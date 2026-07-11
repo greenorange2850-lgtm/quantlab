@@ -16,6 +16,8 @@
     "db:migrate": "npm run migrate -w @trading-os/database",
     "db:seed": "npm run seed -w @trading-os/database",
     "lint": "oxlint",
+    "typecheck": "npm run build:packages && tsc -b && npm run build -w @trading-os/api",
+    "smoke": "node scripts/smoke-test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
