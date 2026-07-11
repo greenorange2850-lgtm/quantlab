@@ -1,0 +1,67 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+
+# Build outputs
+dist
+dist-ssr
+build
+packages/*/dist
+server/dist
+
+# TypeScript
+*.tsbuildinfo
+node_modules/.tmp/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Local overrides
+*.local
+
+# Runtime data & databases
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Test & coverage
+coverage
+.nyc_output
+
+# Caches
+.cache
+.parcel-cache
+.turbo
+.eslintcache
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Cursor / local IDE agent state
+.cursor/

@@ -1,0 +1,30 @@
+{
+  "name": "@trading-os/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@trading-os/database": "*",
+    "@trading-os/engines": "*",
+    "@trading-os/market-data": "*",
+    "@trading-os/rule-engine": "*",
+    "@trading-os/market-intelligence": "*",
+    "@trading-os/shared": "*",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "~6.0.2"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "@trading-os/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc && node --input-type=module -e \"import {cpSync} from 'fs'; cpSync('src/migrations','dist/migrations',{recursive:true})\"",
+    "dev": "tsc --watch",
+    "migrate": "tsx src/migrate.ts",
+    "seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "@trading-os/shared": "*",
+    "@trading-os/market-data": "*",
+    "@trading-os/rule-engine": "*",
+    "@trading-os/market-intelligence": "*",
+    "better-sqlite3": "^12.6.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "tsx": "^4.21.0",
+    "typescript": "~6.0.2"
+  }
+}
