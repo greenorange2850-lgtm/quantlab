@@ -30,7 +30,7 @@ node_modules/.tmp/
 *.local
 
 # Runtime data & databases
-data/
+/data/
 *.db
 *.db-shm
 *.db-wal
