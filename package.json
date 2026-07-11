@@ -21,6 +21,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "demo:indicators": "tsx src/examples/indicator-demo.ts",
+    "demo:strategy": "tsx src/examples/strategy-demo.ts",
+    "demo:backtest": "tsx src/examples/backtest-demo.ts",
+    "demo:analytics": "tsx src/examples/analytics-demo.ts",
     "preview": "vite preview"
   },
   "dependencies": {

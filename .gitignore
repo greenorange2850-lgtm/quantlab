@@ -65,3 +65,8 @@ Desktop.ini
 
 # Cursor / local IDE agent state
 .cursor/
+
+# Generated backtest exports
+backtest-report.json
+equity.csv
+trades.csv
