@@ -20,6 +20,7 @@
     "smoke": "node scripts/smoke-test.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "demo:indicators": "tsx src/examples/indicator-demo.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -46,6 +47,7 @@
     "concurrently": "^9.2.1",
     "oxlint": "^1.71.0",
     "tailwindcss": "^4.3.2",
+    "tsx": "^4.23.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vitest": "^3.2.4"
