@@ -69,6 +69,7 @@ export async function runBacktestPipeline(
     commissionPercent: params.commissionPercent,
     positionSizePercent: params.positionSizePercent,
     symbol: params.symbol,
+    riskConfig: defaultRiskConfig,
   }
 
   const result = await backtestEngine.runWithHistoricalFeed(

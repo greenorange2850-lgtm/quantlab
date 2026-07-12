@@ -1,9 +1,12 @@
+import type { RiskConfig } from '../risk/config.js'
+
 export interface BacktestConfig {
   initialCapital: number
   commissionPercent: number
   positionSizePercent: number
   slippagePercent?: number
   symbol: string
+  riskConfig?: RiskConfig
 }
 
 export function validateBacktestConfig(config: BacktestConfig): void {

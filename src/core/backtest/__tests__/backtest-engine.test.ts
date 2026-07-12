@@ -3,6 +3,7 @@ import type { Candle } from '../../../data/candles.js'
 import { SignalType, type SignalType as SignalTypeValue } from '../../signals/SignalType.js'
 import type { Strategy } from '../../strategy/Strategy.js'
 import { MockMarketDataProvider } from '../../../data/providers/MockMarketDataProvider.js'
+import { defaultRiskConfig } from '../../risk/config.js'
 import { HistoricalFeed } from '../../market/historical-feed.js'
 import { BacktestEngine } from '../BacktestEngine.js'
 
@@ -20,6 +21,7 @@ class ScriptedStrategy implements Strategy {
   evaluate(candles: Candle[], symbol: string) {
     const index = candles.length - 1
     const signal = this.sequence[index] ?? SignalType.HOLD
+    const close = candles[index]?.close ?? 0
 
     return {
       signal,
@@ -27,6 +29,12 @@ class ScriptedStrategy implements Strategy {
       reason: `scripted:${signal}`,
       timestamp: candles[index]?.time ?? Date.now(),
       symbol,
+      stopLossPrice:
+        signal === SignalType.BUY
+          ? close * 0.9
+          : signal === SignalType.SELL
+            ? close * 1.1
+            : undefined,
     }
   }
 }
@@ -51,6 +59,7 @@ function buildConfig() {
     commissionPercent: 0.1,
     positionSizePercent: 100,
     symbol: SYMBOL,
+    riskConfig: defaultRiskConfig,
   }
 }
 

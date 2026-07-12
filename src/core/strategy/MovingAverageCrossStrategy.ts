@@ -50,6 +50,7 @@ export class MovingAverageCrossStrategy implements Strategy {
         reason: `EMA${FAST_PERIOD} crossed above EMA${SLOW_PERIOD} with RSI confirmation (${rsiNow.toFixed(2)})`,
         timestamp,
         symbol,
+        stopLossPrice: slowNow,
       }
     }
 
@@ -60,6 +61,7 @@ export class MovingAverageCrossStrategy implements Strategy {
         reason: `EMA${FAST_PERIOD} crossed below EMA${SLOW_PERIOD} with RSI confirmation (${rsiNow.toFixed(2)})`,
         timestamp,
         symbol,
+        stopLossPrice: slowNow,
       }
     }
 

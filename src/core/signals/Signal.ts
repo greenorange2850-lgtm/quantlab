@@ -6,4 +6,6 @@ export interface Signal {
   reason: string
   timestamp: number
   symbol: string
+  /** Stop-loss price required for risk-based entry sizing. */
+  stopLossPrice?: number
 }

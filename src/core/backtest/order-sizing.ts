@@ -1,12 +1,13 @@
 import type { Portfolio } from './Portfolio.js'
 import type { BacktestConfig } from './BacktestConfig.js'
-import { calculatePositionQuantity } from './trade-math.js'
 import { OrderSide, OrderType } from '../models/order.js'
 import { estimateFillPrice } from '../execution/execution-engine.js'
 import { SignalType } from '../signals/SignalType.js'
 import type { Signal } from '../signals/Signal.js'
 import { TradeDirection } from './Trade.js'
 import type { OrderRequest } from '../execution/order-request.js'
+import { defaultRiskConfig, type RiskConfig } from '../risk/config.js'
+import { calculatePositionSize } from '../risk/position-sizing.js'
 
 export function buildOrderRequestFromSignal(
   portfolio: Portfolio,
@@ -14,6 +15,7 @@ export function buildOrderRequestFromSignal(
   price: number,
   config: BacktestConfig,
 ): OrderRequest | null {
+  const riskConfig = config.riskConfig ?? defaultRiskConfig
   const position = portfolio.getPosition()
 
   if (signal.signal === SignalType.BUY) {
@@ -27,8 +29,20 @@ export function buildOrderRequestFromSignal(
     }
 
     if (!position) {
-      const quantity = calculateLongOpenQuantity(portfolio, price, config)
-      if (quantity <= 0) {
+      if (!riskConfig.allowLong) {
+        return null
+      }
+
+      const quantity = calculateRiskBasedEntryQuantity(
+        portfolio,
+        price,
+        signal.stopLossPrice,
+        config,
+        riskConfig,
+        OrderSide.BUY,
+      )
+
+      if (quantity === null) {
         return null
       }
 
@@ -54,8 +68,20 @@ export function buildOrderRequestFromSignal(
     }
 
     if (!position) {
-      const quantity = calculateShortOpenQuantity(portfolio, price, config)
-      if (quantity <= 0) {
+      if (!riskConfig.allowShort) {
+        return null
+      }
+
+      const quantity = calculateRiskBasedEntryQuantity(
+        portfolio,
+        price,
+        signal.stopLossPrice,
+        config,
+        riskConfig,
+        OrderSide.SELL,
+      )
+
+      if (quantity === null) {
         return null
       }
 
@@ -73,34 +99,77 @@ export function buildOrderRequestFromSignal(
   return null
 }
 
-function calculateLongOpenQuantity(
+function calculateRiskBasedEntryQuantity(
   portfolio: Portfolio,
-  price: number,
+  entryPrice: number,
+  stopLossPrice: number | undefined,
   config: BacktestConfig,
-): number {
-  const equity = portfolio.getEquity(price)
-  const allocation = (equity * config.positionSizePercent) / 100
-  const spendable = Math.min(allocation, portfolio.getCash())
-  const fillPrice = estimateFillPrice(price, OrderSide.BUY, config.slippagePercent ?? 0)
-  const costPerUnit = fillPrice * (1 + config.commissionPercent / 100)
-
-  if (costPerUnit <= 0) {
-    return 0
+  riskConfig: RiskConfig,
+  side: OrderSide,
+): number | null {
+  if (stopLossPrice === undefined || !isValidStopLoss(entryPrice, stopLossPrice, side)) {
+    return null
   }
 
-  return spendable / costPerUnit
+  const equity = portfolio.getEquity(entryPrice)
+  if (equity <= 0) {
+    return null
+  }
+
+  const fillPrice = estimateFillPrice(entryPrice, side, config.slippagePercent ?? 0)
+
+  let quantity: number
+
+  try {
+    const sized = calculatePositionSize({
+      accountEquity: equity,
+      riskPercent: riskConfig.riskPercent,
+      entryPrice: fillPrice,
+      stopLossPrice,
+    })
+
+    if (sized.quantity <= 0) {
+      return null
+    }
+
+    quantity = sized.quantity
+  } catch {
+    return null
+  }
+
+  const maxNotional = equity * (riskConfig.maxPositionSize / 100)
+  if (quantity * fillPrice > maxNotional) {
+    quantity = maxNotional / fillPrice
+  }
+
+  if (side === OrderSide.BUY) {
+    const costPerUnit = fillPrice * (1 + config.commissionPercent / 100)
+    if (costPerUnit <= 0) {
+      return null
+    }
+
+    quantity = Math.min(quantity, portfolio.getCash() / costPerUnit)
+  }
+
+  return quantity > 0 ? quantity : null
 }
 
-function calculateShortOpenQuantity(
-  portfolio: Portfolio,
-  price: number,
-  config: BacktestConfig,
-): number {
-  const fillPrice = estimateFillPrice(price, OrderSide.SELL, config.slippagePercent ?? 0)
+function isValidStopLoss(entryPrice: number, stopLossPrice: number, side: OrderSide): boolean {
+  if (!Number.isFinite(stopLossPrice) || stopLossPrice <= 0) {
+    return false
+  }
 
-  return calculatePositionQuantity(
-    portfolio.getEquity(price),
-    fillPrice,
-    config.positionSizePercent,
-  )
+  if (!Number.isFinite(entryPrice) || entryPrice <= 0) {
+    return false
+  }
+
+  if (entryPrice === stopLossPrice) {
+    return false
+  }
+
+  if (side === OrderSide.BUY) {
+    return stopLossPrice < entryPrice
+  }
+
+  return stopLossPrice > entryPrice
 }
