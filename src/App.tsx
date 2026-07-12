@@ -2,10 +2,10 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { MainLayout } from '@/layouts/MainLayout'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { MarketExplorerPage } from '@/pages/MarketExplorerPage'
+import { StrategyLabPage } from '@/pages/StrategyLabPage'
 import { PlaceholderPage } from '@/pages/PlaceholderPage'
 
 const placeholders = [
-  { path: '/strategy-lab', title: 'Strategy Lab', description: 'Create, version and manage trading strategies with full rule and filter configuration.' },
   { path: '/backtest-lab', title: 'Backtest Lab', description: 'Run historical backtests, compare versions and analyze performance metrics.' },
   { path: '/trade-replay', title: 'Trade Replay', description: 'Step through historical trades with chart replay and pattern visualization.' },
   { path: '/ai-analysis', title: 'AI Analysis', description: 'AI-powered strategy weakness detection and measurable improvement recommendations.' },
@@ -22,6 +22,7 @@ export function App() {
         <Route element={<MainLayout />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/market-explorer" element={<MarketExplorerPage />} />
+          <Route path="/strategy-lab" element={<StrategyLabPage />} />
           {placeholders.map((p) => (
             <Route
               key={p.path}

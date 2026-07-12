@@ -1,5 +1,5 @@
-export const APP_NAME = 'AI Trading Research OS'
-export const APP_VERSION = '0.1.0'
+export const APP_NAME = 'QUANTLAB'
+export const APP_VERSION = '0.2.0-alpha.1'
 export const API_BASE_PATH = '/api/v1'
 
 export const ENGINE_NAMES = {

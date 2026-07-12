@@ -1,0 +1,152 @@
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { FlaskConical, Play, Loader2 } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { defaultBacktestPipelineParams } from '@/core/dashboard'
+import { useBacktestStore } from '@/stores/backtest.store'
+
+export function StrategyLabPage() {
+  const navigate = useNavigate()
+  const runBacktest = useBacktestStore((state) => state.runBacktest)
+  const isRunning = useBacktestStore((state) => state.isRunning)
+  const error = useBacktestStore((state) => state.error)
+  const hasBacktest = useBacktestStore((state) => state.dashboard.hasBacktest)
+
+  const [symbol, setSymbol] = useState(defaultBacktestPipelineParams.symbol)
+  const [interval, setInterval] = useState(defaultBacktestPipelineParams.interval)
+  const [limit, setLimit] = useState(String(defaultBacktestPipelineParams.limit))
+  const [initialCapital, setInitialCapital] = useState(
+    String(defaultBacktestPipelineParams.initialCapital),
+  )
+
+  const handleRunBacktest = async () => {
+    const parsedLimit = Number(limit)
+    const parsedCapital = Number(initialCapital)
+
+    await runBacktest({
+      symbol: symbol.trim().toUpperCase(),
+      interval: interval.trim(),
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : defaultBacktestPipelineParams.limit,
+      initialCapital: Number.isFinite(parsedCapital)
+        ? parsedCapital
+        : defaultBacktestPipelineParams.initialCapital,
+    })
+
+    if (!useBacktestStore.getState().error) {
+      navigate('/')
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="mx-auto max-w-3xl space-y-6"
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/15 border border-accent/20">
+          <FlaskConical className="h-5 w-5 text-accent" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Strategy Lab</h2>
+          <p className="text-xs text-muted-foreground">
+            Run a backtest through the strategy, risk, and analytics pipeline.
+          </p>
+        </div>
+      </div>
+
+      <Card glow>
+        <CardHeader>
+          <CardTitle className="text-base">Run Backtest</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Strategy
+              </label>
+              <Input value="Moving Average Cross" disabled className="bg-white/[0.03]" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Symbol
+              </label>
+              <Input
+                value={symbol}
+                onChange={(event) => setSymbol(event.target.value)}
+                className="bg-white/[0.03]"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Interval
+              </label>
+              <Input
+                value={interval}
+                onChange={(event) => setInterval(event.target.value)}
+                className="bg-white/[0.03]"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Candle Limit
+              </label>
+              <Input
+                value={limit}
+                onChange={(event) => setLimit(event.target.value)}
+                className="bg-white/[0.03]"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Initial Capital
+              </label>
+              <Input
+                value={initialCapital}
+                onChange={(event) => setInitialCapital(event.target.value)}
+                className="bg-white/[0.03]"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+              {error}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={handleRunBacktest} disabled={isRunning}>
+              {isRunning ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Running Backtest...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  Run Backtest
+                </>
+              )}
+            </Button>
+
+            {hasBacktest && (
+              <Link to="/">
+                <Button variant="secondary">View Dashboard</Button>
+              </Link>
+            )}
+
+            <Badge variant="outline" className="text-[10px]">
+              Mock market data
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}

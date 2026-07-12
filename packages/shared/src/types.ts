@@ -368,8 +368,43 @@ export interface DashboardData {
   strategyHealth: HealthMetric[]
   overallHealthScore: number
   recentBacktests: BacktestSummary[]
+  tradeHistory: DashboardTradeRow[]
   marketContext: MarketContext
   watchlist: WatchlistItem[]
+  portfolio: PortfolioSnapshot
+  hasBacktest: boolean
+}
+
+export interface PortfolioSnapshot {
+  cash: number
+  equity: number
+  buyingPower: number
+  realizedPnL: number
+  unrealizedPnL: number
+  totalExposure: number
+  positions: PortfolioPositionSnapshot[]
+}
+
+export interface PortfolioPositionSnapshot {
+  symbol: string
+  quantity: number
+  marketValue: number
+  costBasis: number
+  unrealizedPnL: number
+  realizedPnL: number
+  weight: number
+}
+
+export interface DashboardTradeRow {
+  id: string
+  symbol: string
+  side: TradeDirection
+  entryPrice: number
+  exitPrice: number
+  quantity: number
+  pnl: number
+  returnPercent: number
+  durationMs: number
 }
 
 export interface MonthlyProfit {

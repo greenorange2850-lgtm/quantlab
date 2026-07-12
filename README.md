@@ -1,32 +1,135 @@
-# React + TypeScript + Vite
+# QUANTLAB
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Quantitative trading research platform — strategy development, event-driven backtesting, analytics, and a live dashboard.
 
-Currently, two official plugins are available:
+**Version:** `0.2.0-alpha.1`
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Overview
 
-## React Compiler
+QUANTLAB is a TypeScript monorepo with a pure core engine and a React dashboard. All trading logic lives in `src/core/`; the UI is presentational only.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+Market → Strategy → Risk → Execution → Portfolio → Analytics → Dashboard
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design.
+
+## Prerequisites
+
+- **Node.js** 20 or later
+- **npm** 10 or later
+
+## Install
+
+```bash
+git clone <repository-url>
+cd chart
+npm install
+```
+
+## Development
+
+Start the web dashboard and API server concurrently:
+
+```bash
+npm run dev
+```
+
+| Service | URL |
+|---------|-----|
+| Dashboard | http://localhost:5173 |
+| API | http://localhost:3001/api/v1 |
+
+### Open the dashboard
+
+1. Run `npm run dev`
+2. Open http://localhost:5173
+3. Navigate to **Strategy Lab** (`/strategy-lab`)
+4. Click **Run Backtest** — the dashboard populates automatically with real metrics
+
+## Run Tests
+
+```bash
+# Run all tests once
+npm run test
+
+# Watch mode
+npm run test:watch
+```
+
+## Run Backtests
+
+### Via the dashboard (recommended)
+
+1. `npm run dev`
+2. Open http://localhost:5173/strategy-lab
+3. Configure symbol, interval, and capital
+4. Click **Run Backtest**
+
+### Via CLI demos
+
+```bash
+# Event-driven backtest with Binance data
+npm run demo:backtest
+
+# Full analytics report from a backtest
+npm run demo:analytics
+
+# Strategy signal evaluation
+npm run demo:strategy
+
+# Indicator calculations
+npm run demo:indicators
+```
+
+## Validation
+
+```bash
+# TypeScript type checking (all packages + app + API)
+npm run typecheck
+
+# Lint
+npm run lint
+
+# Build for production
+npm run build
+```
+
+## Project Structure
+
+```
+src/core/       Business logic (strategy, backtest, execution, analytics, …)
+src/features/   React dashboard components
+src/pages/      Route pages
+src/data/       Exchange data adapters
+packages/       Shared workspace libraries
+server/         Express API
+docs/           Module documentation and ADRs
+```
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture and layer responsibilities |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+| [ROADMAP.md](ROADMAP.md) | Planned features |
+| [docs/strategy-engine.md](docs/strategy-engine.md) | Strategy framework |
+| [docs/backtesting.md](docs/backtesting.md) | Backtest engine |
+| [docs/analytics.md](docs/analytics.md) | Analytics and reports |
+| [docs/adr/](docs/adr/) | Architecture decision records |
+
+## Alpha Limitations
+
+This is an **alpha** release. Known gaps:
+
+- Live trading feed is not connected (`LiveFeed` is interface-only)
+- Several navigation routes are placeholders
+- Risk engine validates config but does not yet size positions in backtests
+- Stop orders and full partial-fill simulation are stubbed
+
+See [ROADMAP.md](ROADMAP.md) for the path to v0.3 and beyond.
+
+## License
+
+Private — all rights reserved.

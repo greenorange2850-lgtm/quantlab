@@ -52,3 +52,69 @@ export function analyzeTrades(trades: Trade[]): TradeAnalysis {
 export function getTopTrades(trades: Trade[], limit = 5): Trade[] {
   return [...trades].sort((left, right) => right.pnl - left.pnl).slice(0, limit)
 }
+
+export interface TradeStreaks {
+  consecutiveWins: number
+  consecutiveLosses: number
+  maxWinStreak: number
+  maxLossStreak: number
+}
+
+/**
+ * Computes ending and maximum win/loss streaks from closed trades.
+ */
+export function computeTradeStreaks(trades: Trade[]): TradeStreaks {
+  const ordered = [...trades].sort((left, right) => left.exitTime - right.exitTime)
+
+  let consecutiveWins = 0
+  let consecutiveLosses = 0
+  let maxWinStreak = 0
+  let maxLossStreak = 0
+  let currentWinStreak = 0
+  let currentLossStreak = 0
+
+  for (const trade of ordered) {
+    if (trade.pnl > 0) {
+      currentWinStreak += 1
+      currentLossStreak = 0
+      maxWinStreak = Math.max(maxWinStreak, currentWinStreak)
+    } else if (trade.pnl < 0) {
+      currentLossStreak += 1
+      currentWinStreak = 0
+      maxLossStreak = Math.max(maxLossStreak, currentLossStreak)
+    } else {
+      currentWinStreak = 0
+      currentLossStreak = 0
+    }
+  }
+
+  for (let index = ordered.length - 1; index >= 0; index--) {
+    const trade = ordered[index]
+    if (trade.pnl > 0) {
+      if (consecutiveLosses > 0) break
+      consecutiveWins += 1
+    } else if (trade.pnl < 0) {
+      if (consecutiveWins > 0) break
+      consecutiveLosses += 1
+    } else {
+      break
+    }
+  }
+
+  return {
+    consecutiveWins,
+    consecutiveLosses,
+    maxWinStreak,
+    maxLossStreak,
+  }
+}
+
+/**
+ * Proxy risk-reward from average win and average loss magnitudes.
+ */
+export function computeAverageRiskReward(averageWin: number, averageLoss: number): number {
+  if (averageLoss === 0) {
+    return averageWin > 0 ? Number.POSITIVE_INFINITY : 0
+  }
+  return averageWin / Math.abs(averageLoss)
+}

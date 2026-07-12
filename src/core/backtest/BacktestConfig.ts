@@ -2,6 +2,7 @@ export interface BacktestConfig {
   initialCapital: number
   commissionPercent: number
   positionSizePercent: number
+  slippagePercent?: number
   symbol: string
 }
 

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { NAV_ITEMS } from '@trading-os/shared'
 import { cn } from '@/lib/utils'
-import { userProfile } from '@/mock/dashboard'
+import { userProfile } from '@/constants/user-profile'
 import { useAppStore } from '@/stores/app.store'
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {

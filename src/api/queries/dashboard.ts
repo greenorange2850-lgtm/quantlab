@@ -1,7 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
-import type { DashboardData } from '@trading-os/shared'
-import { api } from '../client.js'
-import { dashboardData as mockData } from '@/mock/dashboard'
+import { useBacktestStore } from '@/stores/backtest.store'
 
 export const queryKeys = {
   dashboard: ['dashboard'] as const,
@@ -13,27 +10,21 @@ export const queryKeys = {
   health: ['health'] as const,
 }
 
-async function fetchDashboard(): Promise<DashboardData> {
-  try {
-    return await api.get<DashboardData>('/dashboard')
-  } catch {
-    return mockData
+export function useDashboard() {
+  const dashboard = useBacktestStore((state) => state.dashboard)
+  const isRunning = useBacktestStore((state) => state.isRunning)
+
+  return {
+    data: dashboard,
+    isLoading: isRunning,
+    isError: false,
   }
 }
 
-export function useDashboard() {
-  return useQuery({
-    queryKey: queryKeys.dashboard,
-    queryFn: fetchDashboard,
-    staleTime: 30_000,
-  })
-}
-
 export function useHealth() {
-  return useQuery({
-    queryKey: queryKeys.health,
-    queryFn: () => api.get('/health'),
-    refetchInterval: 60_000,
-    retry: 1,
-  })
+  return {
+    data: { status: 'ok' },
+    isLoading: false,
+    isError: false,
+  }
 }

@@ -11,7 +11,8 @@ export type {
 export { buildEquityCurve, computeMaxDrawdownFromCurve } from './equity-curve.js'
 export { analyzeDrawdown } from './drawdown.js'
 export { analyzeMonthlyReturns } from './monthly-returns.js'
-export { analyzeTrades, getTopTrades } from './trade-analyzer.js'
+export { analyzeTrades, getTopTrades, computeTradeStreaks, computeAverageRiskReward } from './trade-analyzer.js'
+export type { TradeStreaks } from './trade-analyzer.js'
 export { buildBacktestReport } from './report-builder.js'
 export {
   exportTradesCsv,
