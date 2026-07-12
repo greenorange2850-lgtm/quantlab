@@ -17,3 +17,5 @@ export {
 export { computeStatistics, computeMaxDrawdown } from './statistics.js'
 export { Portfolio } from './Portfolio.js'
 export { BacktestEngine } from './BacktestEngine.js'
+export { buildOrderRequestFromSignal } from './order-sizing.js'
+export type { HistoricalLoadParams } from '../market/historical-feed.js'

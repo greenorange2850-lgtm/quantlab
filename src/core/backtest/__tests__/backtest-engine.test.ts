@@ -3,9 +3,11 @@ import type { Candle } from '../../../data/candles.js'
 import { SignalType, type SignalType as SignalTypeValue } from '../../signals/SignalType.js'
 import type { Strategy } from '../../strategy/Strategy.js'
 import { MockMarketDataProvider } from '../../../data/providers/MockMarketDataProvider.js'
+import { HistoricalFeed } from '../../market/historical-feed.js'
 import { BacktestEngine } from '../BacktestEngine.js'
 
 const SYMBOL = 'BTCUSDT'
+const TIMEFRAME = '1h'
 
 class ScriptedStrategy implements Strategy {
   readonly name = 'Scripted'
@@ -52,16 +54,31 @@ function buildConfig() {
   }
 }
 
+async function runWithHistoricalData(
+  seed: number,
+  limit: number,
+  strategy: Strategy,
+  basePrice = 100,
+) {
+  const feed = new HistoricalFeed(new MockMarketDataProvider({ seed, basePrice }))
+  const engine = new BacktestEngine()
+  const result = await engine.runWithHistoricalFeed(
+    feed,
+    { symbol: SYMBOL, timeframe: TIMEFRAME, limit },
+    strategy,
+    buildConfig(),
+  )
+
+  return {
+    result,
+    candles: [...feed.getHistory(SYMBOL)],
+  }
+}
+
 describe('BacktestEngine', () => {
   const engine = new BacktestEngine()
 
   it('executes LONG trades on BUY then SELL signals at next candle open', async () => {
-    const candles = await new MockMarketDataProvider({ seed: 11, basePrice: 100 }).getCandles({
-      symbol: SYMBOL,
-      interval: '1h',
-      limit: 6,
-    })
-
     const strategy = new ScriptedStrategy([
       SignalType.HOLD,
       SignalType.BUY,
@@ -71,7 +88,7 @@ describe('BacktestEngine', () => {
       SignalType.HOLD,
     ])
 
-    const result = engine.run(candles, strategy, buildConfig())
+    const { result, candles } = await runWithHistoricalData(11, 6, strategy)
 
     expect(result.trades).toHaveLength(1)
     expect(result.trades[0].direction).toBe('LONG')
@@ -81,12 +98,6 @@ describe('BacktestEngine', () => {
   })
 
   it('executes SHORT trades on SELL then BUY signals', async () => {
-    const candles = await new MockMarketDataProvider({ seed: 12, basePrice: 100 }).getCandles({
-      symbol: SYMBOL,
-      interval: '1h',
-      limit: 6,
-    })
-
     const strategy = new ScriptedStrategy([
       SignalType.HOLD,
       SignalType.SELL,
@@ -96,7 +107,7 @@ describe('BacktestEngine', () => {
       SignalType.HOLD,
     ])
 
-    const result = engine.run(candles, strategy, buildConfig())
+    const { result, candles } = await runWithHistoricalData(12, 6, strategy)
 
     expect(result.trades).toHaveLength(1)
     expect(result.trades[0].direction).toBe('SHORT')
@@ -105,12 +116,6 @@ describe('BacktestEngine', () => {
   })
 
   it('applies commission to completed trades', async () => {
-    const candles = await new MockMarketDataProvider({ seed: 13, basePrice: 100 }).getCandles({
-      symbol: SYMBOL,
-      interval: '1h',
-      limit: 6,
-    })
-
     const strategy = new ScriptedStrategy([
       SignalType.HOLD,
       SignalType.BUY,
@@ -120,19 +125,13 @@ describe('BacktestEngine', () => {
       SignalType.HOLD,
     ])
 
-    const result = engine.run(candles, strategy, buildConfig())
+    const { result } = await runWithHistoricalData(13, 6, strategy)
 
     expect(result.trades[0].commission).toBeGreaterThan(0)
   })
 
   it('produces no trades when strategy always returns HOLD', async () => {
-    const candles = await new MockMarketDataProvider({ seed: 14 }).getCandles({
-      symbol: SYMBOL,
-      interval: '1h',
-      limit: 20,
-    })
-
-    const result = engine.run(candles, new HoldStrategy(), buildConfig())
+    const { result } = await runWithHistoricalData(14, 20, new HoldStrategy())
 
     expect(result.trades).toHaveLength(0)
     expect(result.statistics.totalTrades).toBe(0)
@@ -140,12 +139,6 @@ describe('BacktestEngine', () => {
   })
 
   it('evaluates strategy without future candles', async () => {
-    const candles = await new MockMarketDataProvider({ seed: 15, basePrice: 100 }).getCandles({
-      symbol: SYMBOL,
-      interval: '1h',
-      limit: 4,
-    })
-
     const seenLengths: number[] = []
     const strategy: Strategy = {
       name: 'LengthTracker',
@@ -161,24 +154,18 @@ describe('BacktestEngine', () => {
       },
     }
 
-    engine.run(candles, strategy, buildConfig())
+    await runWithHistoricalData(15, 4, strategy)
     expect(seenLengths).toEqual([1, 2, 3, 4])
   })
 
   it('does not execute a signal generated on the final candle', async () => {
-    const candles = await new MockMarketDataProvider({ seed: 16, basePrice: 100 }).getCandles({
-      symbol: SYMBOL,
-      interval: '1h',
-      limit: 3,
-    })
-
     const strategy = new ScriptedStrategy([
       SignalType.HOLD,
       SignalType.HOLD,
       SignalType.BUY,
     ])
 
-    const result = engine.run(candles, strategy, buildConfig())
+    const { result } = await runWithHistoricalData(16, 3, strategy)
     expect(result.trades).toHaveLength(0)
     expect(result.equityCurve).toHaveLength(3)
   })

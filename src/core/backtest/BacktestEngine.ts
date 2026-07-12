@@ -2,13 +2,37 @@ import type { Candle } from '../../data/candles.js'
 import type { Strategy } from '../strategy/Strategy.js'
 import { SignalType } from '../signals/SignalType.js'
 import type { Signal } from '../signals/Signal.js'
-import { TradeDirection } from './Trade.js'
+import { ExecutionEngine } from '../execution/execution-engine.js'
+import { OrderManager } from '../execution/order-manager.js'
+import type { ExecutionContext } from '../execution/execution-context.js'
+import type { HistoricalFeed, HistoricalLoadParams } from '../market/historical-feed.js'
 import { validateBacktestConfig, type BacktestConfig } from './BacktestConfig.js'
 import type { BacktestResult } from './BacktestResult.js'
 import { Portfolio } from './Portfolio.js'
 import { computeStatistics } from './statistics.js'
+import { buildOrderRequestFromSignal } from './order-sizing.js'
 
 export class BacktestEngine {
+  private readonly executionEngine = new ExecutionEngine()
+  private readonly orderManager = new OrderManager()
+
+  async runWithHistoricalFeed(
+    feed: HistoricalFeed,
+    loadParams: HistoricalLoadParams,
+    strategy: Strategy,
+    config: BacktestConfig,
+  ): Promise<BacktestResult> {
+    if (!feed.getHistory(loadParams.symbol).length) {
+      feed.subscribe({ symbol: loadParams.symbol, timeframe: loadParams.timeframe })
+    }
+
+    await feed.connect()
+    const candles = await feed.loadHistorical(loadParams)
+    await feed.disconnect()
+
+    return this.run(candles, strategy, config)
+  }
+
   run(candles: Candle[], strategy: Strategy, config: BacktestConfig): BacktestResult {
     validateBacktestConfig(config)
 
@@ -54,6 +78,10 @@ export class BacktestEngine {
     }
   }
 
+  getOrderManager(): OrderManager {
+    return this.orderManager
+  }
+
   private executeSignal(
     portfolio: Portfolio,
     signal: Signal,
@@ -61,41 +89,28 @@ export class BacktestEngine {
     time: number,
     config: BacktestConfig,
   ): void {
-    const position = portfolio.getPosition()
-
-    if (signal.signal === SignalType.BUY) {
-      if (position?.direction === TradeDirection.SHORT) {
-        portfolio.close(config.symbol, price, time, config.commissionPercent)
-        return
-      }
-
-      if (!position) {
-        portfolio.openLong(
-          config.symbol,
-          price,
-          time,
-          config.commissionPercent,
-          config.positionSizePercent,
-        )
-      }
+    const orderRequest = buildOrderRequestFromSignal(portfolio, signal, price, config)
+    if (!orderRequest) {
       return
     }
 
-    if (signal.signal === SignalType.SELL) {
-      if (position?.direction === TradeDirection.LONG) {
-        portfolio.close(config.symbol, price, time, config.commissionPercent)
-        return
-      }
+    const context: ExecutionContext = {
+      symbol: config.symbol,
+      marketPrice: price,
+      timestamp: time,
+      commissionPercent: config.commissionPercent,
+      slippagePercent: config.slippagePercent ?? 0,
+    }
 
-      if (!position) {
-        portfolio.openShort(
-          config.symbol,
-          price,
-          time,
-          config.commissionPercent,
-          config.positionSizePercent,
-        )
-      }
+    const result = this.executionEngine.executeOrder(orderRequest, context)
+    this.orderManager.recordExecution(orderRequest, result, time)
+
+    if (!result.accepted || result.fills.length === 0) {
+      return
+    }
+
+    for (const fill of result.fills) {
+      portfolio.applyFill(fill)
     }
   }
 }

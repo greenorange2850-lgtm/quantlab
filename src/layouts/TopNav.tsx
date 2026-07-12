@@ -3,14 +3,16 @@ import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { dashboardData } from '@/mock/dashboard'
+import { useBacktestStore } from '@/stores/backtest.store'
 
 interface TopNavProps {
   title?: string
 }
 
 export function TopNav({ title = 'Dashboard' }: TopNavProps) {
-  const { activeStrategy } = dashboardData
+  const activeStrategy = useBacktestStore((state) => state.dashboard.activeStrategy)
+  const runBacktest = useBacktestStore((state) => state.runBacktest)
+  const isRunning = useBacktestStore((state) => state.isRunning)
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/80 backdrop-blur-xl px-6">
@@ -46,7 +48,13 @@ export function TopNav({ title = 'Dashboard' }: TopNavProps) {
         </Button>
 
         <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.4 }}>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            disabled={isRunning}
+            onClick={() => void runBacktest()}
+          >
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
         </motion.div>

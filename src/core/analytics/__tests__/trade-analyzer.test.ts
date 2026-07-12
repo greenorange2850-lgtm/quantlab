@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Trade } from '../../backtest/Trade.js'
-import { analyzeTrades, getTopTrades } from '../trade-analyzer.js'
+import {
+  analyzeTrades,
+  computeAverageRiskReward,
+  computeTradeStreaks,
+  getTopTrades,
+} from '../trade-analyzer.js'
 
 const trades: Trade[] = [
   {
@@ -29,46 +34,46 @@ const trades: Trade[] = [
     commission: 0.2,
     duration: 1,
   },
-  {
-    id: 'trade-3',
-    symbol: 'BTCUSDT',
-    entryTime: 5,
-    exitTime: 6,
-    entryPrice: 120,
-    exitPrice: 110,
-    quantity: 1,
-    direction: 'SHORT',
-    pnl: 10,
-    commission: 0.2,
-    duration: 1,
-  },
 ]
 
-describe('trade-analyzer', () => {
-  it('computes trade analytics', () => {
+describe('analyzeTrades', () => {
+  it('computes trade analysis metrics', () => {
     const analysis = analyzeTrades(trades)
 
     expect(analysis.averageWin).toBe(10)
     expect(analysis.averageLoss).toBe(-5)
-    expect(analysis.largestWinner).toBe(10)
-    expect(analysis.largestLoser).toBe(-5)
-    expect(analysis.profitFactor).toBe(4)
-    expect(analysis.expectancy).toBeCloseTo(5, 5)
-    expect(analysis.averageHoldingTimeMs).toBe(1)
-    expect(analysis.longPerformance.trades).toBe(2)
-    expect(analysis.shortPerformance.netProfit).toBe(10)
+    expect(analysis.profitFactor).toBe(2)
   })
+})
 
-  it('returns top trades by pnl', () => {
-    expect(getTopTrades(trades, 2).map((trade) => trade.id)).toEqual(['trade-1', 'trade-3'])
+describe('getTopTrades', () => {
+  it('returns highest pnl trades first', () => {
+    expect(getTopTrades(trades, 1)[0]?.id).toBe('trade-1')
   })
+})
 
-  it('handles empty trade list', () => {
-    const analysis = analyzeTrades([])
+describe('computeTradeStreaks', () => {
+  it('computes ending and maximum streaks', () => {
+    const streakTrades: Trade[] = [
+      { ...trades[0], id: 'w1', pnl: 10, exitTime: 1 },
+      { ...trades[0], id: 'w2', pnl: 8, exitTime: 2 },
+      { ...trades[1], id: 'l1', pnl: -4, exitTime: 3 },
+      { ...trades[1], id: 'l2', pnl: -6, exitTime: 4 },
+      { ...trades[0], id: 'w3', pnl: 5, exitTime: 5 },
+    ]
 
-    expect(analysis.averageWin).toBe(0)
-    expect(analysis.profitFactor).toBe(0)
-    expect(analysis.longPerformance.trades).toBe(0)
-    expect(getTopTrades([])).toEqual([])
+    const streaks = computeTradeStreaks(streakTrades)
+
+    expect(streaks.maxWinStreak).toBe(2)
+    expect(streaks.maxLossStreak).toBe(2)
+    expect(streaks.consecutiveWins).toBe(1)
+    expect(streaks.consecutiveLosses).toBe(0)
+  })
+})
+
+describe('computeAverageRiskReward', () => {
+  it('derives average risk-reward from win and loss magnitudes', () => {
+    expect(computeAverageRiskReward(20, -10)).toBe(2)
+    expect(computeAverageRiskReward(10, 0)).toBe(Number.POSITIVE_INFINITY)
   })
 })

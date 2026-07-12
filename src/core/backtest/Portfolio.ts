@@ -1,9 +1,9 @@
+import { OrderSide } from '../models/order.js'
+import type { Fill } from '../execution/fill.js'
 import { TradeDirection, type Trade } from './Trade.js'
 import type { Position } from './Position.js'
 import {
-  calculateCommission,
   calculatePnL,
-  calculatePositionQuantity,
   calculateTradeDuration,
 } from './trade-math.js'
 
@@ -45,104 +45,100 @@ export class Portfolio {
     return this.cash - this.position.quantity * markPrice
   }
 
-  openLong(
-    symbol: string,
-    price: number,
-    time: number,
-    commissionPercent: number,
-    positionSizePercent: number,
-  ): void {
+  /**
+   * Applies an execution fill as the only path for cash and position updates.
+   */
+  applyFill(fill: Fill): Trade | null {
+    if (fill.side === OrderSide.BUY) {
+      if (this.position?.direction === TradeDirection.SHORT) {
+        return this.closePosition(fill)
+      }
+
+      if (!this.position) {
+        this.openPosition(fill, TradeDirection.LONG)
+        return null
+      }
+
+      throw new Error('Cannot apply BUY fill while a LONG position is open')
+    }
+
+    if (this.position?.direction === TradeDirection.LONG) {
+      return this.closePosition(fill)
+    }
+
+    if (!this.position) {
+      this.openPosition(fill, TradeDirection.SHORT)
+      return null
+    }
+
+    throw new Error('Cannot apply SELL fill while a SHORT position is open')
+  }
+
+  private openPosition(fill: Fill, direction: TradeDirection): void {
     if (this.position) {
-      throw new Error('Cannot open LONG while a position is already open')
+      throw new Error('Cannot open a position while another position is open')
     }
 
-    const equity = this.getEquity(price)
-    const allocation = (equity * positionSizePercent) / 100
-    const spendable = Math.min(allocation, this.cash)
-    const quantity = spendable / (price * (1 + commissionPercent / 100))
-    const entryCommission = calculateCommission(price * quantity, commissionPercent)
-    const cost = price * quantity + entryCommission
+    if (direction === TradeDirection.LONG) {
+      const cost = fill.fillPrice * fill.fillQuantity + fill.commission
+      if (cost > this.cash + 1e-9) {
+        throw new Error('Insufficient cash to apply BUY fill')
+      }
 
-    if (quantity <= 0 || cost > this.cash + 1e-9) {
-      throw new Error('Insufficient cash to open LONG position')
+      this.cash -= cost
+    } else {
+      const proceeds = fill.fillPrice * fill.fillQuantity - fill.commission
+      this.cash += proceeds
     }
 
-    this.cash -= cost
     this.position = {
-      symbol,
-      direction: TradeDirection.LONG,
-      quantity,
-      entryPrice: price,
-      entryTime: time,
-      entryCommission,
+      symbol: fill.symbol,
+      direction,
+      quantity: fill.fillQuantity,
+      entryPrice: fill.fillPrice,
+      entryTime: fill.timestamp,
+      entryCommission: fill.commission,
     }
   }
 
-  openShort(
-    symbol: string,
-    price: number,
-    time: number,
-    commissionPercent: number,
-    positionSizePercent: number,
-  ): void {
-    if (this.position) {
-      throw new Error('Cannot open SHORT while a position is already open')
-    }
-
-    const equity = this.getEquity(price)
-    const quantity = calculatePositionQuantity(equity, price, positionSizePercent)
-    const entryCommission = calculateCommission(price * quantity, commissionPercent)
-    const proceeds = price * quantity - entryCommission
-
-    this.cash += proceeds
-    this.position = {
-      symbol,
-      direction: TradeDirection.SHORT,
-      quantity,
-      entryPrice: price,
-      entryTime: time,
-      entryCommission,
-    }
-  }
-
-  close(symbol: string, price: number, time: number, commissionPercent: number): Trade {
+  private closePosition(fill: Fill): Trade {
     if (!this.position) {
       throw new Error('Cannot close position when none is open')
     }
 
-    if (this.position.symbol !== symbol) {
+    if (this.position.symbol !== fill.symbol) {
       throw new Error('Cannot close position for a different symbol')
     }
 
-    const exitCommission = calculateCommission(price * this.position.quantity, commissionPercent)
+    const exitCommission = fill.commission
     const totalCommission = this.position.entryCommission + exitCommission
     const pnl = calculatePnL(
       this.position.direction,
       this.position.entryPrice,
-      price,
-      this.position.quantity,
+      fill.fillPrice,
+      fill.fillQuantity,
       this.position.entryCommission,
       exitCommission,
     )
 
     if (this.position.direction === TradeDirection.LONG) {
-      this.cash += price * this.position.quantity - exitCommission
+      this.cash += fill.fillPrice * fill.fillQuantity - exitCommission
     } else {
-      this.cash -= price * this.position.quantity + exitCommission
+      this.cash -= fill.fillPrice * fill.fillQuantity + exitCommission
     }
 
     const trade: Trade = {
       id: `trade-${++this.tradeCounter}`,
-      symbol,
+      symbol: fill.symbol,
       entryTime: this.position.entryTime,
-      exitTime: time,
+      exitTime: fill.timestamp,
       entryPrice: this.position.entryPrice,
-      exitPrice: price,
-      quantity: this.position.quantity,
+      exitPrice: fill.fillPrice,
+      quantity: fill.fillQuantity,
       direction: this.position.direction,
       pnl,
       commission: totalCommission,
-      duration: calculateTradeDuration(this.position.entryTime, time),
+      duration: calculateTradeDuration(this.position.entryTime, fill.timestamp),
     }
 
     this.position = null
