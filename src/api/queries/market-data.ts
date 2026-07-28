@@ -73,7 +73,9 @@ export function useImportMarketData() {
       formData.append('symbolId', symbolId)
       formData.append('timeframeId', timeframeId)
 
-      const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api/v1'
+      const baseUrl =
+        import.meta.env.VITE_API_URL ??
+        (import.meta.env.PROD ? '/api/v1' : 'http://localhost:3001/api/v1')
       const response = await fetch(`${baseUrl}/market-data/import`, {
         method: 'POST',
         body: formData,

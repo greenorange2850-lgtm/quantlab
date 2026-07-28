@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+dist
+**/dist
+data
+**/*.db
+.git
+.github
+coverage
+**/*.test.ts
+**/__tests__
+services/ai-python
+docs
+*.md
+.oxlintrc.json
+.env
+.env.*
