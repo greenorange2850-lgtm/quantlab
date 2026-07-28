@@ -1,8 +1,6 @@
 import type { TradeDirection } from './Trade.js'
 
-export function calculateCommission(notional: number, commissionPercent: number): number {
-  return (notional * commissionPercent) / 100
-}
+export { calculateCommission } from '../execution/commission.js'
 
 export function calculateLongPnL(
   entryPrice: number,
