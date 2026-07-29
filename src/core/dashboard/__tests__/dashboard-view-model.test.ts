@@ -92,5 +92,9 @@ describe('buildDashboardViewModel', () => {
     expect(dashboard.tradeHistory[0]?.symbol).toBe('BTCUSDT')
     expect(dashboard.portfolio.equity).toBeGreaterThan(0)
     expect(dashboard.portfolio.realizedPnL).toBe(5)
+    // AI / market / watchlist are not synthesized from backtest results
+    expect(dashboard.aiRecommendation).toBeNull()
+    expect(dashboard.marketContext).toBeNull()
+    expect(dashboard.watchlist).toEqual([])
   })
 })

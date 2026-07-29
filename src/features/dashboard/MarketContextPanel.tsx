@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import {
   Newspaper,
   Gauge,
@@ -7,18 +8,59 @@ import {
   Droplets,
   Clock,
   ArrowUpRight,
+  LineChart,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { EmptyState } from '@/components/ui/empty-state'
 import { AnimatedCounter } from '@/hooks/use-animated-counter'
 import type { MarketContext } from '@/types'
 
 interface MarketContextPanelProps {
-  context: MarketContext
+  context: MarketContext | null
+}
+
+/** True when live market context is present (not a stub). */
+export function hasMarketContext(
+  context: MarketContext | null | undefined,
+): context is MarketContext {
+  return context != null
 }
 
 export function MarketContextPanel({ context }: MarketContextPanelProps) {
+  if (!hasMarketContext(context)) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.6 }}
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>Market Context</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EmptyState
+              icon={<LineChart className="h-6 w-6" />}
+              title="No live market data connected."
+              description="Sentiment, session, and calendar context require a live market intelligence feed."
+              action={
+                <Link to="/market-explorer">
+                  <Button size="sm" variant="outline">
+                    Import market data
+                  </Button>
+                </Link>
+              }
+              className="py-8"
+            />
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
+
   const sentimentLabel =
     context.newsSentiment >= 60 ? 'Bullish' : context.newsSentiment >= 40 ? 'Neutral' : 'Bearish'
 

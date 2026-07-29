@@ -51,11 +51,7 @@ export function createEmptyDashboard(): DashboardData {
       sharpeRatio: 0,
       recoveryFactor: 0,
     },
-    aiRecommendation: {
-      suggestions: [],
-      confidence: 0,
-      reasoning: 'Run a backtest in Strategy Lab to generate performance insights.',
-    },
+    aiRecommendation: null,
     strategyHealth: [
       { id: 'profitability', label: 'Profitability', score: 0 },
       { id: 'consistency', label: 'Consistency', score: 0 },
@@ -67,15 +63,7 @@ export function createEmptyDashboard(): DashboardData {
     overallHealthScore: 0,
     recentBacktests: [],
     tradeHistory: [],
-    marketContext: {
-      newsSentiment: 0,
-      fearGreed: 50,
-      volatility: 0,
-      upcomingEvents: [],
-      liquidityStatus: 'medium',
-      marketSession: '—',
-      currentSpread: 0,
-    },
+    marketContext: null,
     watchlist: [],
     portfolio: {
       cash: 0,

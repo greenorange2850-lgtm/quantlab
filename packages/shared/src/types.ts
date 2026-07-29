@@ -364,12 +364,14 @@ export interface DashboardData {
   timeframeDistribution: DistributionItem[]
   riskDistribution: DistributionItem[]
   bestStrategy: BestStrategySummary
-  aiRecommendation: AiRecommendationSummary
+  /** Null until a real AI research session produces recommendations. */
+  aiRecommendation: AiRecommendationSummary | null
   strategyHealth: HealthMetric[]
   overallHealthScore: number
   recentBacktests: BacktestSummary[]
   tradeHistory: DashboardTradeRow[]
-  marketContext: MarketContext
+  /** Null until live market intelligence is connected. */
+  marketContext: MarketContext | null
   watchlist: WatchlistItem[]
   portfolio: PortfolioSnapshot
   hasBacktest: boolean

@@ -1,16 +1,75 @@
 import { motion } from 'framer-motion'
-import { Sparkles, Check, X, Play } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Sparkles, Check, X, Play, FlaskConical } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { EmptyState } from '@/components/ui/empty-state'
 import { AnimatedCounter } from '@/hooks/use-animated-counter'
 import type { AiRecommendationSummary } from '@/types'
 
 interface AiRecommendationPanelProps {
-  recommendation: AiRecommendationSummary
+  recommendation: AiRecommendationSummary | null
+}
+
+/** True when a real AI research payload is present (not a stub). */
+export function hasAiRecommendation(
+  recommendation: AiRecommendationSummary | null | undefined,
+): recommendation is AiRecommendationSummary {
+  if (!recommendation) return false
+  return (
+    recommendation.suggestions.length > 0 ||
+    recommendation.reasoning.trim().length > 0 ||
+    recommendation.confidence > 0
+  )
 }
 
 export function AiRecommendationPanel({ recommendation }: AiRecommendationPanelProps) {
+  const hasData = hasAiRecommendation(recommendation)
+
+  if (!hasData) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.45 }}
+      >
+        <Card className="relative overflow-hidden border-accent/20">
+          <div className="absolute inset-0 bg-gradient-to-br from-accent/5 via-transparent to-purple-600/5 pointer-events-none" />
+          <CardHeader className="relative">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15">
+                <Sparkles className="h-4 w-4 text-accent" />
+              </div>
+              <div>
+                <CardTitle className="text-base">AI Recommendation</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Improvement suggestions based on backtest analysis
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="relative">
+            <EmptyState
+              icon={<Sparkles className="h-6 w-6" />}
+              title="No AI research has been generated."
+              description="AI recommendations appear after a Research session analyzes a completed backtest."
+              action={
+                <Link to="/strategy-lab">
+                  <Button size="sm">
+                    <FlaskConical className="h-3.5 w-3.5" />
+                    Run a Research session
+                  </Button>
+                </Link>
+              }
+              className="py-8"
+            />
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
+
   const suggestions = recommendation.suggestions.filter((s) => s.type === 'add')
   const avoid = recommendation.suggestions.filter((s) => s.type === 'avoid')
 
