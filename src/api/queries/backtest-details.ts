@@ -1,0 +1,32 @@
+import { useQuery } from '@tanstack/react-query'
+import {
+  fetchBacktestDetail,
+  getBacktestDetail,
+  type PersistedBacktestDetail,
+} from '@/backtests/detail-archive'
+
+export const backtestDetailKeys = {
+  all: ['backtest-details'] as const,
+  detail: (id: string) => [...backtestDetailKeys.all, id] as const,
+}
+
+export async function queryBacktestDetail(id: string): Promise<PersistedBacktestDetail> {
+  return fetchBacktestDetail(id)
+}
+
+/**
+ * TanStack Query owns detail fetching. The archive is the persistence backend
+ * for full reports (until a server detail API stores BacktestReport blobs).
+ */
+export function useBacktestDetail(id: string | null) {
+  return useQuery({
+    queryKey: backtestDetailKeys.detail(id ?? ''),
+    queryFn: () => queryBacktestDetail(id!),
+    enabled: Boolean(id),
+    staleTime: Infinity,
+    retry: 1,
+    // Prefer cached archive hit without network.
+    initialData: () => (id ? getBacktestDetail(id) ?? undefined : undefined),
+    initialDataUpdatedAt: () => (id && getBacktestDetail(id) ? Date.now() : undefined),
+  })
+}
