@@ -14,6 +14,7 @@ import { PortfolioPanel } from '@/features/dashboard/PortfolioPanel'
 import { MarketContextPanel } from '@/features/dashboard/MarketContextPanel'
 import { WatchlistPanel } from '@/features/dashboard/WatchlistPanel'
 import { useDashboard } from '@/api/queries/dashboard'
+import { useBacktestHistory } from '@/api/queries/backtests'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,8 @@ import { Card, CardContent } from '@/components/ui/card'
 
 export function DashboardPage() {
   const { data } = useDashboard()
+  // Hydrate Recent Backtests from GET /backtests (server history).
+  useBacktestHistory()
   const isRunning = useBacktestStore((state) => state.isRunning)
 
   if (!data) {

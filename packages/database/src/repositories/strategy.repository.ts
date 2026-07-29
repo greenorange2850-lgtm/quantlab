@@ -49,6 +49,69 @@ export class StrategyRepository extends BaseRepository {
     return row ? this.mapVersion(row) : null
   }
 
+  findByName(name: string): Strategy | null {
+    const row = this.db
+      .prepare('SELECT * FROM strategies WHERE name = ? COLLATE NOCASE')
+      .get(name) as StrategyRow | undefined
+    return row ? this.mapStrategy(row) : null
+  }
+
+  findVersionByStrategyAndLabel(strategyId: string, version: string): StrategyVersion | null {
+    const row = this.db
+      .prepare(
+        'SELECT * FROM strategy_versions WHERE strategy_id = ? AND version = ? COLLATE NOCASE',
+      )
+      .get(strategyId, version) as VersionRow | undefined
+    return row ? this.mapVersion(row) : null
+  }
+
+  /**
+   * Ensure a strategy + version exist for FK integrity when persisting backtests.
+   * Returns the strategy_versions.id.
+   */
+  ensureVersion(strategyName: string, version: string): string {
+    let strategy = this.findByName(strategyName)
+    if (!strategy) {
+      const strategyId = `str-${strategyName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+      this.db
+        .prepare(
+          `INSERT INTO strategies (id, name, description, status, tags)
+           VALUES (?, ?, ?, 'active', '[]')`,
+        )
+        .run(strategyId, strategyName, `${strategyName} (auto-created for backtest history)`)
+      strategy = this.findById(strategyId)
+    }
+
+    if (!strategy) {
+      throw new Error(`Failed to resolve strategy "${strategyName}"`)
+    }
+
+    const existingVersion = this.findVersionByStrategyAndLabel(strategy.id, version)
+    if (existingVersion) return existingVersion.id
+
+    const maxRow = this.db
+      .prepare(
+        'SELECT COALESCE(MAX(version_number), 0) as max_version FROM strategy_versions WHERE strategy_id = ?',
+      )
+      .get(strategy.id) as { max_version: number }
+    const versionNumber = maxRow.max_version + 1
+    const versionId = `sv-${strategy.id.replace(/^str-/, '')}-v${versionNumber}`
+
+    this.db
+      .prepare(
+        `INSERT INTO strategy_versions
+          (id, strategy_id, version, version_number, rules, filters, metrics, changelog)
+         VALUES (?, ?, ?, ?, '{}', '{}', NULL, ?)`,
+      )
+      .run(versionId, strategy.id, version, versionNumber, 'Auto-created for persisted backtest history')
+
+    this.db
+      .prepare('UPDATE strategies SET current_version_id = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(versionId, strategy.id)
+
+    return versionId
+  }
+
   private mapStrategy(row: StrategyRow): Strategy {
     return {
       id: row.id,
