@@ -149,6 +149,33 @@ This is an **alpha** release. Known gaps:
 
 See [ROADMAP.md](ROADMAP.md) for the path to v0.3 and beyond.
 
+## Deploy
+
+### Production (API + dashboard together)
+
+```bash
+npm ci
+npm run build
+CORS_ORIGIN=* npm start
+```
+
+The API serves the built web UI from `dist/` and listens on `PORT` (default `3001`).
+
+### Docker / Render
+
+```bash
+docker build -t quantlab .
+docker run --rm -p 3001:3001 quantlab
+```
+
+Or connect this repo to [Render](https://render.com) — `render.yaml` is included.
+
+### GitHub Pages (frontend only)
+
+Pushing to `main` deploys the dashboard to GitHub Pages. Strategy Lab works client-side; API-backed pages need the full-stack deploy above.
+
+Site URL: `https://greenorange2850-lgtm.github.io/quantlab/`
+
 ## License
 
 Private — all rights reserved.

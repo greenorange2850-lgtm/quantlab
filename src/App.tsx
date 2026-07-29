@@ -15,9 +15,11 @@ const placeholders = [
   { path: '/settings', title: 'Settings', description: 'Platform configuration, data sources and preferences.' },
 ] as const
 
+const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, '') || undefined
+
 export function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename}>
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<DashboardPage />} />

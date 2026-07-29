@@ -1,7 +1,9 @@
 import { API_BASE_PATH } from '@trading-os/shared'
 import type { ApiError, ApiResponse } from '@trading-os/shared'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? `http://localhost:3001${API_BASE_PATH}`
+const BASE_URL =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? API_BASE_PATH : `http://localhost:3001${API_BASE_PATH}`)
 
 export class ApiClientError extends Error {
   code: string
