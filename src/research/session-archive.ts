@@ -8,9 +8,12 @@ export interface PersistedResearchSession {
 }
 
 /** Stable key — never rename (preserves existing user data). */
-const STORAGE_KEY = 'quantlab.research-sessions.v1'
+export const RESEARCH_SESSION_STORAGE_KEY = 'quantlab.research-sessions.v1'
+const STORAGE_KEY = RESEARCH_SESSION_STORAGE_KEY
 const memory = new Map<string, PersistedResearchSession>()
 let didHydrate = false
+/** Last durable write failure message (quota / private mode), if any. */
+let lastPersistenceError: string | null = null
 
 function canUseStorage(): boolean {
   return typeof localStorage !== 'undefined'
@@ -94,12 +97,18 @@ export function slimResearchSessionForStorage(
 }
 
 function writeStorage(map: Record<string, PersistedResearchSession>): boolean {
-  if (!canUseStorage()) return false
+  if (!canUseStorage()) {
+    lastPersistenceError = 'localStorage is unavailable in this environment'
+    return false
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
+    lastPersistenceError = null
     return true
-  } catch {
+  } catch (error) {
     // Quota / private mode — caller may prune and retry.
+    lastPersistenceError =
+      error instanceof Error ? error.message : 'localStorage setItem failed'
     return false
   }
 }
@@ -120,6 +129,51 @@ export function ensureResearchSessionArchiveHydrated(): void {
 
 export function isResearchSessionArchiveHydrated(): boolean {
   return didHydrate
+}
+
+export function getResearchSessionLastPersistenceError(): string | null {
+  return lastPersistenceError
+}
+
+/** Snapshot of durable research-session storage for preview/dev diagnostics. */
+export function getResearchSessionPersistenceDiagnostics(): {
+  storageKey: string
+  hydrated: boolean
+  memoryCount: number
+  persistedCount: number
+  payloadBytes: number | null
+  keyPresent: boolean
+  lastPersistenceError: string | null
+  canUseStorage: boolean
+} {
+  const canUse = canUseStorage()
+  let raw: string | null = null
+  let persistedCount = 0
+  if (canUse) {
+    try {
+      raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown
+        if (parsed && typeof parsed === 'object') {
+          persistedCount = Object.keys(parsed as object).length
+        }
+      }
+    } catch {
+      raw = null
+      persistedCount = 0
+    }
+  }
+
+  return {
+    storageKey: STORAGE_KEY,
+    hydrated: didHydrate,
+    memoryCount: memory.size,
+    persistedCount,
+    payloadBytes: raw === null ? null : raw.length,
+    keyPresent: raw !== null,
+    lastPersistenceError,
+    canUseStorage: canUse,
+  }
 }
 
 function hydrate(): void {
@@ -211,6 +265,7 @@ export async function removeResearchSession(id: string): Promise<void> {
 export function clearResearchSessionArchive(): void {
   memory.clear()
   didHydrate = false
+  lastPersistenceError = null
   if (canUseStorage()) {
     try {
       localStorage.removeItem(STORAGE_KEY)

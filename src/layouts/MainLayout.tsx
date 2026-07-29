@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
+import { ResearchPersistenceDiagnosticsPanel } from '@/components/dev/ResearchPersistenceDiagnosticsPanel'
 import { Sidebar } from './Sidebar'
 import { TopNav } from './TopNav'
 import {
@@ -82,6 +83,8 @@ export function MainLayout() {
           <Outlet />
         </main>
       </div>
+
+      <ResearchPersistenceDiagnosticsPanel />
     </div>
   )
 }
