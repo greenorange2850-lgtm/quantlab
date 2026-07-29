@@ -4,7 +4,11 @@ import path from 'path'
 export default defineConfig({
   test: {
     globals: false,
-    include: ['src/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts',
+      'server/src/**/*.test.ts',
+      'packages/*/src/**/*.test.ts',
+    ],
   },
   resolve: {
     alias: {

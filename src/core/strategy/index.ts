@@ -1,2 +1,6 @@
 export type { Strategy } from './Strategy.js'
-export { MovingAverageCrossStrategy } from './MovingAverageCrossStrategy.js'
+export {
+  MovingAverageCrossStrategy,
+  DEFAULT_MA_CROSS_PARAMS,
+  type MovingAverageCrossParams,
+} from './MovingAverageCrossStrategy.js'

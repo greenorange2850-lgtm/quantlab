@@ -1,0 +1,6 @@
+export { StrategyComparePage } from './StrategyComparePage'
+export { ComparisonOverview } from './components/ComparisonOverview'
+export { MetricsComparison } from './components/MetricsComparison'
+export { ImprovementSummary } from './components/ImprovementSummary'
+export { WhatsChangedCard } from './components/WhatsChangedCard'
+export { ValidationNotice } from './components/ValidationNotice'

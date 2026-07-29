@@ -42,14 +42,14 @@ export function ImportPanel({ symbol, timeframe }: ImportPanelProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="min-w-0 space-y-4">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
           {SOURCES.map((s) => (
             <button
               key={s.id}
               type="button"
               onClick={() => setSource(s.id)}
               className={cn(
-                'min-h-11 rounded-lg border p-3 text-left transition-all sm:min-h-0',
+                'min-h-11 w-full rounded-lg border p-3 text-left transition-all md:min-h-0',
                 source === s.id
                   ? 'border-accent/40 bg-accent/10'
                   : 'border-border hover:bg-white/[0.03]',
@@ -70,7 +70,7 @@ export function ImportPanel({ symbol, timeframe }: ImportPanelProps) {
           onDrop={onDrop}
           onClick={() => document.getElementById('mde-file')?.click()}
           className={cn(
-            'flex min-h-11 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-all sm:p-8',
+            'flex w-full min-h-11 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-all sm:p-8',
             dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-border-hover',
           )}
         >

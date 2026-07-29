@@ -8,7 +8,6 @@ import {
   Globe,
   Play,
   Brain,
-  BookOpen,
   SlidersHorizontal,
   FileText,
   Settings,
@@ -17,6 +16,8 @@ import {
   WifiOff,
   Crown,
   ChevronRight,
+  ArrowLeftRight,
+  History,
 } from 'lucide-react'
 import { NAV_ITEMS } from '@trading-os/shared'
 import { cn } from '@/lib/utils'
@@ -31,10 +32,11 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Globe,
   Play,
   Brain,
-  BookOpen,
   SlidersHorizontal,
   FileText,
   Settings,
+  ArrowLeftRight,
+  History,
 }
 
 interface SidebarProps {
@@ -48,7 +50,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
   const [isDesktop, setIsDesktop] = useState(false)
 
   useEffect(() => {
-    const media = window.matchMedia('(min-width: 768px)')
+    const media = window.matchMedia('(min-width: 1024px)')
     const update = () => setIsDesktop(media.matches)
     update()
     media.addEventListener('change', update)
@@ -86,7 +88,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
             <Link key={item.id} to={item.path} onClick={onNavigate}>
               <motion.div
                 className={cn(
-                  'group relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors md:min-h-0',
+                  'group relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors lg:min-h-0',
                   isActive
                     ? 'bg-accent/10 text-foreground'
                     : 'text-muted hover:bg-white/5 hover:text-foreground',

@@ -91,9 +91,27 @@ npm run typecheck
 # Lint
 npm run lint
 
-# Build for production
+# Full monorepo production build (packages + API + web)
 npm run build
+
+# Frontend-only production build (Vite → dist/) — used by Vercel
+npm run build:web
 ```
+
+## Deployment (Vercel frontend)
+
+The Vite dashboard is deployed from the **repository root**. Do not set Vercel Root Directory to `server/` — that package is the Express API and is hosted separately.
+
+| Setting | Value |
+|---------|--------|
+| Framework | Vite |
+| Root Directory | `.` |
+| Build Command | `npm run build:web` |
+| Output Directory | `dist` |
+
+`vercel.json` at the repo root encodes the same build settings and an SPA rewrite so React Router deep links work on refresh.
+
+See [docs/deployment/vercel.md](docs/deployment/vercel.md) for the full deployment checklist.
 
 ## Project Structure
 
@@ -114,6 +132,7 @@ docs/           Module documentation and ADRs
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture and layer responsibilities |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 | [ROADMAP.md](ROADMAP.md) | Planned features |
+| [docs/deployment/vercel.md](docs/deployment/vercel.md) | Vercel frontend deployment checklist |
 | [docs/strategy-engine.md](docs/strategy-engine.md) | Strategy framework |
 | [docs/backtesting.md](docs/backtesting.md) | Backtest engine |
 | [docs/analytics.md](docs/analytics.md) | Analytics and reports |

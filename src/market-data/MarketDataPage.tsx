@@ -27,14 +27,14 @@ export function MarketDataPage() {
       </div>
 
       <div className="flex min-w-0 flex-col gap-6 lg:flex-row">
-        <div className="min-w-0 flex-1 space-y-2">
+        <div className="min-w-0 w-full flex-1 space-y-2">
           <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             Symbol
           </label>
           {symLoading ? (
             <Skeleton className="h-10 w-full" />
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex w-full min-w-0 flex-wrap gap-2">
               {symbols?.map((s) => (
                 <button
                   key={s.name}
@@ -53,14 +53,14 @@ export function MarketDataPage() {
             </div>
           )}
         </div>
-        <div className="min-w-0 space-y-2 lg:shrink-0">
+        <div className="min-w-0 w-full space-y-2 lg:w-auto lg:shrink-0">
           <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             Timeframe
           </label>
           {tfLoading ? (
-            <Skeleton className="h-10 w-full sm:w-48" />
+            <Skeleton className="h-10 w-full lg:w-48" />
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex w-full min-w-0 flex-wrap gap-2">
               {timeframes?.map((t) => (
                 <button
                   key={t.code}

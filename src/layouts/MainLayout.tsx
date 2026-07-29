@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { TopNav } from './TopNav'
-import { MAIN_CONTENT_OFFSET, MAIN_PADDING, PAGE_SHELL } from './layout-classes'
+import {
+  DRAWER_BACKDROP,
+  MAIN_CONTENT_OFFSET,
+  MAIN_PADDING,
+  PAGE_SHELL,
+} from './layout-classes'
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
@@ -10,8 +16,11 @@ const pageTitles: Record<string, string> = {
   '/backtest-lab': 'Backtest Lab',
   '/market-explorer': 'Market Explorer',
   '/trade-replay': 'Trade Replay',
-  '/ai-analysis': 'AI Analysis',
-  '/knowledge-base': 'Knowledge Base',
+  '/ai-analysis': 'Research Analysis',
+  '/research-analysis': 'Research Analysis',
+  '/strategy-compare': 'Strategy Compare',
+  '/research-sessions': 'Research Sessions',
+  '/knowledge-base': 'Research Sessions',
   '/optimizer': 'Optimizer',
   '/reports': 'Reports',
   '/settings': 'Settings',
@@ -45,14 +54,21 @@ export function MainLayout() {
 
   return (
     <div className={PAGE_SHELL}>
-      {mobileNavOpen ? (
-        <button
-          type="button"
-          aria-label="Close navigation menu"
-          className="fixed inset-0 z-40 bg-black/60 md:hidden"
-          onClick={() => setMobileNavOpen(false)}
-        />
-      ) : null}
+      <AnimatePresence>
+        {mobileNavOpen ? (
+          <motion.button
+            key="drawer-backdrop"
+            type="button"
+            aria-label="Close navigation menu"
+            className={DRAWER_BACKDROP}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            onClick={() => setMobileNavOpen(false)}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <Sidebar mobileOpen={mobileNavOpen} onNavigate={() => setMobileNavOpen(false)} />
 

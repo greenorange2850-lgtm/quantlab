@@ -1,17 +1,18 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { MainLayout } from '@/layouts/MainLayout'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { MarketExplorerPage } from '@/pages/MarketExplorerPage'
 import { StrategyLabPage } from '@/pages/StrategyLabPage'
+import { BacktestLabPage } from '@/pages/BacktestLabPage'
+import { TradeReplayPage } from '@/pages/TradeReplayPage'
+import { ReportsPage } from '@/pages/ReportsPage'
+import { OptimizerPage } from '@/pages/OptimizerPage'
+import { ResearchAnalysisPage } from '@/features/research-analysis'
+import { StrategyComparePage } from '@/features/strategy-compare'
+import { ResearchSessionsPage } from '@/features/research-sessions'
 import { PlaceholderPage } from '@/pages/PlaceholderPage'
 
 const placeholders = [
-  { path: '/backtest-lab', title: 'Backtest Lab', description: 'Run historical backtests, compare versions and analyze performance metrics.' },
-  { path: '/trade-replay', title: 'Trade Replay', description: 'Step through historical trades with chart replay and pattern visualization.' },
-  { path: '/ai-analysis', title: 'AI Analysis', description: 'AI-powered strategy weakness detection and measurable improvement recommendations.' },
-  { path: '/knowledge-base', title: 'Knowledge Base', description: 'Accumulated research insights from every completed backtest.' },
-  { path: '/optimizer', title: 'Optimizer', description: 'Parameter optimization and walk-forward analysis engine.' },
-  { path: '/reports', title: 'Reports', description: 'Generate and export institutional-grade performance reports.' },
   { path: '/settings', title: 'Settings', description: 'Platform configuration, data sources and preferences.' },
 ] as const
 
@@ -23,6 +24,15 @@ export function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/market-explorer" element={<MarketExplorerPage />} />
           <Route path="/strategy-lab" element={<StrategyLabPage />} />
+          <Route path="/backtest-lab" element={<BacktestLabPage />} />
+          <Route path="/trade-replay" element={<TradeReplayPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/optimizer" element={<OptimizerPage />} />
+          <Route path="/research-analysis" element={<ResearchAnalysisPage />} />
+          <Route path="/strategy-compare" element={<StrategyComparePage />} />
+          <Route path="/research-sessions" element={<ResearchSessionsPage />} />
+          <Route path="/ai-analysis" element={<Navigate to="/research-analysis" replace />} />
+          <Route path="/knowledge-base" element={<Navigate to="/research-sessions" replace />} />
           {placeholders.map((p) => (
             <Route
               key={p.path}
