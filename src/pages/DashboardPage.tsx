@@ -20,11 +20,27 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
+function DashboardHydrateSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-12 w-full min-w-0 rounded-xl" />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6 lg:gap-3">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <Skeleton key={index} className="h-20 min-w-0 rounded-xl" />
+        ))}
+      </div>
+      <Skeleton className="h-[400px] w-full min-w-0 rounded-xl" />
+    </div>
+  )
+}
+
 export function DashboardPage() {
   const { data } = useDashboard()
   const isRunning = useBacktestStore((state) => state.isRunning)
   const restoredId = useBacktestStore((state) => state.restoredId)
   const isRestoring = useBacktestStore((state) => state.isRestoring)
+  const isHydratingSession = useBacktestStore((state) => state.isHydratingSession)
+  const sessionHydrateError = useBacktestStore((state) => state.sessionHydrateError)
   const restoreBacktest = useBacktestStore((state) => state.restoreBacktest)
 
   const handleViewDetails = (id: string) => {
@@ -35,14 +51,15 @@ export function DashboardPage() {
   }
 
   if (!data) {
+    return <DashboardHydrateSkeleton />
+  }
+
+  // Brief skeleton while auto-restoring — never show fabricated KPIs mid-hydrate.
+  if (isHydratingSession && !data.hasBacktest && !sessionHydrateError) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6 lg:gap-3">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <Skeleton key={index} className="h-20 min-w-0 rounded-xl" />
-          ))}
-        </div>
-        <Skeleton className="h-[400px] w-full min-w-0 rounded-xl" />
+      <div className="min-w-0 space-y-6">
+        <RestoredBacktestBanner />
+        <DashboardHydrateSkeleton />
       </div>
     )
   }
@@ -56,7 +73,7 @@ export function DashboardPage() {
     >
       <RestoredBacktestBanner />
 
-      {!data.hasBacktest && (
+      {!data.hasBacktest && !isHydratingSession && (
         <Card className="border-dashed">
           <CardContent className="flex flex-col gap-3 py-6 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">

@@ -55,6 +55,20 @@ export function getResearchSession(id: string): PersistedResearchSession | null 
   return memory.get(id) ?? null
 }
 
+export function listResearchSessionsBySavedAt(): PersistedResearchSession[] {
+  hydrate()
+  return [...memory.values()].sort((a, b) => b.savedAt - a.savedAt)
+}
+
+/** Latest archived research session, or null when none exist. */
+export function getLatestResearchSession(): PersistedResearchSession | null {
+  return listResearchSessionsBySavedAt()[0] ?? null
+}
+
+export async function fetchLatestResearchSession(): Promise<PersistedResearchSession | null> {
+  return getLatestResearchSession()
+}
+
 export async function fetchResearchSession(id: string): Promise<PersistedResearchSession> {
   const entry = getResearchSession(id)
   if (!entry) {

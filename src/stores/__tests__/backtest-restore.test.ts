@@ -108,6 +108,10 @@ describe('backtest store restore session', () => {
       isRestoring: false,
       restoreError: null,
       liveSession: null,
+      autoRestored: false,
+      isHydratingSession: false,
+      sessionHydrateError: null,
+      hasAttemptedSessionHydrate: false,
     })
   })
 

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { DashboardData } from '@trading-os/shared'
+import type { BacktestSummary, DashboardData } from '@trading-os/shared'
 import type { BacktestReport } from '@/core/analytics/types'
 import {
   createEmptyDashboard,
@@ -9,7 +9,12 @@ import {
   type RunBacktestPipelineParams,
 } from '@/core/dashboard'
 import { queryBacktestDetail } from '@/api/queries/backtest-details'
-import { BacktestDetailNotFoundError, saveBacktestDetail } from '@/backtests/detail-archive'
+import {
+  BacktestDetailNotFoundError,
+  listBacktestDetailsBySavedAt,
+  saveBacktestDetail,
+  type PersistedBacktestDetail,
+} from '@/backtests/detail-archive'
 import {
   buildPersistedDetail,
   restoreDashboardFromDetail,
@@ -37,12 +42,50 @@ interface BacktestState {
   restoreError: string | null
   /** Latest run session — clearing a restored view returns here. */
   liveSession: LiveSessionSnapshot | null
+  /** True after startup hydration from the archive (refresh survival). */
+  autoRestored: boolean
+  /** One-shot startup hydrate in progress (skeleton UX). */
+  isHydratingSession: boolean
+  sessionHydrateError: string | null
+  /** Prevents duplicate auto-hydrate attempts in-session. */
+  hasAttemptedSessionHydrate: boolean
 
   runBacktest: (params?: Partial<RunBacktestPipelineParams>) => Promise<void>
   restoreBacktest: (id: string) => Promise<void>
+  /** Apply a TanStack-fetched latest detail as the active session (no rerun). */
+  applyStartupSession: (detail: PersistedBacktestDetail) => void
+  markSessionHydrateIdle: () => void
+  markSessionHydrateFailed: (message: string) => void
+  markSessionHydrateEmpty: () => void
+  clearSessionHydrateError: () => void
+  dismissAutoRestoredBadge: () => void
   clearRestoredResult: () => void
   clearError: () => void
   clearRestoreError: () => void
+}
+
+function recentSummariesFromArchive(preferId?: string): BacktestSummary[] {
+  const details = listBacktestDetailsBySavedAt()
+  const summaries = details.map((detail) => detail.summary)
+  if (!preferId) return summaries.slice(0, 12)
+
+  const preferred = summaries.find((item) => item.id === preferId)
+  const rest = summaries.filter((item) => item.id !== preferId)
+  return (preferred ? [preferred, ...rest] : rest).slice(0, 12)
+}
+
+function lastParamsFromDetail(detail: PersistedBacktestDetail): RunBacktestPipelineParams {
+  const intervalRaw = detail.context.timeframe || defaultBacktestPipelineParams.interval
+  return {
+    ...defaultBacktestPipelineParams,
+    symbol: detail.report.config.symbol,
+    interval: intervalRaw.toLowerCase(),
+    initialCapital: detail.report.config.initialCapital,
+    commissionPercent: detail.report.config.commissionPercent,
+    positionSizePercent: detail.report.config.positionSizePercent,
+    strategyName: detail.context.strategyName,
+    strategyVersion: detail.context.strategyVersion,
+  }
 }
 
 export const useBacktestStore = create<BacktestState>((set, get) => ({
@@ -57,9 +100,63 @@ export const useBacktestStore = create<BacktestState>((set, get) => ({
   isRestoring: false,
   restoreError: null,
   liveSession: null,
+  autoRestored: false,
+  isHydratingSession: false,
+  sessionHydrateError: null,
+  hasAttemptedSessionHydrate: false,
 
   clearError: () => set({ error: null }),
   clearRestoreError: () => set({ restoreError: null }),
+  clearSessionHydrateError: () => set({ sessionHydrateError: null }),
+  dismissAutoRestoredBadge: () => set({ autoRestored: false }),
+
+  markSessionHydrateIdle: () =>
+    set({
+      isHydratingSession: true,
+      sessionHydrateError: null,
+      hasAttemptedSessionHydrate: true,
+    }),
+
+  markSessionHydrateEmpty: () =>
+    set({
+      isHydratingSession: false,
+      sessionHydrateError: null,
+      hasAttemptedSessionHydrate: true,
+      autoRestored: false,
+    }),
+
+  markSessionHydrateFailed: (message) =>
+    set({
+      isHydratingSession: false,
+      sessionHydrateError: message,
+      hasAttemptedSessionHydrate: true,
+    }),
+
+  applyStartupSession: (detail) => {
+    const recentBacktests = recentSummariesFromArchive(detail.id)
+    const dashboard = restoreDashboardFromDetail(detail, recentBacktests)
+    const lastParams = lastParamsFromDetail(detail)
+    const liveSession: LiveSessionSnapshot = {
+      dashboard,
+      report: detail.report,
+      lastParams,
+    }
+
+    set({
+      dashboard,
+      report: detail.report,
+      lastParams,
+      liveSession,
+      viewMode: 'live',
+      restoredId: null,
+      isRestoring: false,
+      restoreError: null,
+      autoRestored: true,
+      isHydratingSession: false,
+      sessionHydrateError: null,
+      hasAttemptedSessionHydrate: true,
+    })
+  },
 
   clearRestoredResult: () => {
     const live = get().liveSession
@@ -90,7 +187,10 @@ export const useBacktestStore = create<BacktestState>((set, get) => ({
     try {
       const detail = await queryBacktestDetail(id)
       const recentBacktests =
-        get().liveSession?.dashboard.recentBacktests ?? get().dashboard.recentBacktests
+        get().liveSession?.dashboard.recentBacktests ??
+        (get().dashboard.recentBacktests.length > 0
+          ? get().dashboard.recentBacktests
+          : recentSummariesFromArchive(id))
 
       const dashboard = restoreDashboardFromDetail(detail, recentBacktests)
 
@@ -123,9 +223,11 @@ export const useBacktestStore = create<BacktestState>((set, get) => ({
       isRunning: true,
       error: null,
       restoreError: null,
+      sessionHydrateError: null,
       lastParams: params,
       viewMode: 'live',
       restoredId: null,
+      autoRestored: false,
     })
 
     try {
@@ -158,6 +260,7 @@ export const useBacktestStore = create<BacktestState>((set, get) => ({
         liveSession,
         viewMode: 'live',
         restoredId: null,
+        autoRestored: false,
       })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Backtest failed'
