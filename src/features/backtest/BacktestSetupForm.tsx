@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FlaskConical, Play, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
+import { FlaskConical, Play, Loader2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,9 @@ import { SymbolSelect } from '@/components/market/SymbolSelect'
 import { TimeframeSelect } from '@/components/market/TimeframeSelect'
 import { useBinanceKlines } from '@/api/queries/binance-market'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
+import { DEFAULT_MA_CROSS_PARAMS, type MovingAverageCrossParams } from '@/core/strategy'
 import { useBacktestStore } from '@/stores/backtest.store'
+import { useResearchStore } from '@/stores/research.store'
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
 
 interface BacktestSetupFormProps {
@@ -19,12 +21,14 @@ interface BacktestSetupFormProps {
   variant?: 'strategy' | 'backtest'
 }
 
-export function BacktestSetupForm({ title, description }: BacktestSetupFormProps) {
+export function BacktestSetupForm({ title, description, variant = 'strategy' }: BacktestSetupFormProps) {
   const navigate = useNavigate()
   const runBacktest = useBacktestStore((state) => state.runBacktest)
   const isRunning = useBacktestStore((state) => state.isRunning)
   const error = useBacktestStore((state) => state.error)
   const hasBacktest = useBacktestStore((state) => state.dashboard.hasBacktest)
+  const appliedParameters = useResearchStore((state) => state.appliedParameters)
+  const clearAppliedParameters = useResearchStore((state) => state.clearAppliedParameters)
 
   const [symbol, setSymbol] = useState(defaultBacktestPipelineParams.symbol)
   const [interval, setInterval] = useState<BacktestTimeframe>(
@@ -34,6 +38,17 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
   const [initialCapital, setInitialCapital] = useState(
     String(defaultBacktestPipelineParams.initialCapital),
   )
+  const [strategyParams, setStrategyParams] = useState<MovingAverageCrossParams>({
+    ...DEFAULT_MA_CROSS_PARAMS,
+  })
+  const [appliedNotice, setAppliedNotice] = useState(false)
+
+  useEffect(() => {
+    if (!appliedParameters) return
+    setStrategyParams({ ...appliedParameters })
+    setAppliedNotice(true)
+    clearAppliedParameters()
+  }, [appliedParameters, clearAppliedParameters])
 
   const parsedLimit = useMemo(() => {
     const value = Number(limit)
@@ -50,6 +65,13 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
 
   const canRun = candlesReady && !candlesLoading && !isRunning
 
+  const updateParam = (key: keyof MovingAverageCrossParams, raw: string) => {
+    const value = Number(raw)
+    if (!Number.isFinite(value)) return
+    setStrategyParams((current) => ({ ...current, [key]: Math.round(value) }))
+    setAppliedNotice(false)
+  }
+
   const handleRunBacktest = async () => {
     if (!candlesQuery.data?.length) return
 
@@ -63,6 +85,7 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
         ? parsedCapital
         : defaultBacktestPipelineParams.initialCapital,
       candles: candlesQuery.data,
+      strategyParams,
     })
 
     if (!useBacktestStore.getState().error) {
@@ -87,6 +110,20 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
           <CardTitle className="text-base">Run Backtest</CardTitle>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
+          <p className="text-pretty text-[11px] text-muted-foreground">
+            <strong className="text-foreground">Run Backtest</strong> evaluates the current
+            parameters once.{' '}
+            <strong className="text-foreground">Random Search</strong> explores many combinations
+            in the Optimizer.
+          </p>
+
+          {appliedNotice && (
+            <div className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-accent">
+              Parameters applied from Random Search. Review and click Run Backtest when ready —
+              nothing was saved or rerun automatically.
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="min-w-0 space-y-2">
               <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -131,7 +168,41 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
               />
             </div>
 
-            <div className="min-w-0 space-y-2 md:col-span-2">
+            <div className="min-w-0 space-y-2">
+              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Fast EMA
+              </label>
+              <Input
+                value={String(strategyParams.fastPeriod)}
+                onChange={(event) => updateParam('fastPeriod', event.target.value)}
+                inputMode="numeric"
+                className="w-full bg-white/[0.03]"
+              />
+            </div>
+            <div className="min-w-0 space-y-2">
+              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Slow EMA
+              </label>
+              <Input
+                value={String(strategyParams.slowPeriod)}
+                onChange={(event) => updateParam('slowPeriod', event.target.value)}
+                inputMode="numeric"
+                className="w-full bg-white/[0.03]"
+              />
+            </div>
+            <div className="min-w-0 space-y-2">
+              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                RSI Period
+              </label>
+              <Input
+                value={String(strategyParams.rsiPeriod)}
+                onChange={(event) => updateParam('rsiPeriod', event.target.value)}
+                inputMode="numeric"
+                className="w-full bg-white/[0.03]"
+              />
+            </div>
+
+            <div className="min-w-0 space-y-2">
               <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Initial Capital
               </label>
@@ -207,6 +278,15 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
                 </>
               )}
             </Button>
+
+            {variant === 'strategy' && (
+              <Link to="/optimizer" className="w-full sm:w-auto">
+                <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Random Search
+                </Button>
+              </Link>
+            )}
 
             {hasBacktest && (
               <Link to="/" className="w-full sm:w-auto">

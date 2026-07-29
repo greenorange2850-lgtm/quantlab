@@ -6,7 +6,11 @@ import { BacktestEngine } from '../backtest/BacktestEngine.js'
 import { MarketDataEngine } from '../market/market-data-engine.js'
 import { defaultRiskConfig } from '../risk/config.js'
 import { validateRiskConfig } from '../risk/validators.js'
-import { MovingAverageCrossStrategy } from '../strategy/MovingAverageCrossStrategy.js'
+import {
+  DEFAULT_MA_CROSS_PARAMS,
+  MovingAverageCrossStrategy,
+  type MovingAverageCrossParams,
+} from '../strategy/MovingAverageCrossStrategy.js'
 import {
   buildDashboardViewModel,
   createBacktestSummaryFromReport,
@@ -25,6 +29,8 @@ export interface RunBacktestPipelineParams {
   strategyVersion?: string
   /** Prefetched canonical candles (TanStack Query). When set, mock data is never used. */
   candles?: Candle[]
+  /** Optional MA Cross parameters — defaults preserve original strategy behavior. */
+  strategyParams?: Partial<MovingAverageCrossParams>
   /**
    * @deprecated Prefer passing live `candles`. Ignored when `candles` is provided.
    * Retained only so older call sites compiling against the type do not break.
@@ -37,6 +43,7 @@ export interface RunBacktestPipelineResult {
   candles: Candle[]
   context: DashboardViewModelContext
   backtestId: string
+  strategyParams: MovingAverageCrossParams
 }
 
 export const defaultBacktestPipelineParams: RunBacktestPipelineParams = {
@@ -48,6 +55,7 @@ export const defaultBacktestPipelineParams: RunBacktestPipelineParams = {
   positionSizePercent: 100,
   strategyName: 'Moving Average Cross',
   strategyVersion: 'v1.0.0',
+  strategyParams: { ...DEFAULT_MA_CROSS_PARAMS },
 }
 
 function createBacktestId(): string {
@@ -66,7 +74,11 @@ export async function runBacktestPipeline(
 ): Promise<RunBacktestPipelineResult> {
   validateRiskConfig(defaultRiskConfig)
 
-  const strategy = new MovingAverageCrossStrategy()
+  const strategyParams: MovingAverageCrossParams = {
+    ...DEFAULT_MA_CROSS_PARAMS,
+    ...params.strategyParams,
+  }
+  const strategy = new MovingAverageCrossStrategy(strategyParams)
   const backtestEngine = new BacktestEngine()
   const backtestConfig = {
     initialCapital: params.initialCapital,
@@ -113,6 +125,7 @@ export async function runBacktestPipeline(
     candles,
     context,
     backtestId: createBacktestId(),
+    strategyParams,
   }
 }
 
