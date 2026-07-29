@@ -10,15 +10,20 @@ import {
 import {
   clearResearchSessionArchive,
   deleteResearchSession,
+  ensureResearchSessionArchiveHydrated,
+  isResearchSessionArchiveHydrated,
   listResearchSessionsBySavedAt,
   resetResearchSessionMemory,
   saveResearchSession,
+  slimResearchSessionForStorage,
 } from '@/research/session-archive'
 import {
   collectFilterOptions,
   filterAndSortSessions,
   toSessionListItem,
 } from '../session-list-model'
+
+const STORAGE_KEY = 'quantlab.research-sessions.v1'
 
 function stubReport(netProfit: number, trades = 12): BacktestReport {
   return {
@@ -35,14 +40,31 @@ function stubReport(netProfit: number, trades = 12): BacktestReport {
       largestLoser: -15,
       finalBalance: 10_000 + netProfit,
     },
-    equityCurve: [],
+    equityCurve: Array.from({ length: 40 }, (_, i) => ({
+      time: 1_700_000_000_000 + i * 3_600_000,
+      equity: 10_000 + i,
+      cash: 10_000,
+      drawdown: 0,
+    })),
     drawdown: {
       currentDrawdown: 0,
       maxDrawdown: 0.1,
       maxDrawdownDurationMs: 0,
       maxDrawdownRecoveryMs: null,
     },
-    monthlyReturns: { months: [], bestMonth: null, worstMonth: null },
+    monthlyReturns: {
+      months: [
+        {
+          month: '2024-01',
+          startEquity: 10_000,
+          endEquity: 10_000 + netProfit,
+          monthlyReturn: netProfit / 10_000,
+          cumulativeReturn: netProfit / 10_000,
+        },
+      ],
+      bestMonth: null,
+      worstMonth: null,
+    },
     tradeAnalysis: {
       averageWin: 20,
       averageLoss: -10,
@@ -123,13 +145,26 @@ function makeSession(input: {
   }
 }
 
-function installMemoryLocalStorage(): void {
+function installMemoryLocalStorage(options?: {
+  quotaBytes?: number
+}): Map<string, string> {
   const store = new Map<string, string>()
+  const quota = options?.quotaBytes
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
     value: {
       getItem: (key: string) => store.get(key) ?? null,
       setItem: (key: string, value: string) => {
+        if (quota !== undefined) {
+          const others = [...store.entries()]
+            .filter(([k]) => k !== key)
+            .reduce((sum, [, v]) => sum + v.length, 0)
+          if (others + value.length > quota) {
+            const err = new Error('QuotaExceededError')
+            err.name = 'QuotaExceededError'
+            throw err
+          }
+        }
         store.set(key, value)
       },
       removeItem: (key: string) => {
@@ -140,6 +175,20 @@ function installMemoryLocalStorage(): void {
       },
     },
   })
+  return store
+}
+
+/** Mirrors ResearchSessionsPage empty-state gate (no empty UI before hydrate). */
+function shouldShowSessionsEmptyState(input: {
+  archiveReady: boolean
+  data: unknown[] | undefined
+  isPending: boolean
+}): boolean {
+  const awaitingHydration =
+    !input.archiveReady ||
+    (!input.data && input.isPending)
+  if (awaitingHydration) return false
+  return (input.data?.length ?? 0) === 0
 }
 
 describe('research sessions archive + query sync', () => {
@@ -147,6 +196,120 @@ describe('research sessions archive + query sync', () => {
     installMemoryLocalStorage()
     clearResearchSessionArchive()
     appQueryClient.clear()
+  })
+
+  it('creating a session persists it under the stable storage key', () => {
+    const session = makeSession({
+      id: 'rs-create',
+      symbol: 'ETHUSDT',
+      interval: '1h',
+      createdAt: 100,
+      score: 1.8,
+      netProfit: 200,
+    })
+    const ok = saveResearchSession({
+      session,
+      report: buildResearchReport(session),
+      savedAt: 200,
+    })
+    expect(ok).toBe(true)
+
+    const raw = localStorage.getItem(STORAGE_KEY)
+    expect(raw).toBeTruthy()
+    const parsed = JSON.parse(raw!) as Record<string, { session: { id: string } }>
+    expect(parsed['rs-create']?.session.id).toBe('rs-create')
+    expect(listResearchSessionsBySavedAt()).toHaveLength(1)
+  })
+
+  it('hydration restores sessions on startup (memory drop, storage kept)', () => {
+    const session = makeSession({
+      id: 'rs-persist',
+      symbol: 'SOLUSDT',
+      interval: '4h',
+      createdAt: 500,
+      score: 2.2,
+      netProfit: 300,
+    })
+    saveResearchSession({
+      session,
+      report: buildResearchReport(session),
+      savedAt: 600,
+    })
+    expect(isResearchSessionArchiveHydrated()).toBe(true)
+
+    // Simulate tab close / reopen: module memory cleared, localStorage kept.
+    resetResearchSessionMemory()
+    appQueryClient.clear()
+    expect(isResearchSessionArchiveHydrated()).toBe(false)
+
+    ensureResearchSessionArchiveHydrated()
+    expect(isResearchSessionArchiveHydrated()).toBe(true)
+    expect(listResearchSessionsBySavedAt()).toHaveLength(1)
+    expect(listResearchSessionsBySavedAt()[0]?.session.id).toBe('rs-persist')
+
+    // List metrics still resolve from slim persisted summaries.
+    const item = toSessionListItem(listResearchSessionsBySavedAt()[0]!)
+    expect(item.netProfit).toBe(300)
+    expect(item.totalTrades).toBe(12)
+  })
+
+  it('session list does not render empty before hydration completes', () => {
+    expect(
+      shouldShowSessionsEmptyState({
+        archiveReady: false,
+        data: undefined,
+        isPending: true,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldShowSessionsEmptyState({
+        archiveReady: true,
+        data: undefined,
+        isPending: true,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldShowSessionsEmptyState({
+        archiveReady: true,
+        data: [],
+        isPending: false,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldShowSessionsEmptyState({
+        archiveReady: true,
+        data: [{ id: 'rs-1' }],
+        isPending: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('deleting a session removes it from persisted storage', () => {
+    const session = makeSession({
+      id: 'rs-del',
+      symbol: 'BTCUSDT',
+      interval: '1h',
+      createdAt: 10,
+      score: 1.1,
+      netProfit: 40,
+    })
+    saveResearchSession({
+      session,
+      report: buildResearchReport(session),
+      savedAt: 20,
+    })
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toHaveProperty('rs-del')
+
+    expect(deleteResearchSession('rs-del')).toBe(true)
+    expect(listResearchSessionsBySavedAt()).toHaveLength(0)
+
+    const raw = localStorage.getItem(STORAGE_KEY)
+    expect(raw).toBeTruthy()
+    expect(JSON.parse(raw!)).not.toHaveProperty('rs-del')
+    expect(Object.keys(JSON.parse(raw!))).toHaveLength(0)
   })
 
   it('lists and deletes archived sessions', () => {
@@ -171,7 +334,6 @@ describe('research sessions archive + query sync', () => {
   })
 
   it('generated session appears in query list and updates count', () => {
-    // Simulate visiting /research-sessions while empty (stale empty cache).
     appQueryClient.setQueryData(researchSessionKeys.list(), [])
     expect(appQueryClient.getQueryData(researchSessionKeys.list())).toEqual([])
 
@@ -202,40 +364,9 @@ describe('research sessions archive + query sync', () => {
     ).toEqual(entry)
   })
 
-  it('persisted session restores after reload (memory drop, storage kept)', () => {
-    const session = makeSession({
-      id: 'rs-persist',
-      symbol: 'SOLUSDT',
-      interval: '4h',
-      createdAt: 500,
-      score: 2.2,
-      netProfit: 300,
-    })
-    saveResearchSession({
-      session,
-      report: buildResearchReport(session),
-      savedAt: 600,
-    })
-    syncResearchSessionQueries()
-    expect(listResearchSessionsBySavedAt()).toHaveLength(1)
-
-    // Simulate full page reload: drop memory + query cache, keep localStorage.
-    resetResearchSessionMemory()
-    appQueryClient.clear()
-    expect(listResearchSessionsBySavedAt()).toHaveLength(1)
-    expect(listResearchSessionsBySavedAt()[0]?.session.id).toBe('rs-persist')
-
-    syncResearchSessionQueries()
-    const list = appQueryClient.getQueryData(researchSessionKeys.list()) as
-      | ReturnType<typeof listResearchSessionsBySavedAt>
-      | undefined
-    expect(list).toHaveLength(1)
-    expect(list?.[0]?.session.id).toBe('rs-persist')
-  })
-
   it('deleting a session removes it from the synced query list', () => {
     const session = makeSession({
-      id: 'rs-del',
+      id: 'rs-del-q',
       symbol: 'BTCUSDT',
       interval: '1h',
       createdAt: 10,
@@ -252,14 +383,62 @@ describe('research sessions archive + query sync', () => {
       (appQueryClient.getQueryData(researchSessionKeys.list()) as unknown[]).length,
     ).toBe(1)
 
-    expect(deleteResearchSession('rs-del')).toBe(true)
+    expect(deleteResearchSession('rs-del-q')).toBe(true)
     syncResearchSessionQueries()
 
     expect(appQueryClient.getQueryData(researchSessionKeys.list())).toEqual([])
     expect(
-      appQueryClient.getQueryData(researchSessionKeys.detail('rs-del')),
+      appQueryClient.getQueryData(researchSessionKeys.detail('rs-del-q')),
     ).toBeUndefined()
     expect(appQueryClient.getQueryData(researchSessionKeys.latest())).toBeNull()
+  })
+
+  it('slim storage payload drops heavy series but keeps list metrics', () => {
+    const session = makeSession({
+      id: 'rs-slim',
+      symbol: 'BTCUSDT',
+      interval: '1h',
+      createdAt: 1,
+      score: 1.5,
+      netProfit: 90,
+    })
+    const entry = {
+      session,
+      report: buildResearchReport(session),
+      savedAt: 2,
+    }
+    const slim = slimResearchSessionForStorage(entry)
+    expect(slim.session.candidates[0]!.report.equityCurve).toEqual([])
+    expect(slim.session.candidates[0]!.report.trades).toEqual([])
+    expect(slim.session.candidates[0]!.report.summary.netProfit).toBe(90)
+
+    const fullJson = JSON.stringify(entry)
+    const slimJson = JSON.stringify(slim)
+    expect(slimJson.length).toBeLessThan(fullJson.length / 2)
+  })
+
+  it('survives quota pressure by writing slim payloads', () => {
+    // Tiny quota that a full equity/trades payload would blow past.
+    installMemoryLocalStorage({ quotaBytes: 8_000 })
+    clearResearchSessionArchive()
+
+    const session = makeSession({
+      id: 'rs-quota',
+      symbol: 'BTCUSDT',
+      interval: '1h',
+      createdAt: 1,
+      score: 1.4,
+      netProfit: 55,
+    })
+    const ok = saveResearchSession({
+      session,
+      report: buildResearchReport(session),
+      savedAt: 2,
+    })
+    expect(ok).toBe(true)
+
+    resetResearchSessionMemory()
+    expect(listResearchSessionsBySavedAt()[0]?.session.id).toBe('rs-quota')
   })
 })
 

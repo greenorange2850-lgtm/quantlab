@@ -1,11 +1,14 @@
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { appQueryClient } from '@/api/query-client'
 import {
+  ensureResearchSessionArchiveHydrated,
   fetchLatestResearchSession,
   fetchResearchSession,
   fetchResearchSessions,
   getLatestResearchSession,
   getResearchSession,
+  isResearchSessionArchiveHydrated,
   listResearchSessionsBySavedAt,
   removeResearchSession,
   type PersistedResearchSession,
@@ -48,39 +51,72 @@ export function syncResearchSessionQueries(
   }
 }
 
+/**
+ * Gates UI until the research archive has been hydrated from localStorage.
+ * Prevents a flash of “0 sessions archived” before restore finishes.
+ */
+export function useResearchSessionArchiveReady(): boolean {
+  const [ready, setReady] = useState(() => isResearchSessionArchiveHydrated())
+
+  useEffect(() => {
+    if (ready) return
+    ensureResearchSessionArchiveHydrated()
+    syncResearchSessionQueries()
+    setReady(true)
+  }, [ready])
+
+  return ready
+}
+
 export function useResearchSession(id: string | null) {
+  const archiveReady = useResearchSessionArchiveReady()
+
   return useQuery({
     queryKey: researchSessionKeys.detail(id ?? ''),
     queryFn: () => fetchResearchSession(id!),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && archiveReady,
     staleTime: Infinity,
-    initialData: () => (id ? getResearchSession(id) ?? undefined : undefined),
+    initialData: () =>
+      archiveReady && id ? (getResearchSession(id) ?? undefined) : undefined,
   })
 }
 
 export function useLatestResearchSession(enabled = true) {
+  const archiveReady = useResearchSessionArchiveReady()
+
   return useQuery({
     queryKey: researchSessionKeys.latest(),
     queryFn: fetchLatestResearchSession,
-    enabled,
+    enabled: enabled && archiveReady,
     staleTime: Infinity,
     retry: 1,
-    initialData: () => getLatestResearchSession() ?? undefined,
-    initialDataUpdatedAt: () => (getLatestResearchSession() ? Date.now() : undefined),
+    initialData: () =>
+      archiveReady ? (getLatestResearchSession() ?? undefined) : undefined,
+    initialDataUpdatedAt: () =>
+      archiveReady && getLatestResearchSession() ? Date.now() : undefined,
   })
 }
 
 /** TanStack Query owns the research session list (archive-backed). */
 export function useResearchSessions(enabled = true) {
+  const archiveReady = useResearchSessionArchiveReady()
+
   return useQuery({
     queryKey: researchSessionKeys.list(),
     queryFn: fetchResearchSessions,
-    enabled,
+    enabled: enabled && archiveReady,
     staleTime: Infinity,
     retry: 1,
-    // Always prefer archive as initial snapshot when available.
-    initialData: () => listResearchSessionsBySavedAt(),
-    initialDataUpdatedAt: () => Date.now(),
+    // Only seed from archive after hydrate — never treat pre-hydrate [] as loaded.
+    initialData: () => {
+      if (!archiveReady) return undefined
+      const list = listResearchSessionsBySavedAt()
+      return list.length > 0 ? list : undefined
+    },
+    initialDataUpdatedAt: () => {
+      if (!archiveReady) return undefined
+      return listResearchSessionsBySavedAt().length > 0 ? Date.now() : undefined
+    },
   })
 }
 
