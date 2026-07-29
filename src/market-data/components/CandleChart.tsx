@@ -25,8 +25,8 @@ export function CandleChart({ symbol, timeframe }: CandleChartProps) {
   return (
     <Card>
       <CardHeader><CardTitle className="text-sm">Price Chart</CardTitle></CardHeader>
-      <CardContent>
-        <div className="h-[280px]">
+      <CardContent className="min-w-0">
+        <div className="h-[220px] w-full min-w-0 sm:h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />

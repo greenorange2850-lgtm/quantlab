@@ -96,10 +96,11 @@ export function TradeDistribution({
       transition={{ duration: 0.5, delay: 0.35 }}
     >
       <h2 className="text-sm font-semibold mb-3">Trade Distribution</h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         {charts.map((chart, i) => (
           <motion.div
             key={chart.title}
+            className="min-w-0"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4, delay: 0.4 + i * 0.05 }}

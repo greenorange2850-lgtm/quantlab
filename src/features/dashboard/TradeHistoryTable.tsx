@@ -138,19 +138,19 @@ export function TradeHistoryTable({ data }: TradeHistoryTableProps) {
       transition={{ duration: 0.5, delay: 0.45 }}
     >
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-base">Trade History</CardTitle>
-          <div className="relative w-48">
+          <div className="relative w-full min-w-0 sm:w-48">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search trades..."
               value={globalFilter}
               onChange={(event) => setGlobalFilter(event.target.value)}
-              className="h-8 pl-9 text-xs bg-white/[0.03]"
+              className="h-11 bg-white/[0.03] pl-9 text-xs sm:h-8"
             />
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           {data.length === 0 ? (
             <EmptyState
               title="No trades yet"
@@ -158,8 +158,8 @@ export function TradeHistoryTable({ data }: TradeHistoryTableProps) {
             />
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="min-w-0 overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm">
                   <thead>
                     {table.getHeaderGroups().map((headerGroup) => (
                       <tr key={headerGroup.id} className="border-b border-border">

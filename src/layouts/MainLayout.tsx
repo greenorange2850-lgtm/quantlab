@@ -1,6 +1,13 @@
+import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { TopNav } from './TopNav'
+import {
+  DRAWER_BACKDROP,
+  MAIN_CONTENT_OFFSET,
+  MAIN_PADDING,
+  PAGE_SHELL,
+} from './layout-classes'
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
@@ -18,13 +25,49 @@ const pageTitles: Record<string, string> = {
 export function MainLayout() {
   const location = useLocation()
   const title = pageTitles[location.pathname] ?? 'Dashboard'
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileNavOpen(false)
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [mobileNavOpen])
 
   return (
-    <div className="min-h-screen">
-      <Sidebar />
-      <div className="ml-[240px]">
-        <TopNav title={title} />
-        <main className="p-6 max-w-[1440px] mx-auto">
+    <div className={PAGE_SHELL}>
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          className={DRAWER_BACKDROP}
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
+
+      <Sidebar mobileOpen={mobileNavOpen} onNavigate={() => setMobileNavOpen(false)} />
+
+      <div className={MAIN_CONTENT_OFFSET}>
+        <TopNav
+          title={title}
+          onMenuClick={() => setMobileNavOpen(true)}
+          menuOpen={mobileNavOpen}
+        />
+        <main className={MAIN_PADDING}>
           <Outlet />
         </main>
       </div>

@@ -46,11 +46,11 @@ export function MarketContextPanel({ context }: MarketContextPanelProps) {
           <CardTitle>Market Context</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg border border-border bg-white/[0.02] p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Newspaper className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="min-w-0 rounded-lg border border-border bg-white/[0.02] p-3">
+              <div className="mb-2 flex min-w-0 items-center gap-2">
+                <Newspaper className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
                   News Sentiment
                 </span>
               </div>
@@ -61,10 +61,10 @@ export function MarketContextPanel({ context }: MarketContextPanelProps) {
               <Progress value={context.newsSentiment} className="mt-2" />
             </div>
 
-            <div className="rounded-lg border border-border bg-white/[0.02] p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+            <div className="min-w-0 rounded-lg border border-border bg-white/[0.02] p-3">
+              <div className="mb-2 flex min-w-0 items-center gap-2">
+                <Gauge className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
                   Fear & Greed
                 </span>
               </div>
@@ -75,10 +75,10 @@ export function MarketContextPanel({ context }: MarketContextPanelProps) {
               <Progress value={context.fearGreed} className="mt-2" />
             </div>
 
-            <div className="rounded-lg border border-border bg-white/[0.02] p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+            <div className="min-w-0 rounded-lg border border-border bg-white/[0.02] p-3">
+              <div className="mb-2 flex min-w-0 items-center gap-2">
+                <Activity className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
                   Volatility
                 </span>
               </div>
@@ -98,13 +98,13 @@ export function MarketContextPanel({ context }: MarketContextPanelProps) {
               {context.upcomingEvents.map((event) => (
                 <div
                   key={event.id}
-                  className="flex items-center justify-between rounded-md px-2.5 py-1.5 hover:bg-white/[0.03] transition-colors"
+                  className="flex min-w-0 flex-col gap-2 rounded-md px-2.5 py-1.5 transition-colors hover:bg-white/[0.03] sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-[10px] font-mono text-muted w-10">{event.time}</span>
-                    <span className="text-xs">{event.event}</span>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="w-10 shrink-0 font-mono text-[10px] text-muted">{event.time}</span>
+                    <span className="min-w-0 truncate text-xs">{event.event}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
                     <Badge variant="outline" className="text-[9px] font-mono">
                       {event.currency}
                     </Badge>
@@ -117,26 +117,26 @@ export function MarketContextPanel({ context }: MarketContextPanelProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 pt-1">
-            <div className="flex items-center gap-2">
-              <Droplets className="h-3.5 w-3.5 text-success" />
-              <div>
+          <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <Droplets className="h-3.5 w-3.5 shrink-0 text-success" />
+              <div className="min-w-0">
                 <p className="text-[10px] text-muted-foreground">Liquidity</p>
-                <p className="text-xs font-medium capitalize">{context.liquidityStatus}</p>
+                <p className="truncate text-xs font-medium capitalize">{context.liquidityStatus}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Clock className="h-3.5 w-3.5 text-accent" />
-              <div>
+            <div className="flex min-w-0 items-center gap-2">
+              <Clock className="h-3.5 w-3.5 shrink-0 text-accent" />
+              <div className="min-w-0">
                 <p className="text-[10px] text-muted-foreground">Session</p>
                 <p className="text-xs font-medium">{context.marketSession}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
-              <div>
+            <div className="flex min-w-0 items-center gap-2">
+              <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
                 <p className="text-[10px] text-muted-foreground">Spread</p>
-                <p className="text-xs font-mono font-medium">{context.currentSpread} pips</p>
+                <p className="truncate font-mono text-xs font-medium">{context.currentSpread} pips</p>
               </div>
             </div>
           </div>

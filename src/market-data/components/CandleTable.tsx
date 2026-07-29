@@ -19,9 +19,9 @@ export function CandleTable({ symbol, timeframe }: CandleTableProps) {
   return (
     <Card>
       <CardHeader><CardTitle className="text-sm">Candle Data</CardTitle></CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-auto max-h-[300px]">
-          <table className="w-full text-xs">
+      <CardContent className="min-w-0 p-0">
+        <div className="max-h-[300px] min-w-0 overflow-auto">
+          <table className="w-full min-w-[560px] text-xs">
             <thead className="sticky top-0 bg-card-solid/95">
               <tr className="border-b border-border">
                 {['Timestamp', 'O', 'H', 'L', 'C', 'Vol', 'Session'].map((h) => (

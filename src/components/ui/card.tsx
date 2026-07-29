@@ -9,7 +9,7 @@ export function Card({ className, glow, hover = true, children, ...props }: Card
   return (
     <div
       className={cn(
-        'rounded-xl border border-border bg-card backdrop-blur-xl',
+        'w-full min-w-0 rounded-xl border border-border bg-card backdrop-blur-xl',
         'shadow-[0_4px_24px_rgba(0,0,0,0.2)]',
         hover && 'transition-all duration-300 hover:border-border-hover hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)]',
         glow && 'shadow-[0_0_40px_rgba(99,102,241,0.08)]',

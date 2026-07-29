@@ -24,8 +24,8 @@ export function PortfolioPanel({ portfolio }: PortfolioPanelProps) {
         <CardHeader>
           <CardTitle className="text-base">Portfolio</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <CardContent className="min-w-0 space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <MetricTile
               icon={<Wallet className="h-3.5 w-3.5" />}
               label="Cash"
@@ -52,27 +52,27 @@ export function PortfolioPanel({ portfolio }: PortfolioPanelProps) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-border bg-white/[0.02] p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="min-w-0 rounded-lg border border-border bg-white/[0.02] p-3">
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                 Realized PnL
               </p>
               <p
                 className={cn(
-                  'text-lg font-semibold font-mono',
+                  'truncate font-mono text-lg font-semibold',
                   portfolio.realizedPnL >= 0 ? 'text-success' : 'text-danger',
                 )}
               >
                 <AnimatedCounter value={portfolio.realizedPnL} prefix="$" decimals={2} />
               </p>
             </div>
-            <div className="rounded-lg border border-border bg-white/[0.02] p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+            <div className="min-w-0 rounded-lg border border-border bg-white/[0.02] p-3">
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                 Unrealized PnL
               </p>
               <p
                 className={cn(
-                  'text-lg font-semibold font-mono',
+                  'truncate font-mono text-lg font-semibold',
                   portfolio.unrealizedPnL >= 0 ? 'text-success' : 'text-danger',
                 )}
               >
@@ -82,8 +82,8 @@ export function PortfolioPanel({ portfolio }: PortfolioPanelProps) {
           </div>
 
           {hasPositions ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="min-w-0 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-border">
                     {['Symbol', 'Qty', 'Market Value', 'Cost Basis', 'Unrealized', 'Realized', 'Weight'].map(
@@ -149,12 +149,14 @@ function MetricTile({
   format: 'currency'
 }) {
   return (
-    <div className="rounded-lg border border-border bg-white/[0.02] p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-muted-foreground">{icon}</span>
-        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</span>
+    <div className="min-w-0 rounded-lg border border-border bg-white/[0.02] p-3">
+      <div className="mb-2 flex min-w-0 items-center gap-2">
+        <span className="shrink-0 text-muted-foreground">{icon}</span>
+        <span className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
       </div>
-      <p className="text-lg font-semibold font-mono">
+      <p className="truncate font-mono text-lg font-semibold">
         {format === 'currency' ? (
           <AnimatedCounter value={value} prefix="$" decimals={2} />
         ) : (

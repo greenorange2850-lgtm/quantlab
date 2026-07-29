@@ -26,19 +26,19 @@ export function DashboardPage() {
   if (!data) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
           {Array.from({ length: 8 }).map((_, index) => (
-            <Skeleton key={index} className="h-20 rounded-xl" />
+            <Skeleton key={index} className="h-20 min-w-0 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-[400px] rounded-xl" />
+        <Skeleton className="h-[400px] w-full min-w-0 rounded-xl" />
       </div>
     )
   }
 
   return (
     <motion.div
-      className="space-y-6"
+      className="min-w-0 space-y-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
@@ -46,15 +46,15 @@ export function DashboardPage() {
       {!data.hasBacktest && (
         <Card className="border-dashed">
           <CardContent className="flex flex-col gap-3 py-6 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-sm font-medium">No backtest results yet</p>
-              <p className="text-xs text-muted-foreground mt-1">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-balance">No backtest results yet</p>
+              <p className="mt-1 text-pretty text-xs text-muted-foreground">
                 Run a backtest in Strategy Lab to populate KPIs, equity curve, and trade history.
               </p>
             </div>
-            <Link to="/strategy-lab">
-              <Button>
-                <FlaskConical className="h-4 w-4 mr-2" />
+            <Link to="/strategy-lab" className="w-full shrink-0 md:w-auto">
+              <Button className="min-h-11 w-full md:min-h-9 md:w-auto">
+                <FlaskConical className="mr-2 h-4 w-4" />
                 Open Strategy Lab
               </Button>
             </Link>
