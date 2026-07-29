@@ -94,6 +94,21 @@ export function listBacktestDetailIds(): string[] {
   return [...memory.keys()]
 }
 
+/** All persisted details, newest `savedAt` first. */
+export function listBacktestDetailsBySavedAt(): PersistedBacktestDetail[] {
+  hydrateMemoryFromStorage()
+  return [...memory.values()].sort((a, b) => b.savedAt - a.savedAt)
+}
+
+/** Latest successful persisted backtest, or null when the archive is empty. */
+export function getLatestBacktestDetail(): PersistedBacktestDetail | null {
+  return listBacktestDetailsBySavedAt()[0] ?? null
+}
+
+export async function fetchLatestBacktestDetail(): Promise<PersistedBacktestDetail | null> {
+  return getLatestBacktestDetail()
+}
+
 /** Test helper — clears memory + storage. */
 export function clearBacktestDetailArchive(): void {
   memory.clear()

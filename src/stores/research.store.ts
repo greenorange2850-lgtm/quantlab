@@ -13,7 +13,10 @@ import {
 } from '@/core/research'
 import type { MovingAverageCrossParams } from '@/core/strategy'
 import { DEFAULT_MA_CROSS_PARAMS } from '@/core/strategy'
-import { saveResearchSession } from '@/research/session-archive'
+import {
+  saveResearchSession,
+  type PersistedResearchSession,
+} from '@/research/session-archive'
 import { saveBacktestDetail } from '@/backtests/detail-archive'
 import { buildPersistedDetail } from '@/backtests/restore-dashboard'
 import { createBacktestSummaryFromReport } from '@/core/dashboard'
@@ -46,6 +49,7 @@ interface ResearchState {
   applyParameters: (params: MovingAverageCrossParams) => void
   clearAppliedParameters: () => void
   selectCandidate: (id: string | null) => void
+  hydrateFromPersistedSession: (entry: PersistedResearchSession) => void
   clearError: () => void
   reset: () => void
 }
@@ -91,6 +95,26 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   clearAppliedParameters: () => set({ appliedParameters: null }),
 
   selectCandidate: (id) => set({ selectedCandidateId: id }),
+
+  hydrateFromPersistedSession: (entry) => {
+    if (get().status === 'running') return
+    const status: ResearchUiStatus =
+      entry.session.status === 'completed' && entry.report.topCandidates.length === 0
+        ? 'empty'
+        : entry.session.status === 'idle'
+          ? 'idle'
+          : entry.session.status
+
+    set({
+      status,
+      session: entry.session,
+      report: entry.report,
+      progress: entry.session.progress,
+      error: entry.session.error,
+      selectedCandidateId: entry.report.bestCandidate?.id ?? null,
+      validationErrors: [],
+    })
+  },
 
   cancelRandomSearch: () => {
     const controller = get().abortController
