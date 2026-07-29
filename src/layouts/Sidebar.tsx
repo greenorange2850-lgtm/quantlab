@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -21,6 +22,7 @@ import { NAV_ITEMS } from '@trading-os/shared'
 import { cn } from '@/lib/utils'
 import { userProfile } from '@/constants/user-profile'
 import { useAppStore } from '@/stores/app.store'
+import { sidebarClassName } from './layout-classes'
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
@@ -35,17 +37,39 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Settings,
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean
+  onNavigate?: () => void
+}
+
+export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
   const location = useLocation()
   const connectionStatus = useAppStore((s) => s.connectionStatus)
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)')
+    const update = () => setIsDesktop(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
+  const drawerInactive = !isDesktop && !mobileOpen
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-[240px] flex-col border-r border-border bg-card-solid/80 backdrop-blur-xl">
+    <aside
+      id="app-sidebar"
+      className={sidebarClassName(mobileOpen)}
+      aria-hidden={drawerInactive || undefined}
+      inert={drawerInactive || undefined}
+      data-mobile-open={mobileOpen ? 'true' : 'false'}
+    >
       <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-purple-600 shadow-[0_0_20px_rgba(99,102,241,0.3)]">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-purple-600 shadow-[0_0_20px_rgba(99,102,241,0.3)]">
           <TrendingUp className="h-5 w-5 text-white" />
         </div>
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <span className="text-xs font-semibold tracking-tight text-foreground leading-tight">
             AI Trading
           </span>
@@ -53,16 +77,16 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-0.5 px-3 py-2 overflow-y-auto">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label="Primary">
         {NAV_ITEMS.map((item) => {
           const Icon = iconMap[item.icon]
           const isActive = location.pathname === item.path
 
           return (
-            <Link key={item.id} to={item.path}>
+            <Link key={item.id} to={item.path} onClick={onNavigate}>
               <motion.div
                 className={cn(
-                  'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                  'group relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors lg:min-h-0',
                   isActive
                     ? 'bg-accent/10 text-foreground'
                     : 'text-muted hover:bg-white/5 hover:text-foreground',
@@ -77,34 +101,34 @@ export function Sidebar() {
                     transition={{ type: 'spring', bounce: 0.15, duration: 0.5 }}
                   />
                 )}
-                {Icon && <Icon className={cn('relative h-4 w-4', isActive && 'text-accent')} />}
-                <span className="relative flex-1 font-medium">{item.label}</span>
+                {Icon && <Icon className={cn('relative h-4 w-4 shrink-0', isActive && 'text-accent')} />}
+                <span className="relative min-w-0 flex-1 truncate font-medium">{item.label}</span>
               </motion.div>
             </Link>
           )
         })}
       </nav>
 
-      <div className="border-t border-border p-3 space-y-2">
-        <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-white/5 transition-colors cursor-pointer">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-accent/30 to-purple-600/30 text-xs font-semibold text-foreground border border-border">
+      <div className="space-y-2 border-t border-border p-3">
+        <div className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-white/5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-gradient-to-br from-accent/30 to-purple-600/30 text-xs font-semibold text-foreground">
             {userProfile.avatar}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-foreground truncate">{userProfile.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{userProfile.email}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium text-foreground">{userProfile.name}</p>
+            <p className="truncate text-[10px] text-muted-foreground">{userProfile.email}</p>
           </div>
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </div>
 
         <div className="flex items-center justify-between px-3 py-1.5">
-          <div className="flex items-center gap-2">
-            <Crown className="h-3.5 w-3.5 text-warning" />
-            <span className="text-[10px] font-medium text-muted uppercase tracking-wider">
+          <div className="flex min-w-0 items-center gap-2">
+            <Crown className="h-3.5 w-3.5 shrink-0 text-warning" />
+            <span className="truncate text-[10px] font-medium uppercase tracking-wider text-muted">
               {userProfile.subscription}
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             {connectionStatus === 'connected' ? (
               <>
                 <Wifi className="h-3 w-3 text-success" />

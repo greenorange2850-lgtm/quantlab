@@ -41,51 +41,80 @@ export function ImportPanel({ symbol, timeframe }: ImportPanelProps) {
           <Upload className="h-4 w-4 text-accent" /> Import Engine
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-3 gap-2">
+      <CardContent className="min-w-0 space-y-4">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
           {SOURCES.map((s) => (
             <button
               key={s.id}
+              type="button"
               onClick={() => setSource(s.id)}
               className={cn(
-                'rounded-lg border p-3 text-left transition-all',
-                source === s.id ? 'border-accent/40 bg-accent/10' : 'border-border hover:bg-white/[0.03]',
+                'min-h-11 w-full rounded-lg border p-3 text-left transition-all md:min-h-0',
+                source === s.id
+                  ? 'border-accent/40 bg-accent/10'
+                  : 'border-border hover:bg-white/[0.03]',
               )}
             >
               <p className="text-xs font-medium">{s.label}</p>
-              <p className="text-[10px] text-muted-foreground">{s.desc}</p>
+              <p className="text-pretty text-[10px] text-muted-foreground">{s.desc}</p>
             </button>
           ))}
         </div>
 
         <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragOver(true)
+          }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
           onClick={() => document.getElementById('mde-file')?.click()}
           className={cn(
-            'flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 cursor-pointer transition-all',
+            'flex w-full min-h-11 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-all sm:p-8',
             dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-border-hover',
           )}
         >
-          <input id="mde-file" type="file" className="hidden" accept=".csv,.txt,.tsv" onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0])} />
-          <FileSpreadsheet className="h-8 w-8 text-muted mb-2" />
+          <input
+            id="mde-file"
+            type="file"
+            className="hidden"
+            accept=".csv,.txt,.tsv"
+            onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0])}
+          />
+          <FileSpreadsheet className="mb-2 h-8 w-8 text-muted" />
           {file ? (
-            <p className="text-sm font-medium">{file.name} <span className="text-muted-foreground">({(file.size / 1024).toFixed(1)} KB)</span></p>
+            <p className="max-w-full break-all text-sm font-medium">
+              {file.name}{' '}
+              <span className="text-muted-foreground">({(file.size / 1024).toFixed(1)} KB)</span>
+            </p>
           ) : (
-            <p className="text-sm text-muted-foreground">Drag & drop or click to browse</p>
+            <p className="text-pretty text-sm text-muted-foreground">Drag & drop or click to browse</p>
           )}
         </div>
 
         {importMut.isPending && (
           <div className="space-y-2">
             <Progress value={66} className="h-1" />
-            <p className="text-xs text-muted text-center">Processing and validating...</p>
+            <p className="text-center text-xs text-muted">Processing and validating...</p>
           </div>
         )}
 
-        <Button className="w-full" disabled={!canImport || importMut.isPending} onClick={() => file && symbol && timeframe && importMut.mutate({ file, source, symbol, timeframe })}>
-          {importMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Importing...</> : <><Upload className="h-4 w-4" /> Import Data</>}
+        <Button
+          className="min-h-11 w-full"
+          disabled={!canImport || importMut.isPending}
+          onClick={() =>
+            file && symbol && timeframe && importMut.mutate({ file, source, symbol, timeframe })
+          }
+        >
+          {importMut.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Importing...
+            </>
+          ) : (
+            <>
+              <Upload className="h-4 w-4" /> Import Data
+            </>
+          )}
         </Button>
 
         <AnimatePresence>

@@ -70,21 +70,21 @@ export function StrategyHealth({ metrics, overallScore }: StrategyHealthProps) {
         <CardHeader>
           <CardTitle>Strategy Health</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row items-center gap-6">
+        <CardContent className="min-w-0">
+          <div className="flex flex-col items-center gap-6 sm:flex-row">
             <CircularGauge score={overallScore} />
-            <div className="flex-1 w-full space-y-3">
+            <div className="w-full min-w-0 flex-1 space-y-3">
               {metrics.map((metric, i) => (
                 <motion.div
                   key={metric.id}
                   initial={{ opacity: 0, x: 12 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.6 + i * 0.06 }}
-                  className="space-y-1.5"
+                  className="min-w-0 space-y-1.5"
                 >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted">{metric.label}</span>
-                    <span className="font-mono font-medium">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="min-w-0 truncate text-muted">{metric.label}</span>
+                    <span className="shrink-0 font-mono font-medium">
                       <AnimatedCounter value={metric.score} suffix="/100" />
                     </span>
                   </div>

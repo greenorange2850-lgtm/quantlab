@@ -30,7 +30,7 @@ export function QualityReport({ symbol, timeframe }: QualityReportProps) {
           <span className="text-sm text-muted-foreground">Quality Score</span>
           <span className="text-2xl font-bold font-mono text-accent">{data.qualityScore as number}%</span>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
           {[
             { label: 'Missing', value: data.missingCandles },
             { label: 'Duplicates', value: data.duplicateCandles },
@@ -39,8 +39,8 @@ export function QualityReport({ symbol, timeframe }: QualityReportProps) {
             { label: 'TZ Issues', value: data.timezoneIssues },
             { label: 'Weekend Gaps', value: data.weekendGaps },
           ].map((item) => (
-            <div key={item.label} className="rounded-md bg-white/[0.03] p-2">
-              <p className="text-muted-foreground text-[10px]">{item.label}</p>
+            <div key={item.label} className="min-w-0 rounded-md bg-white/[0.03] p-2">
+              <p className="truncate text-[10px] text-muted-foreground">{item.label}</p>
               <p className="font-mono font-medium">{String(item.value)}</p>
             </div>
           ))}
