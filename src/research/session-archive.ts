@@ -35,9 +35,19 @@ function readStorage(): Record<string, PersistedResearchSession> {
  * and Compare. Full reports with equity/trades live in the backtest detail archive.
  */
 function slimBacktestReport(report: BacktestReport): BacktestReport {
+  // Keep first/last equity points so Research Period survives refresh without
+  // storing the full curve (full series lives in the backtest detail archive).
+  const curve = report.equityCurve
+  const endpoints =
+    curve.length === 0
+      ? []
+      : curve.length === 1
+        ? [curve[0]!]
+        : [curve[0]!, curve[curve.length - 1]!]
+
   return {
     ...report,
-    equityCurve: [],
+    equityCurve: endpoints,
     trades: [],
     topTrades: [],
     monthlyReturns: {

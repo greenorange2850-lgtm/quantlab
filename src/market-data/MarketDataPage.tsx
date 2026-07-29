@@ -20,7 +20,7 @@ export function MarketDataPage() {
   return (
     <motion.div className="min-w-0 space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="min-w-0">
-        <h2 className="text-lg font-semibold">Market Data Engine</h2>
+        <h2 className="text-lg font-semibold">Market Explorer</h2>
         <p className="text-pretty text-sm text-muted-foreground">
           Import, validate, and manage historical candle data
         </p>

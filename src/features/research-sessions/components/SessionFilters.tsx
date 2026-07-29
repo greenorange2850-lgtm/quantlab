@@ -23,12 +23,12 @@ export function SessionFilters({
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div className="min-w-0 space-y-1.5">
         <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Search strategy
+          Search
         </label>
         <Input
           value={filters.search}
           disabled={disabled}
-          placeholder="Moving Average Cross"
+          placeholder="Strategy, market, or session id"
           onChange={(event) => onChange({ ...filters, search: event.target.value })}
           className="w-full bg-white/[0.03]"
         />

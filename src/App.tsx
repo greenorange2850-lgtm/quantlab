@@ -4,8 +4,6 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { MarketExplorerPage } from '@/pages/MarketExplorerPage'
 import { StrategyLabPage } from '@/pages/StrategyLabPage'
 import { BacktestLabPage } from '@/pages/BacktestLabPage'
-import { TradeReplayPage } from '@/pages/TradeReplayPage'
-import { ReportsPage } from '@/pages/ReportsPage'
 import { OptimizerPage } from '@/pages/OptimizerPage'
 import { ResearchAnalysisPage } from '@/features/research-analysis'
 import { StrategyComparePage } from '@/features/strategy-compare'
@@ -13,7 +11,21 @@ import { ResearchSessionsPage } from '@/features/research-sessions'
 import { PlaceholderPage } from '@/pages/PlaceholderPage'
 
 const placeholders = [
-  { path: '/settings', title: 'Settings', description: 'Platform configuration, data sources and preferences.' },
+  {
+    path: '/trade-replay',
+    title: 'Trade Replay',
+    description: 'Step-through trade replay is planned for a future release.',
+  },
+  {
+    path: '/reports',
+    title: 'Reports',
+    description: 'Exportable performance reports are planned for a future release.',
+  },
+  {
+    path: '/settings',
+    title: 'Settings',
+    description: 'Platform configuration, data sources and preferences.',
+  },
 ] as const
 
 export function App() {
@@ -25,8 +37,6 @@ export function App() {
           <Route path="/market-explorer" element={<MarketExplorerPage />} />
           <Route path="/strategy-lab" element={<StrategyLabPage />} />
           <Route path="/backtest-lab" element={<BacktestLabPage />} />
-          <Route path="/trade-replay" element={<TradeReplayPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
           <Route path="/optimizer" element={<OptimizerPage />} />
           <Route path="/research-analysis" element={<ResearchAnalysisPage />} />
           <Route path="/strategy-compare" element={<StrategyComparePage />} />

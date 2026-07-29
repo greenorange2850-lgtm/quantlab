@@ -16,6 +16,7 @@ import { MarketContextPanel } from '@/features/dashboard/MarketContextPanel'
 import { WatchlistPanel } from '@/features/dashboard/WatchlistPanel'
 import { useDashboard } from '@/api/queries/dashboard'
 import { useBacktestStore } from '@/stores/backtest.store'
+import { shouldAwaitDashboardSessionHydrate } from '@/research/ui-gates'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -40,6 +41,9 @@ export function DashboardPage() {
   const restoredId = useBacktestStore((state) => state.restoredId)
   const isRestoring = useBacktestStore((state) => state.isRestoring)
   const isHydratingSession = useBacktestStore((state) => state.isHydratingSession)
+  const hasAttemptedSessionHydrate = useBacktestStore(
+    (state) => state.hasAttemptedSessionHydrate,
+  )
   const sessionHydrateError = useBacktestStore((state) => state.sessionHydrateError)
   const restoreBacktest = useBacktestStore((state) => state.restoreBacktest)
 
@@ -54,8 +58,15 @@ export function DashboardPage() {
     return <DashboardHydrateSkeleton />
   }
 
-  // Brief skeleton while auto-restoring — never show fabricated KPIs mid-hydrate.
-  if (isHydratingSession && !data.hasBacktest && !sessionHydrateError) {
+  // Never flash the empty CTA before startup hydrate finishes.
+  if (
+    shouldAwaitDashboardSessionHydrate({
+      hasBacktest: data.hasBacktest,
+      hasAttemptedSessionHydrate,
+      isHydratingSession,
+      sessionHydrateError,
+    })
+  ) {
     return (
       <div className="min-w-0 space-y-6">
         <RestoredBacktestBanner />
@@ -73,7 +84,7 @@ export function DashboardPage() {
     >
       <RestoredBacktestBanner />
 
-      {!data.hasBacktest && !isHydratingSession && (
+      {!data.hasBacktest && hasAttemptedSessionHydrate && !isHydratingSession && (
         <Card className="border-dashed">
           <CardContent className="flex flex-col gap-3 py-6 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">

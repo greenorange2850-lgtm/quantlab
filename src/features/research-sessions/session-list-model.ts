@@ -68,7 +68,17 @@ export function filterAndSortSessions(
   const search = filters.search.trim().toLowerCase()
 
   const filtered = items.filter((item) => {
-    if (search && !item.strategyName.toLowerCase().includes(search)) return false
+    if (search) {
+      const haystack = [
+        item.strategyName,
+        item.market,
+        item.timeframe,
+        item.id,
+      ]
+        .join(' ')
+        .toLowerCase()
+      if (!haystack.includes(search)) return false
+    }
     if (filters.market && item.market !== filters.market) return false
     if (filters.timeframe && item.timeframe !== filters.timeframe) return false
     return true
