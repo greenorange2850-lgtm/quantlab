@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { FlaskConical } from 'lucide-react'
 import { KpiCards } from '@/features/dashboard/KpiCards'
 import { EquityCurveChart } from '@/features/dashboard/EquityCurveChart'
+import { DrawdownChart } from '@/features/dashboard/DrawdownChart'
 import { MonthlyPerformance } from '@/features/dashboard/MonthlyPerformance'
 import { TradeDistribution } from '@/features/dashboard/TradeDistribution'
 import { BestStrategyCard } from '@/features/dashboard/BestStrategyCard'
@@ -72,6 +73,7 @@ export function DashboardPage() {
 
       <KpiCards metrics={data.kpis} />
       <EquityCurveChart data={data.equityCurve} />
+      <DrawdownChart data={data.equityCurve} />
       <MonthlyPerformance
         monthlyProfit={data.monthlyProfit}
         dailyHeatmap={data.dailyHeatmap}
