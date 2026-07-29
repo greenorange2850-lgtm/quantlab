@@ -22,6 +22,7 @@ export interface GetCandlesParams {
   symbol: string
   interval: CandleInterval
   limit: number
+  signal?: AbortSignal
 }
 
 export interface MarketDataProvider {

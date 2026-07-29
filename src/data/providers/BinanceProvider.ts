@@ -1,7 +1,11 @@
 import { normalizeBinanceKlines, type Candle } from '../candles.js'
 import type { CandleInterval, GetCandlesParams, MarketDataProvider } from './MarketDataProvider.js'
 
-export const BINANCE_BASE_URL = 'https://api.binance.com'
+/** Public market-data host (no API key). Prefer over the trading API host for read-only klines/exchangeInfo. */
+export const BINANCE_MARKET_DATA_BASE_URL = 'https://data-api.binance.vision'
+
+/** @deprecated Prefer BINANCE_MARKET_DATA_BASE_URL — kept as alias for existing imports. */
+export const BINANCE_BASE_URL = BINANCE_MARKET_DATA_BASE_URL
 
 /** @deprecated Use CandleInterval from MarketDataProvider */
 export type KlineInterval = CandleInterval
@@ -23,8 +27,14 @@ function validateFetchParams(symbol: string, interval: string, limit: number): v
 }
 
 export class BinanceProvider implements MarketDataProvider {
+  private readonly baseUrl: string
+
+  constructor(baseUrl: string = BINANCE_MARKET_DATA_BASE_URL) {
+    this.baseUrl = baseUrl
+  }
+
   async getCandles(params: GetCandlesParams): Promise<Candle[]> {
-    const { symbol, interval, limit } = params
+    const { symbol, interval, limit, signal } = params
     validateFetchParams(symbol, interval, limit)
 
     const query = new URLSearchParams({
@@ -32,12 +42,15 @@ export class BinanceProvider implements MarketDataProvider {
       interval,
       limit: String(limit),
     })
-    const url = `${BINANCE_BASE_URL}/api/v3/klines?${query.toString()}`
+    const url = `${this.baseUrl}/api/v3/klines?${query.toString()}`
 
     let response: Response
     try {
-      response = await fetch(url)
+      response = await fetch(url, { signal })
     } catch (error) {
+      if (signal?.aborted) {
+        throw error
+      }
       const message = error instanceof Error ? error.message : String(error)
       throw new Error(`Binance API request failed: ${message}`)
     }
