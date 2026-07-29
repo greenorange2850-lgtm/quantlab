@@ -26,7 +26,7 @@ export function DashboardPage() {
   if (!data) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6 lg:gap-3">
           {Array.from({ length: 8 }).map((_, index) => (
             <Skeleton key={index} className="h-20 min-w-0 rounded-xl" />
           ))}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { TopNav } from './TopNav'
 import {
@@ -50,14 +51,21 @@ export function MainLayout() {
 
   return (
     <div className={PAGE_SHELL}>
-      {mobileNavOpen ? (
-        <button
-          type="button"
-          aria-label="Close navigation menu"
-          className={DRAWER_BACKDROP}
-          onClick={() => setMobileNavOpen(false)}
-        />
-      ) : null}
+      <AnimatePresence>
+        {mobileNavOpen ? (
+          <motion.button
+            key="drawer-backdrop"
+            type="button"
+            aria-label="Close navigation menu"
+            className={DRAWER_BACKDROP}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            onClick={() => setMobileNavOpen(false)}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <Sidebar mobileOpen={mobileNavOpen} onNavigate={() => setMobileNavOpen(false)} />
 
