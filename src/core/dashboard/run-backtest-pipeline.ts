@@ -116,18 +116,14 @@ export function mergeRecentBacktests(
 
 export function mapPipelineResultToDashboard(
   pipelineResult: RunBacktestPipelineResult,
-  recentBacktests: BacktestSummary[] = [],
+  _recentBacktests: BacktestSummary[] = [],
 ) {
-  const summary = createBacktestSummaryFromReport(
-    pipelineResult.report,
-    pipelineResult.context,
-    pipelineResult.backtestId,
-  )
-
+  // Session view model only. Recent Backtests are owned by TanStack Query
+  // (`useBacktestHistory`) — do not duplicate server history into the store.
   return buildDashboardViewModel(
     pipelineResult.report,
     pipelineResult.context,
-    mergeRecentBacktests(summary, recentBacktests),
+    [],
   )
 }
 
@@ -159,5 +155,10 @@ export function buildCreateBacktestRequest(
     startDate: first !== undefined ? isoDate(first) : summary.date,
     endDate: last !== undefined ? isoDate(last) : summary.date,
     initialCapital: pipelineResult.report.config.initialCapital,
+    equityCurve: pipelineResult.report.equityCurve.map((point) => ({
+      date: isoDate(point.time),
+      equity: Math.round(point.equity * 100) / 100,
+      drawdown: Math.round(point.drawdown * 1000) / 10,
+    })),
   }
 }

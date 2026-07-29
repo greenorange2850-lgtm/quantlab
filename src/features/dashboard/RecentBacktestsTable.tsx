@@ -15,11 +15,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
 import type { BacktestSummary, BacktestStatus } from '@/types'
 
 interface RecentBacktestsTableProps {
   data: BacktestSummary[]
+  isLoading?: boolean
 }
 
 const statusVariant: Record<BacktestStatus, 'success' | 'accent' | 'danger' | 'warning' | 'outline'> = {
@@ -30,7 +33,7 @@ const statusVariant: Record<BacktestStatus, 'success' | 'accent' | 'danger' | 'w
   cancelled: 'outline',
 }
 
-export function RecentBacktestsTable({ data }: RecentBacktestsTableProps) {
+export function RecentBacktestsTable({ data, isLoading = false }: RecentBacktestsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
 
@@ -171,6 +174,20 @@ export function RecentBacktestsTable({ data }: RecentBacktestsTableProps) {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          {isLoading ? (
+            <div className="space-y-3 px-4 py-6">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} className="h-10 w-full rounded-md" />
+              ))}
+            </div>
+          ) : data.length === 0 ? (
+            <EmptyState
+              title="No recent backtests"
+              description="Completed backtests will appear here after you run research in Strategy Lab."
+              className="py-10"
+            />
+          ) : (
+            <>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -242,6 +259,8 @@ export function RecentBacktestsTable({ data }: RecentBacktestsTableProps) {
               </Button>
             </div>
           </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </motion.div>

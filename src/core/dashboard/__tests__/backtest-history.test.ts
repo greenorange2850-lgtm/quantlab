@@ -106,5 +106,7 @@ describe('buildCreateBacktestRequest', () => {
     expect(request.startDate).toBe('2024-01-01')
     expect(request.endDate).toBe('2024-01-10')
     expect(request.initialCapital).toBe(10_000)
+    expect(request.equityCurve?.length).toBe(2)
+    expect(request.equityCurve?.[0]?.date).toBe('2024-01-01')
   })
 })
