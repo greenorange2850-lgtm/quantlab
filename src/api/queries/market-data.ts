@@ -8,6 +8,7 @@ import type {
   Timeframe,
 } from '@trading-os/shared'
 import { api } from '../client.js'
+import { getApiBaseUrl } from '../base-url.js'
 
 export const marketDataKeys = {
   symbols: ['market-data', 'symbols'] as const,
@@ -73,7 +74,7 @@ export function useImportMarketData() {
       formData.append('symbolId', symbolId)
       formData.append('timeframeId', timeframeId)
 
-      const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api/v1'
+      const baseUrl = getApiBaseUrl()
       const response = await fetch(`${baseUrl}/market-data/import`, {
         method: 'POST',
         body: formData,
