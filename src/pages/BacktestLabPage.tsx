@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { BacktestSetupForm } from '@/features/backtest/BacktestSetupForm'
 
-export function StrategyLabPage() {
+export function BacktestLabPage() {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -9,9 +9,9 @@ export function StrategyLabPage() {
       transition={{ duration: 0.4 }}
     >
       <BacktestSetupForm
-        title="Strategy Lab"
-        description="Select a live Binance pair and timeframe, then run the strategy → risk → analytics pipeline."
-        variant="strategy"
+        title="Backtest Lab"
+        description="Configure symbol and timeframe from live Binance markets, then run historical backtests."
+        variant="backtest"
       />
     </motion.div>
   )
