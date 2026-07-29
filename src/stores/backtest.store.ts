@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { BacktestSummary, DashboardData } from '@trading-os/shared'
+import type { Backtest, BacktestSummary, DashboardData } from '@trading-os/shared'
 import type { BacktestReport } from '@/core/analytics/types'
 import { api } from '@/api/client'
 import {
   buildCreateBacktestRequest,
   createEmptyDashboard,
   defaultBacktestPipelineParams,
+  hydrateDashboardFromPersistedBacktests,
   mapPipelineResultToDashboard,
   runBacktestPipeline,
   type RunBacktestPipelineParams,
@@ -34,8 +35,14 @@ interface BacktestState {
   /** Session preference (last run form) — persisted. */
   lastParams: RunBacktestPipelineParams
   runBacktest: (params?: Partial<RunBacktestPipelineParams>) => Promise<void>
-  /** Replace server-owned history in the dashboard view model. */
-  hydrateRecentBacktests: (items: BacktestSummary[]) => void
+  /**
+   * Hydrate dashboard from persisted backtest history.
+   * Preserves a live session dashboard when `report` is present.
+   */
+  hydrateFromPersistedBacktests: (
+    items: BacktestSummary[],
+    latest?: Backtest | null,
+  ) => void
   clearError: () => void
 }
 
@@ -50,12 +57,12 @@ export const useBacktestStore = create<BacktestState>()(
 
       clearError: () => set({ error: null }),
 
-      hydrateRecentBacktests: (items) => {
+      hydrateFromPersistedBacktests: (items, latest = null) => {
         set((state) => ({
-          dashboard: {
-            ...state.dashboard,
-            recentBacktests: items.slice(0, 12),
-          },
+          dashboard: hydrateDashboardFromPersistedBacktests(state.dashboard, items, {
+            latest,
+            preserveSessionDashboard: state.report !== null,
+          }),
         }))
       },
 
@@ -85,10 +92,11 @@ export const useBacktestStore = create<BacktestState>()(
             await api.post<BacktestSummary>('/backtests', request)
             const serverHistory = await api.get<BacktestSummary[]>('/backtests')
             set((state) => ({
-              dashboard: {
-                ...state.dashboard,
-                recentBacktests: serverHistory.slice(0, 12),
-              },
+              dashboard: hydrateDashboardFromPersistedBacktests(
+                state.dashboard,
+                serverHistory,
+                { preserveSessionDashboard: true },
+              ),
             }))
           } catch {
             // Optimistic history already applied — do not fail the backtest UX.

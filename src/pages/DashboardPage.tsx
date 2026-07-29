@@ -22,7 +22,7 @@ import { Card, CardContent } from '@/components/ui/card'
 
 export function DashboardPage() {
   const { data } = useDashboard()
-  // Hydrate Recent Backtests from GET /backtests (server history).
+  // Hydrate dashboard KPIs / history from persisted GET /backtests.
   useBacktestHistory()
   const isRunning = useBacktestStore((state) => state.isRunning)
 

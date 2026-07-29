@@ -1,6 +1,8 @@
 export { buildDashboardViewModel, createBacktestSummaryFromReport } from './dashboard-view-model.js'
 export type { DashboardViewModelContext } from './dashboard-view-model.js'
 export { createEmptyDashboard } from './empty-dashboard.js'
+export { hydrateDashboardFromPersistedBacktests } from './hydrate-dashboard-from-backtests.js'
+export type { HydrateDashboardOptions } from './hydrate-dashboard-from-backtests.js'
 export {
   buildCreateBacktestRequest,
   defaultBacktestPipelineParams,

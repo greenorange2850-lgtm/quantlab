@@ -159,5 +159,10 @@ export function buildCreateBacktestRequest(
     startDate: first !== undefined ? isoDate(first) : summary.date,
     endDate: last !== undefined ? isoDate(last) : summary.date,
     initialCapital: pipelineResult.report.config.initialCapital,
+    equityCurve: pipelineResult.report.equityCurve.map((point) => ({
+      date: isoDate(point.time),
+      equity: Math.round(point.equity * 100) / 100,
+      drawdown: Math.round(point.drawdown * 1000) / 10,
+    })),
   }
 }
