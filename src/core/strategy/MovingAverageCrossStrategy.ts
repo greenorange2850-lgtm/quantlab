@@ -5,25 +5,43 @@ import { SignalType } from '../signals/SignalType.js'
 import type { Signal } from '../signals/Signal.js'
 import type { Strategy } from './Strategy.js'
 
-const FAST_PERIOD = 20
-const SLOW_PERIOD = 50
-const RSI_PERIOD = 14
-const MIN_CANDLES = SLOW_PERIOD + 1
+export interface MovingAverageCrossParams {
+  fastPeriod: number
+  slowPeriod: number
+  rsiPeriod: number
+}
+
+/** Defaults preserve the original hardcoded strategy behavior. */
+export const DEFAULT_MA_CROSS_PARAMS: MovingAverageCrossParams = {
+  fastPeriod: 20,
+  slowPeriod: 50,
+  rsiPeriod: 14,
+}
 
 export class MovingAverageCrossStrategy implements Strategy {
   readonly name = 'MovingAverageCross'
+  readonly params: MovingAverageCrossParams
+
+  constructor(params: Partial<MovingAverageCrossParams> = {}) {
+    this.params = {
+      ...DEFAULT_MA_CROSS_PARAMS,
+      ...params,
+    }
+  }
 
   evaluate(candles: Candle[], symbol: string): Signal {
+    const { fastPeriod, slowPeriod, rsiPeriod } = this.params
+    const minCandles = slowPeriod + 1
     const timestamp = candles.at(-1)?.time ?? Date.now()
 
-    if (candles.length < MIN_CANDLES) {
-      return this.hold(symbol, timestamp, 0, `Insufficient candle history (need at least ${MIN_CANDLES})`)
+    if (candles.length < minCandles) {
+      return this.hold(symbol, timestamp, 0, `Insufficient candle history (need at least ${minCandles})`)
     }
 
     const closes = extractClosePrices(candles)
-    const emaFast = calculateEMA(closes, FAST_PERIOD)
-    const emaSlow = calculateEMA(closes, SLOW_PERIOD)
-    const rsi = calculateRSI(closes, RSI_PERIOD)
+    const emaFast = calculateEMA(closes, fastPeriod)
+    const emaSlow = calculateEMA(closes, slowPeriod)
+    const rsi = calculateRSI(closes, rsiPeriod)
 
     const i = closes.length - 1
     const prev = i - 1
@@ -47,7 +65,7 @@ export class MovingAverageCrossStrategy implements Strategy {
       return {
         signal: SignalType.BUY,
         confidence: this.confidenceFromRsi(rsiNow),
-        reason: `EMA${FAST_PERIOD} crossed above EMA${SLOW_PERIOD} with RSI confirmation (${rsiNow.toFixed(2)})`,
+        reason: `EMA${fastPeriod} crossed above EMA${slowPeriod} with RSI confirmation (${rsiNow.toFixed(2)})`,
         timestamp,
         symbol,
         stopLossPrice: slowNow,
@@ -58,7 +76,7 @@ export class MovingAverageCrossStrategy implements Strategy {
       return {
         signal: SignalType.SELL,
         confidence: this.confidenceFromRsi(100 - rsiNow),
-        reason: `EMA${FAST_PERIOD} crossed below EMA${SLOW_PERIOD} with RSI confirmation (${rsiNow.toFixed(2)})`,
+        reason: `EMA${fastPeriod} crossed below EMA${slowPeriod} with RSI confirmation (${rsiNow.toFixed(2)})`,
         timestamp,
         symbol,
         stopLossPrice: slowNow,
@@ -78,7 +96,7 @@ export class MovingAverageCrossStrategy implements Strategy {
       symbol,
       timestamp,
       0.5,
-      `No EMA crossover (EMA${FAST_PERIOD}=${fastNow.toFixed(2)}, EMA${SLOW_PERIOD}=${slowNow.toFixed(2)})`,
+      `No EMA crossover (EMA${fastPeriod}=${fastNow.toFixed(2)}, EMA${slowPeriod}=${slowNow.toFixed(2)})`,
     )
   }
 
@@ -87,14 +105,16 @@ export class MovingAverageCrossStrategy implements Strategy {
     ema50: number
     rsi: number
   } | null {
-    if (candles.length < MIN_CANDLES) {
+    const { fastPeriod, slowPeriod, rsiPeriod } = this.params
+    const minCandles = slowPeriod + 1
+    if (candles.length < minCandles) {
       return null
     }
 
     const closes = extractClosePrices(candles)
-    const ema20 = calculateEMA(closes, FAST_PERIOD)
-    const ema50 = calculateEMA(closes, SLOW_PERIOD)
-    const rsi = calculateRSI(closes, RSI_PERIOD)
+    const ema20 = calculateEMA(closes, fastPeriod)
+    const ema50 = calculateEMA(closes, slowPeriod)
+    const rsi = calculateRSI(closes, rsiPeriod)
     const i = closes.length - 1
 
     const values = { ema20: ema20[i], ema50: ema50[i], rsi: rsi[i] }
