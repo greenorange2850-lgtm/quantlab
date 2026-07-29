@@ -55,37 +55,38 @@ export function EquityCurveChart({ data }: EquityCurveChartProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.2 }}
     >
-      <Card glow className="col-span-full">
-        <CardHeader className="flex-row items-center justify-between pb-4">
-          <div>
+      <Card glow className="col-span-full min-w-0">
+        <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <CardTitle className="text-base">Equity Curve</CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="mt-0.5 text-pretty text-xs text-muted-foreground">
               Strategy performance vs Buy & Hold benchmark
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Button
               variant={showBuyHold ? 'secondary' : 'ghost'}
               size="sm"
+              className="min-h-11 sm:min-h-8"
               onClick={() => setShowBuyHold(!showBuyHold)}
             >
               Compare Buy & Hold
             </Button>
-            <Button variant="ghost" size="sm">
-              <Calendar className="h-3.5 w-3.5 mr-1.5" />
+            <Button variant="ghost" size="sm" className="hidden min-h-11 sm:inline-flex sm:min-h-8">
+              <Calendar className="mr-1.5 h-3.5 w-3.5" />
               Date Filter
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button variant="ghost" size="icon" className="hidden h-11 w-11 sm:inline-flex sm:h-8 sm:w-8">
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="pb-4">
-          <div className="flex items-center gap-3 mb-4">
+        <CardContent className="min-w-0 pb-4">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <Badge variant="accent">Strategy</Badge>
             {showBuyHold && <Badge variant="outline">Buy & Hold</Badge>}
           </div>
-          <div className="h-[320px] w-full">
+          <div className="h-[240px] w-full min-w-0 sm:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                 <defs>

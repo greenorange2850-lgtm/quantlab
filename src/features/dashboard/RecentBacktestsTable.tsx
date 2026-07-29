@@ -158,21 +158,21 @@ export function RecentBacktestsTable({ data }: RecentBacktestsTableProps) {
       transition={{ duration: 0.5, delay: 0.55 }}
     >
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Recent Backtests</CardTitle>
-          <div className="relative">
+          <div className="relative w-full min-w-0 sm:w-48">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search backtests..."
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
-              className="w-48 pl-9 h-8 text-xs"
+              className="h-11 w-full pl-9 text-xs sm:h-8"
             />
           </div>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+        <CardContent className="min-w-0 p-0">
+          <div className="min-w-0 overflow-x-auto">
+            <table className="w-full min-w-[640px]">
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-b border-border">
@@ -214,7 +214,7 @@ export function RecentBacktestsTable({ data }: RecentBacktestsTableProps) {
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+          <div className="flex flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xs text-muted-foreground">
               {table.getFilteredRowModel().rows.length} backtests total
             </span>
@@ -222,7 +222,7 @@ export function RecentBacktestsTable({ data }: RecentBacktestsTableProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-11 w-11 sm:h-7 sm:w-7"
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
               >
@@ -234,7 +234,7 @@ export function RecentBacktestsTable({ data }: RecentBacktestsTableProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-11 w-11 sm:h-7 sm:w-7"
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
               >

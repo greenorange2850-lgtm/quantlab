@@ -35,13 +35,13 @@ function KpiCard({ metric, index }: { metric: KpiMetric; index: number }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.04 }}
     >
-      <Card className="group">
-        <CardContent className="p-4">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+      <Card className="group h-full">
+        <CardContent className="min-w-0 p-4">
+          <p className="mb-2 truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             {metric.label}
           </p>
-          <div className="flex items-end justify-between">
-            <p className="text-lg font-semibold tracking-tight font-mono">
+          <div className="flex min-w-0 items-end justify-between gap-2">
+            <p className="min-w-0 truncate text-lg font-semibold tracking-tight font-mono">
               {isNumeric && metric.format !== 'text' ? (
                 <AnimatedCounter
                   value={metric.value as number}
@@ -58,7 +58,7 @@ function KpiCard({ metric, index }: { metric: KpiMetric; index: number }) {
             {metric.change !== undefined && (
               <div
                 className={cn(
-                  'flex items-center gap-0.5 text-[10px] font-medium',
+                  'flex shrink-0 items-center gap-0.5 text-[10px] font-medium',
                   metric.trend === 'up' ? 'text-success' : metric.trend === 'down' ? 'text-danger' : 'text-muted',
                 )}
               >
@@ -68,7 +68,7 @@ function KpiCard({ metric, index }: { metric: KpiMetric; index: number }) {
               </div>
             )}
             {metric.trend && metric.change === undefined && metric.id === 'status' && (
-              <div className="flex items-center gap-0.5 text-[10px] font-medium text-success">
+              <div className="flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-success">
                 <TrendingUp className="h-3 w-3" />
               </div>
             )}
@@ -81,7 +81,7 @@ function KpiCard({ metric, index }: { metric: KpiMetric; index: number }) {
 
 export function KpiCards({ metrics }: KpiCardsProps) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11 gap-3">
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11">
       {metrics.map((metric, i) => (
         <KpiCard key={metric.id} metric={metric} index={i} />
       ))}

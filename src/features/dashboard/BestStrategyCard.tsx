@@ -30,21 +30,21 @@ export function BestStrategyCard({ strategy }: BestStrategyCardProps) {
     >
       <Card glow className="relative overflow-hidden">
         <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-accent/10 to-transparent rounded-bl-full pointer-events-none" />
-        <CardHeader className="flex-row items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/15 border border-warning/20">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/15">
               <Trophy className="h-5 w-5 text-warning" />
             </div>
-            <div>
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+            <div className="min-w-0">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                 Current Best Strategy
               </p>
-              <CardTitle className="text-lg mt-0.5">{strategy.name}</CardTitle>
+              <CardTitle className="mt-0.5 truncate text-lg">{strategy.name}</CardTitle>
               <p className="text-xs text-muted-foreground">{strategy.version}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Filter className="h-3 w-3 text-muted-foreground" />
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
             {strategy.filtersEnabled.map((filter) => (
               <Badge key={filter} variant="outline" className="text-[10px]">
                 {filter}
@@ -52,14 +52,14 @@ export function BestStrategyCard({ strategy }: BestStrategyCardProps) {
             ))}
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+        <CardContent className="min-w-0">
+          <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {metrics.map((m) => (
-              <div key={m.label} className="space-y-1">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              <div key={m.label} className="min-w-0 space-y-1">
+                <p className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
                   {m.label}
                 </p>
-                <p className="text-lg font-semibold font-mono tracking-tight">
+                <p className="truncate font-mono text-lg font-semibold tracking-tight">
                   <AnimatedCounter
                     value={m.value}
                     decimals={m.decimals ?? 0}
@@ -70,16 +70,16 @@ export function BestStrategyCard({ strategy }: BestStrategyCardProps) {
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <Button size="sm" className="min-h-11 w-full sm:min-h-8 sm:w-auto">
               <Eye className="h-3.5 w-3.5" />
               View Details
             </Button>
-            <Button variant="secondary" size="sm">
+            <Button variant="secondary" size="sm" className="min-h-11 w-full sm:min-h-8 sm:w-auto">
               <GitCompare className="h-3.5 w-3.5" />
               Compare
             </Button>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" className="min-h-11 w-full sm:min-h-8 sm:w-auto">
               <Copy className="h-3.5 w-3.5" />
               Duplicate
             </Button>

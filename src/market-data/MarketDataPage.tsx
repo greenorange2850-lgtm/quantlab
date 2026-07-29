@@ -18,35 +18,63 @@ export function MarketDataPage() {
   const { data: timeframes, isLoading: tfLoading } = useMdeTimeframes()
 
   return (
-    <motion.div className="space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div>
+    <motion.div className="min-w-0 space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="min-w-0">
         <h2 className="text-lg font-semibold">Market Data Engine</h2>
-        <p className="text-sm text-muted-foreground">Import, validate, and manage historical candle data</p>
+        <p className="text-pretty text-sm text-muted-foreground">
+          Import, validate, and manage historical candle data
+        </p>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 space-y-2">
-          <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Symbol</label>
-          {symLoading ? <Skeleton className="h-10" /> : (
+      <div className="flex min-w-0 flex-col gap-6 lg:flex-row">
+        <div className="min-w-0 flex-1 space-y-2">
+          <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Symbol
+          </label>
+          {symLoading ? (
+            <Skeleton className="h-10 w-full" />
+          ) : (
             <div className="flex flex-wrap gap-2">
               {symbols?.map((s) => (
-                <button key={s.name} onClick={() => setSymbol(s.name)} className={cn(
-                  'rounded-lg border px-3 py-2 text-xs font-mono font-medium transition-all',
-                  symbol === s.name ? 'border-accent bg-accent/10' : 'border-border hover:bg-white/[0.03] text-muted',
-                )}>{s.name}</button>
+                <button
+                  key={s.name}
+                  type="button"
+                  onClick={() => setSymbol(s.name)}
+                  className={cn(
+                    'min-h-11 rounded-lg border px-3 py-2 font-mono text-xs font-medium transition-all',
+                    symbol === s.name
+                      ? 'border-accent bg-accent/10'
+                      : 'border-border text-muted hover:bg-white/[0.03]',
+                  )}
+                >
+                  {s.name}
+                </button>
               ))}
             </div>
           )}
         </div>
-        <div className="space-y-2">
-          <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Timeframe</label>
-          {tfLoading ? <Skeleton className="h-10 w-48" /> : (
+        <div className="min-w-0 space-y-2 lg:shrink-0">
+          <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Timeframe
+          </label>
+          {tfLoading ? (
+            <Skeleton className="h-10 w-full sm:w-48" />
+          ) : (
             <div className="flex flex-wrap gap-2">
               {timeframes?.map((t) => (
-                <button key={t.code} onClick={() => setTimeframe(t.code)} className={cn(
-                  'rounded-lg border px-3 py-2 text-xs font-mono font-medium transition-all',
-                  timeframe === t.code ? 'border-accent bg-accent/10' : 'border-border hover:bg-white/[0.03] text-muted',
-                )}>{t.code}</button>
+                <button
+                  key={t.code}
+                  type="button"
+                  onClick={() => setTimeframe(t.code)}
+                  className={cn(
+                    'min-h-11 rounded-lg border px-3 py-2 font-mono text-xs font-medium transition-all',
+                    timeframe === t.code
+                      ? 'border-accent bg-accent/10'
+                      : 'border-border text-muted hover:bg-white/[0.03]',
+                  )}
+                >
+                  {t.code}
+                </button>
               ))}
             </div>
           )}
@@ -54,11 +82,11 @@ export function MarketDataPage() {
       </div>
 
       <DataOverview symbol={symbol} timeframe={timeframe} />
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
         <ImportPanel symbol={symbol} timeframe={timeframe} />
         <CandleChart symbol={symbol} timeframe={timeframe} />
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
         <QualityReport symbol={symbol} timeframe={timeframe} />
         <ImportHistory />
       </div>

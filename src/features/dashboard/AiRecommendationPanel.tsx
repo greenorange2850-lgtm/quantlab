@@ -44,15 +44,15 @@ export function AiRecommendationPanel({ recommendation }: AiRecommendationPanelP
                 {suggestions.map((s, i) => (
                   <motion.li
                     key={s.id}
-                    className="flex items-center gap-2 text-sm text-foreground/90"
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5 + i * 0.08 }}
-                  >
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-success-muted">
+                  className="flex items-start gap-2 text-sm text-foreground/90"
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 + i * 0.08 }}
+                >
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-muted">
                       <Check className="h-3 w-3 text-success" />
                     </div>
-                    {s.text}
+                    <span className="min-w-0 text-pretty">{s.text}</span>
                   </motion.li>
                 ))}
               </ul>
@@ -66,15 +66,15 @@ export function AiRecommendationPanel({ recommendation }: AiRecommendationPanelP
                 {avoid.map((s, i) => (
                   <motion.li
                     key={s.id}
-                    className="flex items-center gap-2 text-sm text-foreground/90"
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5 + i * 0.08 }}
-                  >
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-danger-muted">
+                  className="flex items-start gap-2 text-sm text-foreground/90"
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 + i * 0.08 }}
+                >
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-danger-muted">
                       <X className="h-3 w-3 text-danger" />
                     </div>
-                    {s.text}
+                    <span className="min-w-0 text-pretty">{s.text}</span>
                   </motion.li>
                 ))}
               </ul>
@@ -92,7 +92,7 @@ export function AiRecommendationPanel({ recommendation }: AiRecommendationPanelP
             <p className="text-xs text-muted leading-relaxed">{recommendation.reasoning}</p>
           </div>
 
-          <Button className="w-full sm:w-auto">
+          <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">
             <Play className="h-3.5 w-3.5" />
             Run Analysis
           </Button>

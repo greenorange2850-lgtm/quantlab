@@ -38,7 +38,7 @@ export function MonthlyPerformance({
 
   return (
     <motion.div
-      className="grid grid-cols-1 lg:grid-cols-3 gap-4"
+      className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.3 }}
@@ -48,7 +48,7 @@ export function MonthlyPerformance({
           <CardTitle>Monthly Profit</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[220px]">
+          <div className="h-[180px] w-full min-w-0 sm:h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyProfit} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
