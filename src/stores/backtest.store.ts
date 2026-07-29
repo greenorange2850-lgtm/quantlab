@@ -1,20 +1,23 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { BacktestSummary, DashboardData } from '@trading-os/shared'
+import type { DashboardData } from '@trading-os/shared'
 import type { BacktestReport } from '@/core/analytics/types'
-import { api } from '@/api/client'
-import { backtestKeys } from '@/api/queries/backtests'
+import {
+  applyOptimisticHistoryEntry,
+  markHistoryEntryNotSaved,
+  persistBacktestSummary,
+  reconcileHistoryFromServer,
+  fetchBacktestHistory,
+} from '@/api/queries/backtests'
 import {
   buildCreateBacktestRequest,
   createBacktestSummaryFromReport,
   createEmptyDashboard,
   defaultBacktestPipelineParams,
   mapPipelineResultToDashboard,
-  mergeRecentBacktests,
   runBacktestPipeline,
   type RunBacktestPipelineParams,
 } from '@/core/dashboard'
-import { queryClient } from '@/providers/query-client'
 import {
   BACKTEST_STORE_PERSIST_NAME,
   STORE_PERSIST_VERSION,
@@ -25,7 +28,7 @@ import {
 interface BacktestState {
   /**
    * Session-derived presentation model from the last successful run.
-   * Server history (`recentBacktests`) is owned by TanStack Query — not stored here.
+   * Server history is owned by TanStack Query — not stored here.
    */
   dashboard: DashboardData
   /** Session working set from the last run — not persisted. */
@@ -38,14 +41,6 @@ interface BacktestState {
   lastParams: RunBacktestPipelineParams
   runBacktest: (params?: Partial<RunBacktestPipelineParams>) => Promise<void>
   clearError: () => void
-}
-
-function writeHistoryCache(items: BacktestSummary[]) {
-  queryClient.setQueryData<BacktestSummary[]>(backtestKeys.all, items.slice(0, 50))
-}
-
-function readHistoryCache(): BacktestSummary[] {
-  return queryClient.getQueryData<BacktestSummary[]>(backtestKeys.all) ?? []
 }
 
 export const useBacktestStore = create<BacktestState>()(
@@ -70,12 +65,13 @@ export const useBacktestStore = create<BacktestState>()(
             pipelineResult.context,
             pipelineResult.backtestId,
           )
+          const request = buildCreateBacktestRequest(pipelineResult)
 
-          // Session dashboard only — do not embed server history in the store.
+          // Session dashboard only — history lives in the Query cache.
           const dashboard = mapPipelineResultToDashboard(pipelineResult, [])
 
-          // Optimistic: update Query cache (source of truth for Recent Backtests).
-          writeHistoryCache(mergeRecentBacktests(summary, readHistoryCache()))
+          // Optimistic history row: saving…
+          applyOptimisticHistoryEntry(summary, request)
 
           set({
             dashboard,
@@ -83,14 +79,13 @@ export const useBacktestStore = create<BacktestState>()(
             isRunning: false,
           })
 
-          // Persist to API; reconcile cache from server when available.
           try {
-            const request = buildCreateBacktestRequest(pipelineResult)
-            await api.post<BacktestSummary>('/backtests', request)
-            const serverHistory = await api.get<BacktestSummary[]>('/backtests')
-            writeHistoryCache(serverHistory)
+            await persistBacktestSummary(request)
+            const serverHistory = await fetchBacktestHistory()
+            reconcileHistoryFromServer(serverHistory)
           } catch {
-            // Keep optimistic Query cache — do not fail the backtest UX.
+            // Keep session results; mark the optimistic row as not saved for retry.
+            markHistoryEntryNotSaved(summary.id, request)
           }
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : 'Backtest failed'
