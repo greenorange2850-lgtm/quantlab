@@ -1,12 +1,20 @@
 import { motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { TrendingUp, TrendingDown, Minus, List } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
 import { cn, formatPercent } from '@/lib/utils'
 import type { WatchlistItem } from '@/types'
 
 interface WatchlistPanelProps {
   items: WatchlistItem[]
+}
+
+/** True when the watchlist contains real symbols (not an empty stub). */
+export function hasWatchlistItems(items: WatchlistItem[] | null | undefined): boolean {
+  return Array.isArray(items) && items.length > 0
 }
 
 const trendIcon = {
@@ -31,6 +39,37 @@ const signalVariant = {
 }
 
 export function WatchlistPanel({ items }: WatchlistPanelProps) {
+  if (!hasWatchlistItems(items)) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.65 }}
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>Watchlist</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EmptyState
+              icon={<List className="h-6 w-6" />}
+              title="No watchlist symbols yet."
+              description="A live watchlist requires connected market data and saved symbols."
+              action={
+                <Link to="/market-explorer">
+                  <Button size="sm" variant="outline">
+                    Import market data
+                  </Button>
+                </Link>
+              }
+              className="py-8"
+            />
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}

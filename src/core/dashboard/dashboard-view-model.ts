@@ -456,46 +456,15 @@ export function buildDashboardViewModel(
           ? Math.round((report.summary.netProfit / report.config.initialCapital / report.summary.maxDrawdown) * 100) / 100
           : 0,
     },
-    aiRecommendation: {
-      suggestions: [
-        {
-          id: 'session-filter',
-          text: 'Add session filter when session metadata is available',
-          type: 'add',
-        },
-        {
-          id: 'risk-cap',
-          text: 'Review position sizing against risk limits',
-          type: 'avoid',
-        },
-      ],
-      confidence: Math.min(95, overallHealthScore),
-      reasoning: `Backtest completed with ${report.summary.totalTrades} trades, ${ratioToPercent(report.summary.winRate).toFixed(1)}% win rate and ${Math.round(report.summary.profitFactor * 100) / 100} profit factor.`,
-    },
+    // AI research, live market context, and watchlist are not produced by the
+    // backtest pipeline — leave them empty until real sources are wired.
+    aiRecommendation: null,
     strategyHealth,
     overallHealthScore,
     recentBacktests,
     tradeHistory: buildTradeHistory(report.trades),
-    marketContext: {
-      newsSentiment: 50,
-      fearGreed: 50,
-      volatility: Math.round(ratioToPercent(report.drawdown.maxDrawdown) * 10) / 10,
-      upcomingEvents: [],
-      liquidityStatus: 'medium',
-      marketSession: 'Backtest',
-      currentSpread: 0,
-    },
-    watchlist: [
-      {
-        symbol: report.config.symbol,
-        price: report.trades.at(-1)?.exitPrice ?? 0,
-        dailyChange: ratioToPercent(
-          report.summary.netProfit / Math.max(report.config.initialCapital, 1),
-        ),
-        trend: report.summary.netProfit >= 0 ? 'bullish' : 'bearish',
-        signal: report.summary.netProfit >= 0 ? 'buy' : 'sell',
-      },
-    ],
+    marketContext: null,
+    watchlist: [],
     portfolio: buildPortfolioSnapshot(report),
     hasBacktest: true,
   }
