@@ -13,6 +13,7 @@ import { TradeHistoryTable } from '@/features/dashboard/TradeHistoryTable'
 import { PortfolioPanel } from '@/features/dashboard/PortfolioPanel'
 import { MarketContextPanel } from '@/features/dashboard/MarketContextPanel'
 import { WatchlistPanel } from '@/features/dashboard/WatchlistPanel'
+import { BacktestContextBar, formatEquityDateRange } from '@/features/dashboard/BacktestContextBar'
 import { useDashboard } from '@/api/queries/dashboard'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -22,6 +23,8 @@ import { Card, CardContent } from '@/components/ui/card'
 export function DashboardPage() {
   const { data } = useDashboard()
   const isRunning = useBacktestStore((state) => state.isRunning)
+  const report = useBacktestStore((state) => state.report)
+  const lastParams = useBacktestStore((state) => state.lastParams)
 
   if (!data) {
     return (
@@ -35,6 +38,22 @@ export function DashboardPage() {
       </div>
     )
   }
+
+  const hasResults = data.hasBacktest && report !== null
+  const contextStrategyName = hasResults ? data.activeStrategy.name : null
+  const contextSymbol = hasResults ? report.config.symbol : null
+  const contextTimeframe = hasResults
+    ? (data.recentBacktests[0]?.timeframe
+      ?? data.timeframeDistribution[0]?.name
+      ?? lastParams.interval.toUpperCase())
+    : null
+  const contextDateRange = hasResults ? formatEquityDateRange(report.equityCurve) : null
+  const contextInitialCapital = hasResults ? report.config.initialCapital : null
+  const contextCommission = hasResults ? report.config.commissionPercent : null
+  const contextRiskPerTrade =
+    hasResults && report.config.riskConfig
+      ? report.config.riskConfig.riskPercent
+      : null
 
   return (
     <motion.div
@@ -69,6 +88,16 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      <BacktestContextBar
+        strategyName={contextStrategyName}
+        symbol={contextSymbol}
+        timeframe={contextTimeframe}
+        dateRange={contextDateRange}
+        initialCapital={contextInitialCapital}
+        commissionPercent={contextCommission}
+        riskPerTradePercent={contextRiskPerTrade}
+      />
 
       <KpiCards metrics={data.kpis} />
       <EquityCurveChart data={data.equityCurve} />
