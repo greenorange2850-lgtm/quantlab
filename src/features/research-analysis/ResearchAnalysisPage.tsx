@@ -7,8 +7,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   useLatestResearchSession,
   useResearchSession,
+  useResearchSessionArchiveReady,
 } from '@/api/queries/research-sessions'
 import { buildResearchReport } from '@/core/research'
+import { shouldAwaitResearchArchive } from '@/research/ui-gates'
 import { ResearchOverview } from './components/ResearchOverview'
 import { PerformanceMetrics } from './components/PerformanceMetrics'
 import { SummaryCard } from './components/SummaryCard'
@@ -43,6 +45,7 @@ function AnalysisSkeleton() {
 export function ResearchAnalysisPage() {
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session')
+  const archiveReady = useResearchSessionArchiveReady()
 
   const byIdQuery = useResearchSession(sessionId)
   const latestQuery = useLatestResearchSession(!sessionId)
@@ -51,7 +54,13 @@ export function ResearchAnalysisPage() {
   const entry = activeQuery.data
   const report = entry ? buildResearchReport(entry.session) : null
 
-  if (!entry && (activeQuery.isLoading || activeQuery.isFetching)) {
+  if (
+    shouldAwaitResearchArchive({
+      archiveReady,
+      hasData: Boolean(entry),
+      isPending: activeQuery.isLoading || activeQuery.isFetching || activeQuery.isPending,
+    })
+  ) {
     return (
       <div className="mx-auto w-full max-w-6xl min-w-0 space-y-4">
         <Header showOptimizerAction={false} />
@@ -192,7 +201,10 @@ function Header({
         </div>
       </div>
       {showOptimizerAction ? (
-        <Link to="/optimizer" className="w-full sm:w-auto">
+        <Link
+          to={sessionId ? `/optimizer?session=${sessionId}` : '/optimizer'}
+          className="w-full sm:w-auto"
+        >
           <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
             <SlidersHorizontal className="mr-2 h-4 w-4" />
             Optimizer

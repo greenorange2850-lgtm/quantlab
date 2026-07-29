@@ -9,6 +9,7 @@ import {
   useResearchSessionArchiveReady,
   useResearchSessions,
 } from '@/api/queries/research-sessions'
+import { shouldAwaitResearchArchive } from '@/research/ui-gates'
 import {
   collectFilterOptions,
   defaultSessionFilters,
@@ -70,9 +71,12 @@ export function ResearchSessionsPage() {
   }
 
   // Do not show “0 sessions archived” until localStorage hydrate has finished.
-  const awaitingHydration =
-    !archiveReady ||
-    (!sessionsQuery.data && (sessionsQuery.isLoading || sessionsQuery.isFetching || sessionsQuery.isPending))
+  const awaitingHydration = shouldAwaitResearchArchive({
+    archiveReady,
+    hasData: Boolean(sessionsQuery.data),
+    isPending:
+      sessionsQuery.isLoading || sessionsQuery.isFetching || sessionsQuery.isPending,
+  })
 
   if (awaitingHydration) {
     return (

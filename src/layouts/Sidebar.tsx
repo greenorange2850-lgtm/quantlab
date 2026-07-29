@@ -112,7 +112,10 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="space-y-2 border-t border-border p-3">
-        <div className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-white/5">
+        <Link
+          to="/settings"
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-white/5"
+        >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-gradient-to-br from-accent/30 to-purple-600/30 text-xs font-semibold text-foreground">
             {userProfile.avatar}
           </div>
@@ -121,7 +124,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
             <p className="truncate text-[10px] text-muted-foreground">{userProfile.email}</p>
           </div>
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        </div>
+        </Link>
 
         <div className="flex items-center justify-between px-3 py-1.5">
           <div className="flex min-w-0 items-center gap-2">

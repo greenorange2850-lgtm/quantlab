@@ -21,7 +21,7 @@ interface BacktestSetupFormProps {
   variant?: 'strategy' | 'backtest'
 }
 
-export function BacktestSetupForm({ title, description, variant = 'strategy' }: BacktestSetupFormProps) {
+export function BacktestSetupForm({ title, description }: BacktestSetupFormProps) {
   const navigate = useNavigate()
   const runBacktest = useBacktestStore((state) => state.runBacktest)
   const isRunning = useBacktestStore((state) => state.isRunning)
@@ -279,14 +279,12 @@ export function BacktestSetupForm({ title, description, variant = 'strategy' }: 
               )}
             </Button>
 
-            {variant === 'strategy' && (
-              <Link to="/optimizer" className="w-full sm:w-auto">
-                <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Random Search
-                </Button>
-              </Link>
-            )}
+            <Link to="/optimizer" className="w-full sm:w-auto">
+              <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
+                <Sparkles className="mr-2 h-4 w-4" />
+                Random Search
+              </Button>
+            </Link>
 
             {hasBacktest && (
               <Link to="/" className="w-full sm:w-auto">

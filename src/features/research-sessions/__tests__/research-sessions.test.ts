@@ -17,6 +17,7 @@ import {
   saveResearchSession,
   slimResearchSessionForStorage,
 } from '@/research/session-archive'
+import { shouldAwaitResearchArchive } from '@/research/ui-gates'
 import {
   collectFilterOptions,
   filterAndSortSessions,
@@ -184,10 +185,15 @@ function shouldShowSessionsEmptyState(input: {
   data: unknown[] | undefined
   isPending: boolean
 }): boolean {
-  const awaitingHydration =
-    !input.archiveReady ||
-    (!input.data && input.isPending)
-  if (awaitingHydration) return false
+  if (
+    shouldAwaitResearchArchive({
+      archiveReady: input.archiveReady,
+      hasData: Boolean(input.data),
+      isPending: input.isPending,
+    })
+  ) {
+    return false
+  }
   return (input.data?.length ?? 0) === 0
 }
 
@@ -393,7 +399,7 @@ describe('research sessions archive + query sync', () => {
     expect(appQueryClient.getQueryData(researchSessionKeys.latest())).toBeNull()
   })
 
-  it('slim storage payload drops heavy series but keeps list metrics', () => {
+  it('slim storage payload drops heavy series but keeps list metrics and period endpoints', () => {
     const session = makeSession({
       id: 'rs-slim',
       symbol: 'BTCUSDT',
@@ -408,7 +414,7 @@ describe('research sessions archive + query sync', () => {
       savedAt: 2,
     }
     const slim = slimResearchSessionForStorage(entry)
-    expect(slim.session.candidates[0]!.report.equityCurve).toEqual([])
+    expect(slim.session.candidates[0]!.report.equityCurve).toHaveLength(2)
     expect(slim.session.candidates[0]!.report.trades).toEqual([])
     expect(slim.session.candidates[0]!.report.summary.netProfit).toBe(90)
 
@@ -532,5 +538,13 @@ describe('session list model', () => {
       sort: 'newest',
     })
     expect(byNewest.map((item) => item.id)).toEqual(['rs-2', 'rs-3', 'rs-1'])
+
+    const byMarketSearch = filterAndSortSessions(items, {
+      search: 'btc',
+      market: '',
+      timeframe: '',
+      sort: 'newest',
+    })
+    expect(byMarketSearch.map((item) => item.id)).toEqual(['rs-3', 'rs-1'])
   })
 })
