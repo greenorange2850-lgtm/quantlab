@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   useDeleteResearchSession,
+  useResearchSessionArchiveReady,
   useResearchSessions,
 } from '@/api/queries/research-sessions'
 import {
@@ -37,6 +38,7 @@ function SessionsSkeleton() {
  * TanStack Query owns list/delete; filters are local UI state only.
  */
 export function ResearchSessionsPage() {
+  const archiveReady = useResearchSessionArchiveReady()
   const sessionsQuery = useResearchSessions()
   const deleteMutation = useDeleteResearchSession()
   const [filters, setFilters] = useState<SessionListFilters>(defaultSessionFilters)
@@ -67,7 +69,12 @@ export function ResearchSessionsPage() {
     })
   }
 
-  if (!sessionsQuery.data && (sessionsQuery.isLoading || sessionsQuery.isFetching)) {
+  // Do not show “0 sessions archived” until localStorage hydrate has finished.
+  const awaitingHydration =
+    !archiveReady ||
+    (!sessionsQuery.data && (sessionsQuery.isLoading || sessionsQuery.isFetching || sessionsQuery.isPending))
+
+  if (awaitingHydration) {
     return (
       <div className="mx-auto w-full max-w-6xl min-w-0 space-y-4">
         <Header />

@@ -190,7 +190,8 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
             strategyName: 'Moving Average Cross',
             strategyVersion: summary.version,
             timeframe: summary.timeframe,
-            candles,
+            // Omit candles — shared localStorage quota with research sessions.
+            // Report metrics are enough to restore dashboards without rerun.
           },
           existingSummary: summary,
         }),
