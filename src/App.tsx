@@ -9,10 +9,10 @@ import { ReportsPage } from '@/pages/ReportsPage'
 import { OptimizerPage } from '@/pages/OptimizerPage'
 import { ResearchAnalysisPage } from '@/features/research-analysis'
 import { StrategyComparePage } from '@/features/strategy-compare'
+import { ResearchSessionsPage } from '@/features/research-sessions'
 import { PlaceholderPage } from '@/pages/PlaceholderPage'
 
 const placeholders = [
-  { path: '/knowledge-base', title: 'Knowledge Base', description: 'Accumulated research insights from every completed backtest.' },
   { path: '/settings', title: 'Settings', description: 'Platform configuration, data sources and preferences.' },
 ] as const
 
@@ -30,7 +30,9 @@ export function App() {
           <Route path="/optimizer" element={<OptimizerPage />} />
           <Route path="/research-analysis" element={<ResearchAnalysisPage />} />
           <Route path="/strategy-compare" element={<StrategyComparePage />} />
+          <Route path="/research-sessions" element={<ResearchSessionsPage />} />
           <Route path="/ai-analysis" element={<Navigate to="/research-analysis" replace />} />
+          <Route path="/knowledge-base" element={<Navigate to="/research-sessions" replace />} />
           {placeholders.map((p) => (
             <Route
               key={p.path}

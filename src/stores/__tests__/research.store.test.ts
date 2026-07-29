@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Candle } from '@/data/candles'
-import { clearResearchSessionArchive, getResearchSession } from '@/research/session-archive'
+import {
+  clearResearchSessionArchive,
+  getResearchSession,
+  listResearchSessionsBySavedAt,
+} from '@/research/session-archive'
 import { clearBacktestDetailArchive, getBacktestDetail } from '@/backtests/detail-archive'
 import { DEFAULT_MA_CROSS_RANGES } from '@/core/research'
 import type { BacktestReport } from '@/core/analytics/types'
 import { defaultRiskConfig } from '@/core/risk/config'
+import { appQueryClient } from '@/api/query-client'
+import { researchSessionKeys } from '@/api/queries/research-sessions'
 
 vi.mock('@/core/dashboard/run-backtest-pipeline', () => ({
   runBacktestPipeline: vi.fn(),
@@ -90,6 +96,7 @@ describe('research store random search workflow', () => {
   beforeEach(() => {
     clearResearchSessionArchive()
     clearBacktestDetailArchive()
+    appQueryClient.clear()
     useResearchStore.getState().reset()
     useResearchStore.setState({ appliedParameters: null })
     useBacktestStore.setState({ isRunning: false, error: null })
@@ -116,6 +123,9 @@ describe('research store random search workflow', () => {
   })
 
   it('starts with correct configuration and surfaces progress', async () => {
+    // Stale empty list cache (as if user opened Research Sessions first).
+    appQueryClient.setQueryData(researchSessionKeys.list(), [])
+
     const candles = buildCandles(40)
     const progressSnapshots: number[] = []
     const unsub = useResearchStore.subscribe((state) => {
@@ -146,6 +156,16 @@ describe('research store random search workflow', () => {
     expect(progressSnapshots).toContain(1)
     expect(progressSnapshots).toContain(3)
     expect(runBacktestPipeline).toHaveBeenCalledTimes(3)
+
+    // Generated session must appear in the shared archive-backed query list.
+    const archived = getResearchSession(state.report!.sessionId)
+    expect(archived).not.toBeNull()
+    expect(listResearchSessionsBySavedAt()).toHaveLength(1)
+    const list = appQueryClient.getQueryData(researchSessionKeys.list()) as
+      | { session: { id: string } }[]
+      | undefined
+    expect(list).toHaveLength(1)
+    expect(list?.[0]?.session.id).toBe(state.report!.sessionId)
   })
 
   it('validates ranges before starting', async () => {

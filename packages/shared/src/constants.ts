@@ -43,7 +43,7 @@ export const NAV_ITEMS = [
   { id: 'trade-replay', label: 'Trade Replay', icon: 'Play', path: '/trade-replay' },
   { id: 'research-analysis', label: 'Research Analysis', icon: 'Brain', path: '/research-analysis' },
   { id: 'strategy-compare', label: 'Strategy Compare', icon: 'ArrowLeftRight', path: '/strategy-compare' },
-  { id: 'knowledge-base', label: 'Knowledge Base', icon: 'BookOpen', path: '/knowledge-base' },
+  { id: 'research-sessions', label: 'Research Sessions', icon: 'History', path: '/research-sessions' },
   { id: 'optimizer', label: 'Optimizer', icon: 'SlidersHorizontal', path: '/optimizer' },
   { id: 'reports', label: 'Reports', icon: 'FileText', path: '/reports' },
   { id: 'settings', label: 'Settings', icon: 'Settings', path: '/settings' },
