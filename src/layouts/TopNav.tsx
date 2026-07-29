@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useBacktestStore } from '@/stores/backtest.store'
-import { MENU_BUTTON } from './layout-classes'
+import { MENU_BUTTON, TOP_NAV_ACTIONS } from './layout-classes'
 
 interface TopNavProps {
   title?: string
@@ -18,8 +18,9 @@ export function TopNav({ title = 'Dashboard', onMenuClick, menuOpen = false }: T
   const isRunning = useBacktestStore((state) => state.isRunning)
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 min-w-0 items-center justify-between gap-2 border-b border-border bg-background/80 px-4 backdrop-blur-xl lg:px-6">
-      <div className="flex min-w-0 flex-1 items-center gap-2 lg:gap-4">
+    <header className="sticky top-0 z-30 flex h-14 min-w-0 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur-xl sm:px-4 lg:gap-4 lg:px-6">
+      {/* Left: menu (mobile) — fixed width so title/actions stay balanced */}
+      <div className="flex w-11 shrink-0 items-center justify-start lg:hidden">
         <Button
           type="button"
           variant="ghost"
@@ -32,7 +33,10 @@ export function TopNav({ title = 'Dashboard', onMenuClick, menuOpen = false }: T
         >
           <Menu className="h-5 w-5" />
         </Button>
+      </div>
 
+      {/* Center / desktop-left: title + strategy meta */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 lg:gap-4">
         <h1 className="truncate text-base font-semibold tracking-tight lg:text-lg">{title}</h1>
         <div className="hidden min-w-0 items-center gap-2 lg:flex">
           <Badge variant="success" className="shrink-0 text-[10px]">
@@ -44,7 +48,8 @@ export function TopNav({ title = 'Dashboard', onMenuClick, menuOpen = false }: T
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+      {/* Right: actions — reserved cluster for search / notifications / future controls */}
+      <div className={TOP_NAV_ACTIONS}>
         <div className="relative hidden lg:block">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input

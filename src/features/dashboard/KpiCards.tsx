@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { AnimatedCounter } from '@/hooks/use-animated-counter'
 import { cn, formatCurrency, formatPercent } from '@/lib/utils'
+import { KPI_GRID } from '@/layouts/layout-classes'
 import type { KpiMetric } from '@/types'
 
 interface KpiCardsProps {
@@ -81,7 +82,7 @@ function KpiCard({ metric, index }: { metric: KpiMetric; index: number }) {
 
 export function KpiCards({ metrics }: KpiCardsProps) {
   return (
-    <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6 xl:grid-cols-11">
+    <div className={KPI_GRID}>
       {metrics.map((metric, i) => (
         <KpiCard key={metric.id} metric={metric} index={i} />
       ))}
