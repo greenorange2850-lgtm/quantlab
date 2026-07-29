@@ -5,6 +5,7 @@ import {
   buildImprovementHeadline,
   buildMetricCompareRows,
   buildOverviewPairs,
+  buildWhatsChangedItems,
   buildWhatsChangedLines,
   directionLabel,
 } from '../compare-metrics'
@@ -139,6 +140,13 @@ describe('strategy compare metrics (presentation only)', () => {
         'Win rate improved.',
         'Trade count decreased.',
       ]),
+    )
+
+    const items = buildWhatsChangedItems(baseline, optimized)
+    expect(items.some((item) => item.direction === 'improved')).toBe(true)
+    expect(items.find((item) => item.text === 'Drawdown reduced.')?.direction).toBe('improved')
+    expect(items.find((item) => item.text === 'Trade count decreased.')?.direction).toBe(
+      'decreased',
     )
 
     expect(buildImprovementHeadline(baseline, optimized)).toMatch(/stronger/i)

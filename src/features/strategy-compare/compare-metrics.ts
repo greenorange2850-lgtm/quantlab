@@ -163,42 +163,70 @@ export function buildMetricCompareRows(
   ]
 }
 
-/** Human-readable change bullets from existing summary/statistics fields only. */
+/** Human-readable change bullets from existing comparison directions only. */
+export interface WhatsChangedItem {
+  text: string
+  direction: CompareDirection
+}
+
+export function buildWhatsChangedItems(
+  baseline: BacktestReport,
+  optimized: BacktestReport,
+): WhatsChangedItem[] {
+  const items: WhatsChangedItem[] = []
+
+  const push = (direction: CompareDirection, improved: string, decreased: string) => {
+    if (direction === 'improved') items.push({ text: improved, direction })
+    else if (direction === 'decreased') items.push({ text: decreased, direction })
+  }
+
+  push(
+    directionHigher(baseline.summary.netProfit, optimized.summary.netProfit),
+    'Net profit increased.',
+    'Net profit decreased.',
+  )
+  push(
+    directionLower(baseline.summary.maxDrawdown, optimized.summary.maxDrawdown),
+    'Drawdown reduced.',
+    'Drawdown increased.',
+  )
+  push(
+    directionHigher(baseline.summary.winRate, optimized.summary.winRate),
+    'Win rate improved.',
+    'Win rate declined.',
+  )
+  push(
+    directionHigher(baseline.summary.profitFactor, optimized.summary.profitFactor),
+    'Profit factor improved.',
+    'Profit factor declined.',
+  )
+  push(
+    directionHigher(baseline.summary.totalTrades, optimized.summary.totalTrades),
+    'Trade count increased.',
+    'Trade count decreased.',
+  )
+  push(
+    directionHigher(baseline.summary.expectancy, optimized.summary.expectancy),
+    'Expectancy improved.',
+    'Expectancy declined.',
+  )
+
+  if (items.length === 0) {
+    items.push({
+      text: 'No material differences across the compared report metrics.',
+      direction: 'unchanged',
+    })
+  }
+
+  return items
+}
+
+/** @deprecated Prefer buildWhatsChangedItems — kept for simple string lists. */
 export function buildWhatsChangedLines(
   baseline: BacktestReport,
   optimized: BacktestReport,
 ): string[] {
-  const lines: string[] = []
-
-  const netDir = directionHigher(baseline.summary.netProfit, optimized.summary.netProfit)
-  if (netDir === 'improved') lines.push('Net profit increased.')
-  else if (netDir === 'decreased') lines.push('Net profit decreased.')
-
-  const ddDir = directionLower(baseline.summary.maxDrawdown, optimized.summary.maxDrawdown)
-  if (ddDir === 'improved') lines.push('Drawdown reduced.')
-  else if (ddDir === 'decreased') lines.push('Drawdown increased.')
-
-  const wrDir = directionHigher(baseline.summary.winRate, optimized.summary.winRate)
-  if (wrDir === 'improved') lines.push('Win rate improved.')
-  else if (wrDir === 'decreased') lines.push('Win rate declined.')
-
-  const pfDir = directionHigher(baseline.summary.profitFactor, optimized.summary.profitFactor)
-  if (pfDir === 'improved') lines.push('Profit factor improved.')
-  else if (pfDir === 'decreased') lines.push('Profit factor declined.')
-
-  const tradeDir = directionHigher(baseline.summary.totalTrades, optimized.summary.totalTrades)
-  if (tradeDir === 'improved') lines.push('Trade count increased.')
-  else if (tradeDir === 'decreased') lines.push('Trade count decreased.')
-
-  const expDir = directionHigher(baseline.summary.expectancy, optimized.summary.expectancy)
-  if (expDir === 'improved') lines.push('Expectancy improved.')
-  else if (expDir === 'decreased') lines.push('Expectancy declined.')
-
-  if (lines.length === 0) {
-    lines.push('No material differences across the compared report metrics.')
-  }
-
-  return lines
+  return buildWhatsChangedItems(baseline, optimized).map((item) => item.text)
 }
 
 export function directionLabel(direction: CompareDirection | 'unavailable'): string {

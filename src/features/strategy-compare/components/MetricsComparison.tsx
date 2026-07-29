@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { directionLabel, type MetricCompareRow } from '../compare-metrics'
 
@@ -9,18 +10,31 @@ interface MetricsComparisonProps {
 export function MetricsComparison({ rows }: MetricsComparisonProps) {
   return (
     <Card hover={false}>
-      <CardHeader>
-        <CardTitle className="text-base">Metrics Comparison</CardTitle>
-        <p className="text-pretty text-xs text-muted-foreground">
-          Current vs previous with simple direction indicators — no recalculated analytics.
-        </p>
+      <CardHeader className="gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <CardTitle className="text-base">Metrics Comparison</CardTitle>
+          <p className="text-pretty text-xs text-muted-foreground">
+            Baseline vs optimized with simple direction indicators.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-[10px]">
+          <Badge variant="outline" className="border-success/30 bg-success/10 text-success">
+            ↑ Improved
+          </Badge>
+          <Badge variant="outline" className="border-danger/30 bg-danger/10 text-danger">
+            ↓ Decreased
+          </Badge>
+          <Badge variant="outline" className="text-muted-foreground">
+            → No Change
+          </Badge>
+        </div>
       </CardHeader>
       <CardContent className="min-w-0 space-y-3">
         <div className="space-y-2 md:hidden">
           {rows.map((row) => (
             <div
               key={row.label}
-              className="rounded-lg border border-border/60 px-3 py-3 space-y-2"
+              className="space-y-2 rounded-lg border border-border/60 px-3 py-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium">{row.label}</p>
@@ -28,11 +42,11 @@ export function MetricsComparison({ rows }: MetricsComparisonProps) {
               </div>
               <div className="grid grid-cols-3 gap-2 text-[11px]">
                 <div>
-                  <p className="text-muted-foreground">Previous</p>
+                  <p className="text-muted-foreground">Baseline</p>
                   <p className="font-mono tabular-nums">{row.previous}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Current</p>
+                  <p className="text-muted-foreground">Optimized</p>
                   <p className="font-mono tabular-nums">{row.current}</p>
                 </div>
                 <div>
@@ -49,8 +63,8 @@ export function MetricsComparison({ rows }: MetricsComparisonProps) {
             <thead>
               <tr className="border-b border-border text-[10px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-3 py-2 font-medium">Metric</th>
-                <th className="px-3 py-2 font-medium">Previous</th>
-                <th className="px-3 py-2 font-medium">Current</th>
+                <th className="px-3 py-2 font-medium">Baseline</th>
+                <th className="px-3 py-2 font-medium">Optimized</th>
                 <th className="px-3 py-2 font-medium">Difference</th>
                 <th className="px-3 py-2 font-medium">Change</th>
               </tr>
@@ -85,11 +99,11 @@ function DirectionBadge({
   return (
     <span
       className={cn(
-        'inline-flex whitespace-nowrap text-[10px] font-medium',
-        direction === 'improved' && 'text-success',
-        direction === 'decreased' && 'text-danger',
-        direction === 'unchanged' && 'text-muted-foreground',
-        direction === 'unavailable' && 'text-muted-foreground',
+        'inline-flex whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
+        direction === 'improved' && 'border-success/30 bg-success/10 text-success',
+        direction === 'decreased' && 'border-danger/30 bg-danger/10 text-danger',
+        direction === 'unchanged' && 'border-border bg-white/[0.03] text-muted-foreground',
+        direction === 'unavailable' && 'border-border bg-white/[0.03] text-muted-foreground',
       )}
     >
       {directionLabel(direction)}

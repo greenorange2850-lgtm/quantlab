@@ -16,7 +16,7 @@ import {
   buildImprovementHeadline,
   buildMetricCompareRows,
   buildOverviewPairs,
-  buildWhatsChangedLines,
+  buildWhatsChangedItems,
 } from './compare-metrics'
 import { buildComparePair } from './resolve-compare-pair'
 import { ComparisonOverview } from './components/ComparisonOverview'
@@ -202,7 +202,7 @@ export function StrategyComparePage() {
 
   const overview = buildOverviewPairs(pair.baseline, pair.optimized)
   const metrics = buildMetricCompareRows(pair.baseline, pair.optimized)
-  const changed = buildWhatsChangedLines(pair.baseline, pair.optimized)
+  const changed = buildWhatsChangedItems(pair.baseline, pair.optimized)
   const headline = buildImprovementHeadline(pair.baseline, pair.optimized)
   const params = pair.optimizedCandidate.parameters
 
@@ -216,10 +216,19 @@ export function StrategyComparePage() {
       <ComparisonOverview pairs={overview} />
       <MetricsComparison rows={metrics} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ImprovementSummary headline={headline} />
-        <WhatsChangedCard lines={changed} />
-      </div>
+      <section className="space-y-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold tracking-tight">Comparison Insights</h3>
+          <p className="text-pretty text-xs text-muted-foreground">
+            Summary and change list generated from existing comparison values only — no new
+            analytics.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <ImprovementSummary headline={headline} />
+          <WhatsChangedCard items={changed} />
+        </div>
+      </section>
 
       <ValidationNotice />
     </div>
