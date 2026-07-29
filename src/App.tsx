@@ -8,6 +8,7 @@ import { TradeReplayPage } from '@/pages/TradeReplayPage'
 import { ReportsPage } from '@/pages/ReportsPage'
 import { OptimizerPage } from '@/pages/OptimizerPage'
 import { ResearchAnalysisPage } from '@/features/research-analysis'
+import { StrategyComparePage } from '@/features/strategy-compare'
 import { PlaceholderPage } from '@/pages/PlaceholderPage'
 
 const placeholders = [
@@ -28,6 +29,7 @@ export function App() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/optimizer" element={<OptimizerPage />} />
           <Route path="/research-analysis" element={<ResearchAnalysisPage />} />
+          <Route path="/strategy-compare" element={<StrategyComparePage />} />
           <Route path="/ai-analysis" element={<Navigate to="/research-analysis" replace />} />
           {placeholders.map((p) => (
             <Route

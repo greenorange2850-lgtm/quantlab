@@ -543,6 +543,17 @@ export function OptimizerPage() {
                 >
                   View Analysis
                 </Button>
+                <Button
+                  variant="secondary"
+                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                  onClick={() => {
+                    navigate(
+                      `/strategy-compare?session=${report.sessionId}&candidate=${selected.id}`,
+                    )
+                  }}
+                >
+                  Compare
+                </Button>
                 <p className="w-full text-[11px] text-muted-foreground">
                   Apply Parameters updates Strategy Lab fields only — it does not save or rerun.
                 </p>
