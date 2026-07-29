@@ -538,10 +538,7 @@ export function OptimizerPage() {
                   variant="secondary"
                   className="min-h-11 w-full sm:min-h-9 sm:w-auto"
                   onClick={() => {
-                    navigate(`/optimizer?analysis=${report.sessionId}`)
-                    document
-                      .getElementById('research-analysis')
-                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    navigate(`/research-analysis?session=${report.sessionId}`)
                   }}
                 >
                   View Analysis

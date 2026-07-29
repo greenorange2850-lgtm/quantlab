@@ -8,6 +8,9 @@ export type {
   RandomSearchProgress,
   ResearchSession,
   ResearchReport,
+  ResearchAnalysisNarrative,
+  ResearchRiskLevel,
+  ResearchRating,
   RunRandomSearchOptions,
 } from './types.js'
 
@@ -19,7 +22,10 @@ export {
   type RangeValidationIssue,
 } from './sampling.js'
 export { runRandomSearch, getProgressSnapshot } from './random-search.js'
-export { buildResearchReport } from './build-research-report.js'
+export {
+  buildResearchReport,
+  buildResearchAnalysisNarrative,
+} from './build-research-report.js'
 
 import type { ParameterRange } from './types.js'
 
