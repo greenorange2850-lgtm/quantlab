@@ -59,9 +59,28 @@ Use this when connecting the GitHub repo to a new Vercel project (or fixing a mi
 
 ### Runtime / routing
 
-- [ ] Open the production URL — dashboard loads
+- [ ] Open the **stable** production URL — dashboard loads
 - [ ] Hard-refresh a deep route (e.g. `/strategy-lab`) — still returns the SPA (rewrite works)
 - [ ] Static assets under `/assets/` load (200), not rewritten to `index.html`
+
+### Research session persistence (localStorage + origins)
+
+Browsers scope `localStorage` **per origin** (`scheme + host + port`). The research archive key is `quantlab.research-sessions.v1`.
+
+Vercel issues a **new host for every deployment**, including many “Production” deployment status URLs reported to GitHub, for example:
+
+- Ephemeral: `https://quantlab-frontend-<deploymentId>-greenorange.vercel.app`
+- Stable alias: `https://quantlab-frontend.vercel.app`
+
+If you create sessions on an ephemeral deployment URL, then later open a different deployment URL (or the stable alias), the sessions are **not deleted** — they are simply stored under the previous origin and invisible on the new one.
+
+**Always test persistence on the stable URL:**
+
+```text
+https://quantlab-frontend.vercel.app
+```
+
+Dev / Vercel builds show a temporary “Persist diagnostics” panel (origin, key, hydrate status, counts, payload size, last write error) and log the same snapshot to the console as `[quantlab:persist-diag]`. Force it with `?persistDiag=1`.
 
 ### API (separate from Vercel)
 
