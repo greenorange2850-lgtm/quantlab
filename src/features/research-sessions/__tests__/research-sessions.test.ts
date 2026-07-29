@@ -2,10 +2,16 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import type { BacktestReport } from '@/core/analytics/types'
 import { defaultRiskConfig } from '@/core/risk/config'
 import { buildResearchReport, type ResearchSession } from '@/core/research'
+import { appQueryClient } from '@/api/query-client'
+import {
+  researchSessionKeys,
+  syncResearchSessionQueries,
+} from '@/api/queries/research-sessions'
 import {
   clearResearchSessionArchive,
   deleteResearchSession,
   listResearchSessionsBySavedAt,
+  resetResearchSessionMemory,
   saveResearchSession,
 } from '@/research/session-archive'
 import {
@@ -117,9 +123,30 @@ function makeSession(input: {
   }
 }
 
-describe('research sessions archive delete/list', () => {
+function installMemoryLocalStorage(): void {
+  const store = new Map<string, string>()
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value)
+      },
+      removeItem: (key: string) => {
+        store.delete(key)
+      },
+      clear: () => {
+        store.clear()
+      },
+    },
+  })
+}
+
+describe('research sessions archive + query sync', () => {
   beforeEach(() => {
+    installMemoryLocalStorage()
     clearResearchSessionArchive()
+    appQueryClient.clear()
   })
 
   it('lists and deletes archived sessions', () => {
@@ -141,6 +168,98 @@ describe('research sessions archive delete/list', () => {
     expect(deleteResearchSession('rs-a')).toBe(true)
     expect(listResearchSessionsBySavedAt()).toHaveLength(0)
     expect(deleteResearchSession('rs-a')).toBe(false)
+  })
+
+  it('generated session appears in query list and updates count', () => {
+    // Simulate visiting /research-sessions while empty (stale empty cache).
+    appQueryClient.setQueryData(researchSessionKeys.list(), [])
+    expect(appQueryClient.getQueryData(researchSessionKeys.list())).toEqual([])
+
+    const session = makeSession({
+      id: 'rs-1785330235023',
+      symbol: 'BTCUSDT',
+      interval: '1h',
+      createdAt: 1_785_330_235_023,
+      score: 1.75,
+      netProfit: 180,
+    })
+    const entry = {
+      session,
+      report: buildResearchReport(session),
+      savedAt: Date.now(),
+    }
+    saveResearchSession(entry)
+    syncResearchSessionQueries()
+
+    const list = appQueryClient.getQueryData(researchSessionKeys.list()) as
+      | ReturnType<typeof listResearchSessionsBySavedAt>
+      | undefined
+    expect(list).toHaveLength(1)
+    expect(list?.[0]?.session.id).toBe('rs-1785330235023')
+    expect(toSessionListItem(list![0]!).id).toBe('rs-1785330235023')
+    expect(
+      appQueryClient.getQueryData(researchSessionKeys.detail('rs-1785330235023')),
+    ).toEqual(entry)
+  })
+
+  it('persisted session restores after reload (memory drop, storage kept)', () => {
+    const session = makeSession({
+      id: 'rs-persist',
+      symbol: 'SOLUSDT',
+      interval: '4h',
+      createdAt: 500,
+      score: 2.2,
+      netProfit: 300,
+    })
+    saveResearchSession({
+      session,
+      report: buildResearchReport(session),
+      savedAt: 600,
+    })
+    syncResearchSessionQueries()
+    expect(listResearchSessionsBySavedAt()).toHaveLength(1)
+
+    // Simulate full page reload: drop memory + query cache, keep localStorage.
+    resetResearchSessionMemory()
+    appQueryClient.clear()
+    expect(listResearchSessionsBySavedAt()).toHaveLength(1)
+    expect(listResearchSessionsBySavedAt()[0]?.session.id).toBe('rs-persist')
+
+    syncResearchSessionQueries()
+    const list = appQueryClient.getQueryData(researchSessionKeys.list()) as
+      | ReturnType<typeof listResearchSessionsBySavedAt>
+      | undefined
+    expect(list).toHaveLength(1)
+    expect(list?.[0]?.session.id).toBe('rs-persist')
+  })
+
+  it('deleting a session removes it from the synced query list', () => {
+    const session = makeSession({
+      id: 'rs-del',
+      symbol: 'BTCUSDT',
+      interval: '1h',
+      createdAt: 10,
+      score: 1.1,
+      netProfit: 40,
+    })
+    saveResearchSession({
+      session,
+      report: buildResearchReport(session),
+      savedAt: 20,
+    })
+    syncResearchSessionQueries()
+    expect(
+      (appQueryClient.getQueryData(researchSessionKeys.list()) as unknown[]).length,
+    ).toBe(1)
+
+    expect(deleteResearchSession('rs-del')).toBe(true)
+    syncResearchSessionQueries()
+
+    expect(appQueryClient.getQueryData(researchSessionKeys.list())).toEqual([])
+    expect(
+      appQueryClient.getQueryData(researchSessionKeys.detail('rs-del')),
+    ).toBeUndefined()
+    expect(appQueryClient.getQueryData(researchSessionKeys.latest())).toBeNull()
   })
 })
 

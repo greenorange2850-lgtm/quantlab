@@ -110,3 +110,8 @@ export function clearResearchSessionArchive(): void {
     }
   }
 }
+
+/** Test helper — drop in-memory cache only (simulates page reload; storage kept). */
+export function resetResearchSessionMemory(): void {
+  memory.clear()
+}

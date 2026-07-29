@@ -17,6 +17,7 @@ import {
   saveResearchSession,
   type PersistedResearchSession,
 } from '@/research/session-archive'
+import { syncResearchSessionQueries } from '@/api/queries/research-sessions'
 import { saveBacktestDetail } from '@/backtests/detail-archive'
 import { buildPersistedDetail } from '@/backtests/restore-dashboard'
 import { createBacktestSummaryFromReport } from '@/core/dashboard'
@@ -167,6 +168,8 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
 
     const report = buildResearchReport(session)
     saveResearchSession({ session, report, savedAt: Date.now() })
+    // Keep TanStack Query list/detail/latest in sync with the archive.
+    syncResearchSessionQueries()
 
     // Archive candidate reports so View Details can restore without rerun.
     for (const candidate of session.candidates) {
