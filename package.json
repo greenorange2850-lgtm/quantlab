@@ -13,6 +13,8 @@
     "dev:api": "npm run dev -w @trading-os/api",
     "build": "npm run build -w @trading-os/shared && npm run build -w @trading-os/market-data && npm run build -w @trading-os/rule-engine && npm run build -w @trading-os/market-intelligence && npm run build -w @trading-os/database && npm run build -w @trading-os/engines && npm run build -w @trading-os/api && tsc -b && vite build",
     "build:packages": "npm run build -w @trading-os/shared && npm run build -w @trading-os/market-data && npm run build -w @trading-os/rule-engine && npm run build -w @trading-os/market-intelligence && npm run build -w @trading-os/database && npm run build -w @trading-os/engines",
+    "build:server": "npm run build:packages && npm run build -w @trading-os/api",
+    "start": "npm run start -w @trading-os/api",
     "db:migrate": "npm run migrate -w @trading-os/database",
     "db:seed": "npm run seed -w @trading-os/database",
     "lint": "oxlint",

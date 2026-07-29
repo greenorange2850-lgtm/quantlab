@@ -7,7 +7,7 @@ import { KnowledgeRepository } from './repositories/knowledge.repository.js'
 import { RuleEngineRepository } from './repositories/rule-engine.repository.js'
 import { MarketIntelligenceRepository } from './repositories/market-intelligence.repository.js'
 
-export { getDatabase, closeDatabase, getDatabasePath } from './connection.js'
+export { getDatabase, closeDatabase, getDatabasePath, resolveDatabasePath } from './connection.js'
 export { migrate } from './migrate.js'
 export { seed } from './seed.js'
 export { BaseRepository } from './repositories/base.js'
