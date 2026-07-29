@@ -18,6 +18,7 @@ const pageTitles: Record<string, string> = {
   '/trade-replay': 'Trade Replay',
   '/ai-analysis': 'Research Analysis',
   '/research-analysis': 'Research Analysis',
+  '/strategy-compare': 'Strategy Compare',
   '/knowledge-base': 'Knowledge Base',
   '/optimizer': 'Optimizer',
   '/reports': 'Reports',
