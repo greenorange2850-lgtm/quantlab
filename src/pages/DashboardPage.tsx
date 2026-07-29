@@ -22,9 +22,17 @@ import { Card, CardContent } from '@/components/ui/card'
 
 export function DashboardPage() {
   const { data } = useDashboard()
-  // Hydrate dashboard KPIs / history from persisted GET /backtests.
-  useBacktestHistory()
+  const {
+    data: persistedBacktests,
+    isLoading: isHistoryLoading,
+    isError: isHistoryError,
+  } = useBacktestHistory()
   const isRunning = useBacktestStore((state) => state.isRunning)
+
+  // Query is the source of truth. On failure, fall back to an empty list (no crash).
+  const recentBacktests = isHistoryError ? [] : (persistedBacktests ?? [])
+  const showHistoryLoading = isHistoryLoading && persistedBacktests === undefined
+  const showEmptyBanner = !data?.hasBacktest && recentBacktests.length === 0 && !showHistoryLoading
 
   if (!data) {
     return (
@@ -46,7 +54,7 @@ export function DashboardPage() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      {!data.hasBacktest && (
+      {showEmptyBanner && (
         <Card className="border-dashed">
           <CardContent className="flex flex-col gap-3 py-6 md:flex-row md:items-center md:justify-between">
             <div>
@@ -92,7 +100,7 @@ export function DashboardPage() {
         <StrategyHealth metrics={data.strategyHealth} overallScore={data.overallHealthScore} />
       </div>
       <AiRecommendationPanel recommendation={data.aiRecommendation} />
-      <RecentBacktestsTable data={data.recentBacktests} />
+      <RecentBacktestsTable data={recentBacktests} isLoading={showHistoryLoading} />
       <PortfolioPanel portfolio={data.portfolio} />
       <TradeHistoryTable data={data.tradeHistory} />
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

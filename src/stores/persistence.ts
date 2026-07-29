@@ -14,7 +14,7 @@ import type { RunBacktestPipelineParams } from '@/core/dashboard'
  * | error | UI state (ephemeral) | no | Transient error banner |
  * | report | Session working set | no | Large; rebuilt by next run |
  * | dashboard.* (KPIs, charts, …) | Derived state | no | Computed from report |
- * | dashboard.recentBacktests | Server-owned | no | Hydrated from GET /backtests |
+ * | dashboard.recentBacktests | Server-owned | no | Owned by TanStack Query (`useBacktestHistory`) |
  */
 
 /** App store slice written to localStorage. */

@@ -116,18 +116,14 @@ export function mergeRecentBacktests(
 
 export function mapPipelineResultToDashboard(
   pipelineResult: RunBacktestPipelineResult,
-  recentBacktests: BacktestSummary[] = [],
+  _recentBacktests: BacktestSummary[] = [],
 ) {
-  const summary = createBacktestSummaryFromReport(
-    pipelineResult.report,
-    pipelineResult.context,
-    pipelineResult.backtestId,
-  )
-
+  // Session view model only. Recent Backtests are owned by TanStack Query
+  // (`useBacktestHistory`) — do not duplicate server history into the store.
   return buildDashboardViewModel(
     pipelineResult.report,
     pipelineResult.context,
-    mergeRecentBacktests(summary, recentBacktests),
+    [],
   )
 }
 

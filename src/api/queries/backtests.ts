@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Backtest, BacktestSummary, CreateBacktestRequest } from '@trading-os/shared'
+import type { BacktestSummary, CreateBacktestRequest } from '@trading-os/shared'
 import { api } from '../client'
-import { useBacktestStore } from '@/stores/backtest.store'
 
 export const backtestKeys = {
   all: ['backtests'] as const,
@@ -12,10 +11,6 @@ export async function fetchBacktestHistory(): Promise<BacktestSummary[]> {
   return api.get<BacktestSummary[]>('/backtests')
 }
 
-export async function fetchBacktest(id: string): Promise<Backtest> {
-  return api.get<Backtest>(`/backtests/${id}`)
-}
-
 export async function persistBacktestSummary(
   request: CreateBacktestRequest,
 ): Promise<BacktestSummary> {
@@ -23,33 +18,26 @@ export async function persistBacktestSummary(
 }
 
 /**
- * Load persisted backtests and hydrate the dashboard presentation model.
- * Fetches the latest detail row when history exists (metrics + equity curve).
+ * Server-owned recent backtests. TanStack Query is the source of truth —
+ * do not mirror this list into the Zustand store.
  */
 export function useBacktestHistory() {
-  const hydrateFromPersistedBacktests = useBacktestStore(
-    (state) => state.hydrateFromPersistedBacktests,
-  )
-
   return useQuery({
     queryKey: backtestKeys.all,
-    queryFn: async () => {
-      const items = await fetchBacktestHistory()
-      const latestId = items[0]?.id
-      const latest = latestId ? await fetchBacktest(latestId).catch(() => null) : null
-      hydrateFromPersistedBacktests(items, latest)
-      return items
-    },
+    queryFn: fetchBacktestHistory,
+    retry: 1,
   })
 }
 
 export function usePersistBacktest() {
-  const queryClient = useQueryClient()
+  const client = useQueryClient()
 
   return useMutation({
     mutationFn: persistBacktestSummary,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: backtestKeys.all })
+    onSuccess: (summary) => {
+      client.setQueryData<BacktestSummary[]>(backtestKeys.all, (current = []) =>
+        [summary, ...current.filter((item) => item.id !== summary.id)].slice(0, 50),
+      )
     },
   })
 }
