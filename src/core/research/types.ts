@@ -86,6 +86,23 @@ export interface ResearchReport {
   error: string | null
   createdAt: number
   completedAt: number | null
+  /**
+   * Presentation narrative packaged from existing BacktestReport fields.
+   * Not a separate analytics engine — no new metric formulas.
+   */
+  analysis: ResearchAnalysisNarrative
+}
+
+export type ResearchRiskLevel = 'low' | 'moderate' | 'elevated' | 'high'
+export type ResearchRating = 'poor' | 'mixed' | 'fair' | 'strong' | 'inconclusive'
+
+export interface ResearchAnalysisNarrative {
+  summary: string
+  strengths: string[]
+  weaknesses: string[]
+  suggestions: string[]
+  riskLevel: ResearchRiskLevel
+  rating: ResearchRating
 }
 
 export interface RunRandomSearchOptions {
