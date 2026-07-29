@@ -14,7 +14,7 @@ import { PortfolioPanel } from '@/features/dashboard/PortfolioPanel'
 import { MarketContextPanel } from '@/features/dashboard/MarketContextPanel'
 import { WatchlistPanel } from '@/features/dashboard/WatchlistPanel'
 import { useDashboard } from '@/api/queries/dashboard'
-import { useBacktestHistory } from '@/api/queries/backtests'
+import { useBacktestHistory, useRetryPersistBacktest } from '@/api/queries/backtests'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -23,16 +23,18 @@ import { Card, CardContent } from '@/components/ui/card'
 export function DashboardPage() {
   const { data } = useDashboard()
   const {
-    data: persistedBacktests,
+    data: historyEntries,
     isLoading: isHistoryLoading,
     isError: isHistoryError,
+    refetch: refetchHistory,
   } = useBacktestHistory()
+  const retryPersist = useRetryPersistBacktest()
   const isRunning = useBacktestStore((state) => state.isRunning)
 
-  // Query is the source of truth. On failure, fall back to an empty list (no crash).
-  const recentBacktests = isHistoryError ? [] : (persistedBacktests ?? [])
-  const showHistoryLoading = isHistoryLoading && persistedBacktests === undefined
-  const showEmptyBanner = !data?.hasBacktest && recentBacktests.length === 0 && !showHistoryLoading
+  const entries = historyEntries ?? []
+  const showHistoryLoading = isHistoryLoading && historyEntries === undefined
+  const showEmptyBanner =
+    !data?.hasBacktest && entries.length === 0 && !showHistoryLoading && !isHistoryError
 
   if (!data) {
     return (
@@ -100,7 +102,20 @@ export function DashboardPage() {
         <StrategyHealth metrics={data.strategyHealth} overallScore={data.overallHealthScore} />
       </div>
       <AiRecommendationPanel recommendation={data.aiRecommendation} />
-      <RecentBacktestsTable data={recentBacktests} isLoading={showHistoryLoading} />
+      <RecentBacktestsTable
+        data={isHistoryError ? [] : entries}
+        isLoading={showHistoryLoading}
+        isError={isHistoryError}
+        onRetryLoad={() => {
+          void refetchHistory()
+        }}
+        onRetryPersist={(entry) => {
+          retryPersist.mutate(entry)
+        }}
+        isRetryingPersistId={
+          retryPersist.isPending ? (retryPersist.variables?.summary.id ?? null) : null
+        }
+      />
       <PortfolioPanel portfolio={data.portfolio} />
       <TradeHistoryTable data={data.tradeHistory} />
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

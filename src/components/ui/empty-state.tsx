@@ -4,11 +4,13 @@ import { cn } from '@/lib/utils'
 interface EmptyStateProps {
   title: string
   description?: string
+  /** Suggested next action (button, link, etc.). */
+  action?: React.ReactNode
   icon?: React.ReactNode
   className?: string
 }
 
-export function EmptyState({ title, description, icon, className }: EmptyStateProps) {
+export function EmptyState({ title, description, action, icon, className }: EmptyStateProps) {
   return (
     <div className={cn('flex flex-col items-center justify-center py-12 text-center', className)}>
       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-white/5 text-muted">
@@ -18,6 +20,7 @@ export function EmptyState({ title, description, icon, className }: EmptyStatePr
       {description && (
         <p className="mt-1 max-w-sm text-xs text-muted-foreground">{description}</p>
       )}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   )
 }
