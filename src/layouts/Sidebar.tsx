@@ -8,7 +8,6 @@ import {
   Globe,
   Play,
   Brain,
-  BookOpen,
   SlidersHorizontal,
   FileText,
   Settings,
@@ -18,6 +17,7 @@ import {
   Crown,
   ChevronRight,
   ArrowLeftRight,
+  History,
 } from 'lucide-react'
 import { NAV_ITEMS } from '@trading-os/shared'
 import { cn } from '@/lib/utils'
@@ -32,11 +32,11 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Globe,
   Play,
   Brain,
-  BookOpen,
   SlidersHorizontal,
   FileText,
   Settings,
   ArrowLeftRight,
+  History,
 }
 
 interface SidebarProps {

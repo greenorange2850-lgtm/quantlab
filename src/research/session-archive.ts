@@ -77,6 +77,29 @@ export async function fetchResearchSession(id: string): Promise<PersistedResearc
   return entry
 }
 
+export async function fetchResearchSessions(): Promise<PersistedResearchSession[]> {
+  return listResearchSessionsBySavedAt()
+}
+
+export function deleteResearchSession(id: string): boolean {
+  hydrate()
+  const existed = memory.delete(id)
+  const stored = readStorage()
+  if (id in stored) {
+    delete stored[id]
+    writeStorage(stored)
+    return true
+  }
+  return existed
+}
+
+export async function removeResearchSession(id: string): Promise<void> {
+  const removed = deleteResearchSession(id)
+  if (!removed) {
+    throw new Error(`Research session not found: ${id}`)
+  }
+}
+
 export function clearResearchSessionArchive(): void {
   memory.clear()
   if (canUseStorage()) {
