@@ -3,6 +3,7 @@ import { Wallet, TrendingUp, Gauge, Layers } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Disclosure } from '@/components/ui/disclosure'
 import { AnimatedCounter } from '@/hooks/use-animated-counter'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
 import type { PortfolioSnapshot } from '@/types'
@@ -25,47 +26,13 @@ export function PortfolioPanel({ portfolio }: PortfolioPanelProps) {
           <CardTitle className="text-base">Portfolio</CardTitle>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricTile
-              icon={<Wallet className="h-3.5 w-3.5" />}
-              label="Cash"
-              value={portfolio.cash}
-              format="currency"
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <MetricTile
               icon={<TrendingUp className="h-3.5 w-3.5" />}
               label="Equity"
               value={portfolio.equity}
               format="currency"
             />
-            <MetricTile
-              icon={<Gauge className="h-3.5 w-3.5" />}
-              label="Buying Power"
-              value={portfolio.buyingPower}
-              format="currency"
-            />
-            <MetricTile
-              icon={<Layers className="h-3.5 w-3.5" />}
-              label="Total Exposure"
-              value={portfolio.totalExposure}
-              format="currency"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="min-w-0 rounded-lg border border-border bg-white/[0.02] p-3">
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                Realized PnL
-              </p>
-              <p
-                className={cn(
-                  'truncate font-mono text-lg font-semibold',
-                  portfolio.realizedPnL >= 0 ? 'text-success' : 'text-danger',
-                )}
-              >
-                <AnimatedCounter value={portfolio.realizedPnL} prefix="$" decimals={2} />
-              </p>
-            </div>
             <div className="min-w-0 rounded-lg border border-border bg-white/[0.02] p-3">
               <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                 Unrealized PnL
@@ -80,6 +47,42 @@ export function PortfolioPanel({ portfolio }: PortfolioPanelProps) {
               </p>
             </div>
           </div>
+
+          <Disclosure title="More balances">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <MetricTile
+                icon={<Wallet className="h-3.5 w-3.5" />}
+                label="Cash"
+                value={portfolio.cash}
+                format="currency"
+              />
+              <MetricTile
+                icon={<Gauge className="h-3.5 w-3.5" />}
+                label="Buying Power"
+                value={portfolio.buyingPower}
+                format="currency"
+              />
+              <MetricTile
+                icon={<Layers className="h-3.5 w-3.5" />}
+                label="Total Exposure"
+                value={portfolio.totalExposure}
+                format="currency"
+              />
+              <div className="min-w-0 rounded-lg border border-border bg-white/[0.02] p-3 sm:col-span-2 lg:col-span-3">
+                <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Realized PnL
+                </p>
+                <p
+                  className={cn(
+                    'truncate font-mono text-lg font-semibold',
+                    portfolio.realizedPnL >= 0 ? 'text-success' : 'text-danger',
+                  )}
+                >
+                  <AnimatedCounter value={portfolio.realizedPnL} prefix="$" decimals={2} />
+                </p>
+              </div>
+            </div>
+          </Disclosure>
 
           {hasPositions ? (
             <div className="min-w-0 overflow-x-auto">

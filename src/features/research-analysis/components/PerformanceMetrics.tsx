@@ -28,54 +28,49 @@ export function PerformanceMetrics({ report }: PerformanceMetricsProps) {
     <Card hover={false}>
       <CardHeader>
         <CardTitle className="text-base">Performance Metrics</CardTitle>
-        <p className="text-pretty text-xs text-muted-foreground">
-          Secondary report fields. Sharpe when present on the report.
-        </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <MetricTile
             label="Profit Factor"
             value={summary ? formatRatio(summary.profitFactor) : '—'}
             tone={summary ? qualityToTone(profitFactorQuality(summary.profitFactor)) : 'muted'}
-            size="primary"
+            size="secondary"
           />
           <MetricTile
             label="Win Rate"
             value={summary ? formatPercentUnsigned(summary.winRate * 100) : '—'}
             tone={summary ? 'default' : 'muted'}
-            size="primary"
+            size="secondary"
+          />
+          <MetricTile
+            label="Average Trade"
+            value={
+              averageTrade === undefined ? '—' : formatCurrencyAbsolute(averageTrade)
+            }
+            tone={averageTrade === undefined ? 'muted' : 'default'}
+            size="secondary"
+          />
+          <MetricTile
+            label="Expectancy"
+            value={expectancy === undefined ? '—' : formatRatio(expectancy)}
+            tone={
+              expectancy === undefined
+                ? 'muted'
+                : qualityToTone(expectancyQuality(expectancy))
+            }
+            size="secondary"
           />
         </div>
 
-        <Disclosure title="More performance metrics">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            <MetricTile
-              label="Average Trade"
-              value={
-                averageTrade === undefined ? '—' : formatCurrencyAbsolute(averageTrade)
-              }
-              tone={averageTrade === undefined ? 'muted' : 'default'}
-              size="secondary"
-            />
-            <MetricTile
-              label="Sharpe"
-              value="Unavailable"
-              hint="Not stored on BacktestReport"
-              tone="muted"
-              size="secondary"
-            />
-            <MetricTile
-              label="Expectancy"
-              value={expectancy === undefined ? '—' : formatRatio(expectancy)}
-              tone={
-                expectancy === undefined
-                  ? 'muted'
-                  : qualityToTone(expectancyQuality(expectancy))
-              }
-              size="secondary"
-            />
-          </div>
+        <Disclosure title="Unavailable metrics" variant="plain">
+          <MetricTile
+            label="Sharpe"
+            value="Unavailable"
+            hint="Not stored on BacktestReport"
+            tone="muted"
+            size="meta"
+          />
         </Disclosure>
       </CardContent>
     </Card>

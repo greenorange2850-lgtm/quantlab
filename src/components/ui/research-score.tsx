@@ -22,7 +22,7 @@ export function ResearchScore({
   score,
   size = 'md',
   className,
-  showBasis = true,
+  showBasis = false,
 }: ResearchScoreProps) {
   const quality = researchScoreQuality(score)
   const display = Number.isFinite(score) ? Math.round(score) : 0

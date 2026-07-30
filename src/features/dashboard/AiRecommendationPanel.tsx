@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { Sparkles, Check, X, Play } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Disclosure } from '@/components/ui/disclosure'
 import { Progress } from '@/components/ui/progress'
 import { AnimatedCounter } from '@/hooks/use-animated-counter'
 import type { AiRecommendationSummary } from '@/types'
@@ -11,7 +12,7 @@ interface AiRecommendationPanelProps {
 }
 
 export function AiRecommendationPanel({ recommendation }: AiRecommendationPanelProps) {
-  const suggestions = recommendation.suggestions.filter((s) => s.type === 'add')
+  const suggestions = recommendation.suggestions.filter((s) => s.type === 'add').slice(0, 2)
   const avoid = recommendation.suggestions.filter((s) => s.type === 'avoid')
 
   return (
@@ -21,7 +22,7 @@ export function AiRecommendationPanel({ recommendation }: AiRecommendationPanelP
       transition={{ duration: 0.5, delay: 0.45 }}
     >
       <Card className="relative overflow-hidden border-accent/20">
-        <div className="absolute inset-0 bg-gradient-to-br from-accent/5 via-transparent to-purple-600/5 pointer-events-none" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent/5 via-transparent to-transparent" />
         <CardHeader className="relative">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15">
@@ -29,68 +30,50 @@ export function AiRecommendationPanel({ recommendation }: AiRecommendationPanelP
             </div>
             <div>
               <CardTitle className="text-base">AI Recommendation</CardTitle>
-              <p className="text-xs text-muted-foreground">Improvement suggestions based on backtest analysis</p>
+              <p className="text-xs text-muted-foreground">
+                Confidence{' '}
+                <span className="font-mono text-accent">
+                  <AnimatedCounter value={recommendation.confidence} suffix="%" />
+                </span>
+              </p>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="relative space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <p className="text-xs font-medium text-success mb-3 flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5" />
-                Suggested Improvements
-              </p>
+        <CardContent className="relative space-y-4">
+          <Progress value={recommendation.confidence} indicatorClassName="from-accent to-accent/70" />
+
+          <ul className="space-y-2">
+            {suggestions.map((s, i) => (
+              <motion.li
+                key={s.id}
+                className="flex items-start gap-2 text-sm text-foreground/90"
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 + i * 0.08 }}
+              >
+                <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-muted">
+                  <Check className="h-3 w-3 text-success" />
+                </div>
+                <span className="min-w-0 text-pretty">{s.text}</span>
+              </motion.li>
+            ))}
+          </ul>
+
+          <Disclosure title="Avoid & reasoning" variant="plain">
+            <div className="space-y-3">
               <ul className="space-y-2">
-                {suggestions.map((s, i) => (
-                  <motion.li
-                    key={s.id}
-                  className="flex items-start gap-2 text-sm text-foreground/90"
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 + i * 0.08 }}
-                >
-                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-muted">
-                      <Check className="h-3 w-3 text-success" />
-                    </div>
-                    <span className="min-w-0 text-pretty">{s.text}</span>
-                  </motion.li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-danger mb-3 flex items-center gap-1.5">
-                <X className="h-3.5 w-3.5" />
-                Avoid
-              </p>
-              <ul className="space-y-2">
-                {avoid.map((s, i) => (
-                  <motion.li
-                    key={s.id}
-                  className="flex items-start gap-2 text-sm text-foreground/90"
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 + i * 0.08 }}
-                >
+                {avoid.map((s) => (
+                  <li key={s.id} className="flex items-start gap-2 text-sm text-foreground/90">
                     <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-danger-muted">
                       <X className="h-3 w-3 text-danger" />
                     </div>
                     <span className="min-w-0 text-pretty">{s.text}</span>
-                  </motion.li>
+                  </li>
                 ))}
               </ul>
+              <p className="text-xs leading-relaxed text-muted">{recommendation.reasoning}</p>
             </div>
-          </div>
-
-          <div className="rounded-lg border border-border bg-white/[0.02] p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Confidence Score</span>
-              <span className="text-sm font-semibold font-mono text-accent">
-                <AnimatedCounter value={recommendation.confidence} suffix="%" />
-              </span>
-            </div>
-            <Progress value={recommendation.confidence} indicatorClassName="from-accent to-purple-500" />
-            <p className="text-xs text-muted leading-relaxed">{recommendation.reasoning}</p>
-          </div>
+          </Disclosure>
 
           <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">
             <Play className="h-3.5 w-3.5" />

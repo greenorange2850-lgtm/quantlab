@@ -82,7 +82,7 @@ export function ComparisonOverview({
         </div>
       </CardHeader>
       <CardContent className="min-w-0 space-y-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {snapshot.map((pair) => (
             <PairCard
               key={pair.label}

@@ -10,6 +10,7 @@ import {
   Cell,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Disclosure } from '@/components/ui/disclosure'
 import { formatCurrency } from '@/lib/utils'
 import type { MonthlyProfit, DailyHeatmapCell, WeeklySummary } from '@/types'
 
@@ -33,17 +34,17 @@ export function MonthlyPerformance({
   dailyHeatmap,
   weeklySummary,
 }: MonthlyPerformanceProps) {
-  const maxWeek = Math.max(...dailyHeatmap.map((c) => c.week))
+  const maxWeek = Math.max(0, ...dailyHeatmap.map((c) => c.week))
   const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
   return (
     <motion.div
-      className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3"
+      className="min-w-0 space-y-4"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.3 }}
     >
-      <Card className="lg:col-span-2">
+      <Card>
         <CardHeader>
           <CardTitle>Monthly Profit</CardTitle>
         </CardHeader>
@@ -70,11 +71,11 @@ export function MonthlyPerformance({
                     if (!active || !payload?.length) return null
                     return (
                       <div className="rounded-lg border border-border bg-card-solid/95 p-3 text-xs shadow-xl">
-                        <p className="text-muted-foreground mb-1">{label}</p>
+                        <p className="mb-1 text-muted-foreground">{label}</p>
                         <p className="font-mono font-medium">
                           {formatCurrency(payload[0].value as number)}
                         </p>
-                        <p className="text-muted-foreground mt-1">
+                        <p className="mt-1 text-muted-foreground">
                           {payload[0].payload.trades} trades
                         </p>
                       </div>
@@ -96,82 +97,73 @@ export function MonthlyPerformance({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Daily Profit Heatmap</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-1 mb-2">
-            {dayLabels.map((d) => (
-              <div key={d} className="flex-1 text-center text-[9px] text-muted-foreground">
-                {d}
+      <Disclosure title="Heatmap & weekly summary">
+        <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card hover={false} className="border-0 bg-transparent shadow-none lg:col-span-1">
+            <CardHeader className="px-0 pt-0">
+              <CardTitle className="text-xs">Daily Profit Heatmap</CardTitle>
+            </CardHeader>
+            <CardContent className="px-0 pb-0">
+              <div className="mb-2 flex gap-1">
+                {dayLabels.map((d) => (
+                  <div key={d} className="flex-1 text-center text-[9px] text-muted-foreground">
+                    {d}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="space-y-1">
-            {Array.from({ length: maxWeek + 1 }, (_, week) => (
-              <div key={week} className="flex gap-1">
-                {Array.from({ length: 7 }, (_, day) => {
-                  const cell = dailyHeatmap.find((c) => c.week === week && c.day === day)
-                  return (
-                    <div
-                      key={day}
-                      className="flex-1 aspect-square rounded-sm transition-transform hover:scale-110 cursor-pointer"
-                      style={{
-                        backgroundColor: cell
-                          ? getHeatmapColor(cell.profit)
-                          : 'rgba(255,255,255,0.03)',
-                        opacity: cell ? 0.85 : 0.3,
-                      }}
-                      title={cell ? `${cell.date}: ${formatCurrency(cell.profit)}` : ''}
-                    />
-                  )
-                })}
+              <div className="space-y-1">
+                {Array.from({ length: maxWeek + 1 }, (_, week) => (
+                  <div key={week} className="flex gap-1">
+                    {Array.from({ length: 7 }, (_, day) => {
+                      const cell = dailyHeatmap.find((c) => c.week === week && c.day === day)
+                      return (
+                        <div
+                          key={day}
+                          className="aspect-square flex-1 cursor-pointer rounded-sm transition-transform hover:scale-110"
+                          style={{
+                            backgroundColor: cell
+                              ? getHeatmapColor(cell.profit)
+                              : 'rgba(255,255,255,0.03)',
+                            opacity: cell ? 0.85 : 0.3,
+                          }}
+                          title={cell ? `${cell.date}: ${formatCurrency(cell.profit)}` : ''}
+                        />
+                      )
+                    })}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between mt-3 text-[9px] text-muted-foreground">
-            <span>Loss</span>
-            <div className="flex gap-0.5">
-              {['#ef4444', '#f87171', '#fca5a5', '#86efac', '#4ade80', '#22c55e'].map((c) => (
-                <div key={c} className="h-2 w-3 rounded-sm" style={{ backgroundColor: c }} />
+            </CardContent>
+          </Card>
+
+          <div className="lg:col-span-2">
+            <p className="mb-3 text-xs font-semibold">Weekly Summary</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {weeklySummary.map((week) => (
+                <div
+                  key={week.week}
+                  className="rounded-lg border border-border bg-white/[0.02] p-3"
+                >
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {week.week}
+                  </p>
+                  <p
+                    className={`mt-1 font-mono text-sm font-semibold ${
+                      week.profit >= 0 ? 'text-success' : 'text-danger'
+                    }`}
+                  >
+                    {formatCurrency(week.profit)}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>{week.trades} trades</span>
+                    <span>{week.winRate}% WR</span>
+                  </div>
+                </div>
               ))}
             </div>
-            <span>Profit</span>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card className="lg:col-span-3">
-        <CardHeader>
-          <CardTitle>Weekly Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-            {weeklySummary.map((week) => (
-              <div
-                key={week.week}
-                className="rounded-lg border border-border bg-white/[0.02] p-3 hover:bg-white/[0.04] transition-colors"
-              >
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                  {week.week}
-                </p>
-                <p
-                  className={`text-sm font-semibold font-mono mt-1 ${
-                    week.profit >= 0 ? 'text-success' : 'text-danger'
-                  }`}
-                >
-                  {formatCurrency(week.profit)}
-                </p>
-                <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
-                  <span>{week.trades} trades</span>
-                  <span>{week.winRate}% WR</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </Disclosure>
     </motion.div>
   )
 }

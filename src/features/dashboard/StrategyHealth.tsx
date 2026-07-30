@@ -5,7 +5,6 @@ import { Progress } from '@/components/ui/progress'
 import { ResearchScore } from '@/components/ui/research-score'
 import { AnimatedCounter } from '@/hooks/use-animated-counter'
 import {
-  RESEARCH_SCORE_BASIS,
   qualityStrokeColor,
   researchScoreQuality,
 } from '@/lib/metric-semantics'
@@ -70,7 +69,6 @@ export function StrategyHealth({ metrics, overallScore }: StrategyHealthProps) {
       <Card>
         <CardHeader>
           <CardTitle>Strategy Health</CardTitle>
-          <p className="text-xs text-muted-foreground">{RESEARCH_SCORE_BASIS}</p>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
           <CircularGauge score={overallScore} />

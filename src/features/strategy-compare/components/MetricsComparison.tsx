@@ -1,5 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { directionLabel, type MetricCompareRow } from '../compare-metrics'
 
@@ -8,30 +7,23 @@ interface MetricsComparisonProps {
 }
 
 export function MetricsComparison({ rows }: MetricsComparisonProps) {
+  const visible = rows.filter(
+    (row) => row.direction !== 'unavailable' && row.label !== 'Max Drawdown',
+  )
+
   return (
     <Card hover={false}>
       <CardHeader className="gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
           <CardTitle className="text-base">Metrics Comparison</CardTitle>
-          <p className="text-pretty text-xs text-muted-foreground">
-            Baseline vs optimized with simple direction indicators.
+          <p className="text-xs text-muted-foreground">
+            ↑ improved · ↓ decreased · → unchanged
           </p>
-        </div>
-        <div className="flex flex-wrap gap-2 text-[10px]">
-          <Badge variant="outline" className="border-success/30 bg-success/10 text-success">
-            ↑ Improved
-          </Badge>
-          <Badge variant="outline" className="border-danger/30 bg-danger/10 text-danger">
-            ↓ Decreased
-          </Badge>
-          <Badge variant="outline" className="text-muted-foreground">
-            → No Change
-          </Badge>
         </div>
       </CardHeader>
       <CardContent className="min-w-0 space-y-4">
         <div className="space-y-3 md:hidden">
-          {rows.map((row) => (
+          {visible.map((row) => (
             <div
               key={row.label}
               className="space-y-2 rounded-lg border border-border/60 px-3.5 py-3.5"
@@ -70,7 +62,7 @@ export function MetricsComparison({ rows }: MetricsComparisonProps) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {visible.map((row) => (
                 <tr key={row.label} className="border-b border-border/50">
                   <td className="px-3 py-2.5 font-medium">{row.label}</td>
                   <td className="px-3 py-2.5 font-mono tabular-nums text-muted-foreground">

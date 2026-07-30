@@ -186,7 +186,6 @@ export function KpiCards({ metrics, researchScore }: KpiCardsProps) {
             <Card className="h-full">
               <CardContent className="flex h-full min-w-0 flex-col justify-center p-5 sm:p-6">
                 <ResearchScore score={researchScore} size="lg" />
-                <p className="mt-2 text-[10px] text-muted-foreground">Is this strategy good?</p>
               </CardContent>
             </Card>
           </motion.div>

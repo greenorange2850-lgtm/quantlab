@@ -66,32 +66,23 @@ function BacktestCard({
           {item.market}
         </Badge>
         <span className="font-mono text-xs text-muted">{item.timeframe}</span>
-        <span className="text-xs text-muted">{item.trades} trades</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Win Rate</p>
-          <p className="font-mono text-xs">{item.winRate.toFixed(1)}%</p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">PF</p>
-          <p className="font-mono text-xs">{item.profitFactor.toFixed(2)}</p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Max DD</p>
-          <p className="font-mono text-xs text-danger">{formatPercent(item.maxDrawdown)}</p>
-        </div>
-        <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Net Profit</p>
           <p
             className={cn(
-              'font-mono text-xs font-medium',
+              'font-mono text-sm font-medium',
               item.netProfit >= 0 ? 'text-success' : 'text-danger',
             )}
           >
             {formatCurrency(item.netProfit)}
           </p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Max DD</p>
+          <p className="font-mono text-sm text-danger">{formatPercent(item.maxDrawdown)}</p>
         </div>
       </div>
 
@@ -140,52 +131,6 @@ export function RecentBacktestsTable({
         ),
       },
       {
-        accessorKey: 'market',
-        header: 'Market',
-        cell: ({ getValue }) => (
-          <Badge variant="outline" className="font-mono text-[10px]">
-            {getValue() as string}
-          </Badge>
-        ),
-      },
-      {
-        accessorKey: 'timeframe',
-        header: 'TF',
-        cell: ({ getValue }) => (
-          <span className="font-mono text-xs">{getValue() as string}</span>
-        ),
-      },
-      {
-        accessorKey: 'trades',
-        header: 'Trades',
-        cell: ({ getValue }) => (
-          <span className="font-mono text-xs">{getValue() as number}</span>
-        ),
-      },
-      {
-        accessorKey: 'winRate',
-        header: 'Win Rate',
-        cell: ({ getValue }) => (
-          <span className="font-mono text-xs">{(getValue() as number).toFixed(1)}%</span>
-        ),
-      },
-      {
-        accessorKey: 'profitFactor',
-        header: 'PF',
-        cell: ({ getValue }) => (
-          <span className="font-mono text-xs">{(getValue() as number).toFixed(2)}</span>
-        ),
-      },
-      {
-        accessorKey: 'maxDrawdown',
-        header: 'Max DD',
-        cell: ({ getValue }) => (
-          <span className="font-mono text-xs text-danger">
-            {formatPercent(getValue() as number)}
-          </span>
-        ),
-      },
-      {
         accessorKey: 'netProfit',
         header: 'Net Profit',
         cell: ({ getValue }) => {
@@ -196,6 +141,15 @@ export function RecentBacktestsTable({
             </span>
           )
         },
+      },
+      {
+        accessorKey: 'maxDrawdown',
+        header: 'Max DD',
+        cell: ({ getValue }) => (
+          <span className="font-mono text-xs text-danger">
+            {formatPercent(getValue() as number)}
+          </span>
+        ),
       },
       {
         accessorKey: 'status',
@@ -223,9 +177,6 @@ export function RecentBacktestsTable({
               onClick={() => onViewDetails?.(row.original.id)}
             >
               <Eye className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="More actions" disabled>
-              <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
           </div>
         ),

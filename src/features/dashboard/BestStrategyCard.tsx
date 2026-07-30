@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Disclosure } from '@/components/ui/disclosure'
 import { ResearchScore } from '@/components/ui/research-score'
-import { AnimatedCounter } from '@/hooks/use-animated-counter'
 import { cn, formatCurrency, formatRatio } from '@/lib/utils'
 import {
   drawdownQuality,
@@ -22,7 +21,26 @@ interface BestStrategyCardProps {
 }
 
 export function BestStrategyCard({ strategy, netProfit }: BestStrategyCardProps) {
-  const secondary = [
+  const details = [
+    {
+      label: 'Research Score',
+      value: `${Math.round(strategy.score)} / 100`,
+    },
+    {
+      label: 'Net Profit',
+      value: typeof netProfit === 'number' ? formatCurrency(netProfit) : '—',
+      className:
+        typeof netProfit === 'number'
+          ? netProfit >= 0
+            ? 'text-success'
+            : 'text-danger'
+          : undefined,
+    },
+    {
+      label: 'Max Drawdown',
+      value: `${strategy.drawdown.toFixed(2)}%`,
+      className: qualityTextClass(drawdownQuality(strategy.drawdown)),
+    },
     {
       label: 'Profit Factor',
       value: formatRatio(strategy.profitFactor),
@@ -60,56 +78,23 @@ export function BestStrategyCard({ strategy, netProfit }: BestStrategyCardProps)
               <p className="text-xs text-muted-foreground">{strategy.version}</p>
             </div>
           </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
-            {strategy.filtersEnabled.map((filter) => (
-              <Badge key={filter} variant="outline" className="text-[10px]">
-                {filter}
-              </Badge>
-            ))}
-          </div>
+          <ResearchScore score={strategy.score} size="sm" className="shrink-0" />
         </CardHeader>
-        <CardContent className="min-w-0 space-y-5">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <ResearchScore score={strategy.score} size="lg" />
-            <div className="min-w-0 space-y-1.5">
-              <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Net Profit
-              </p>
-              <p
-                className={cn(
-                  'truncate font-mono text-xl font-semibold tracking-tight sm:text-2xl',
-                  typeof netProfit === 'number' && netProfit >= 0 && 'text-success',
-                  typeof netProfit === 'number' && netProfit < 0 && 'text-danger',
-                )}
-              >
-                {typeof netProfit === 'number' ? (
-                  formatCurrency(netProfit)
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </p>
-              <p className="text-[10px] text-muted-foreground">How much it made</p>
+        <CardContent className="min-w-0 space-y-4">
+          {strategy.filtersEnabled.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
+              {strategy.filtersEnabled.map((filter) => (
+                <Badge key={filter} variant="outline" className="text-[10px]">
+                  {filter}
+                </Badge>
+              ))}
             </div>
-            <div className="min-w-0 space-y-1.5">
-              <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Max Drawdown
-              </p>
-              <p
-                className={cn(
-                  'truncate font-mono text-xl font-semibold tracking-tight sm:text-2xl',
-                  qualityTextClass(drawdownQuality(strategy.drawdown)),
-                )}
-              >
-                <AnimatedCounter value={strategy.drawdown} decimals={2} suffix="%" />
-              </p>
-              <p className="text-[10px] text-muted-foreground">How risky it is</p>
-            </div>
-          </div>
+          ) : null}
 
-          <Disclosure title="More metrics">
+          <Disclosure title="Strategy metrics">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {secondary.map((m) => (
+              {details.map((m) => (
                 <div key={m.label} className="min-w-0 space-y-1">
                   <p className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
                     {m.label}

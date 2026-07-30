@@ -72,9 +72,6 @@ export function ResearchOverview({ report }: ResearchOverviewProps) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant="accent" className="text-[10px]">
-            Historical Research Result
-          </Badge>
           <Badge variant="outline" className="text-[10px]">
             Validation Required
           </Badge>

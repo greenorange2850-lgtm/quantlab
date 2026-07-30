@@ -101,7 +101,7 @@ export function buildOverviewPairs(
 }
 
 /** Labels shown above the fold in comparison overview. */
-export const COMPARE_SNAPSHOT_LABELS = new Set(['Net Profit', 'ROI', 'Max Drawdown'])
+export const COMPARE_SNAPSHOT_LABELS = new Set(['Net Profit', 'Max Drawdown'])
 
 /** Metric rows with previous/current/diff — no new analytics formulas. */
 export function buildMetricCompareRows(
