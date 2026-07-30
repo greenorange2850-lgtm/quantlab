@@ -25,6 +25,16 @@ import {
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
 import { Disclosure } from '@/components/ui/disclosure'
+import {
+  buildOptimizerTransparency,
+  buildResearchHealthSnapshot,
+  buildResearchProgressSnapshot,
+  buildResearchRecommendation,
+  NextRecommendationPanel,
+  OptimizerTransparencyPanel,
+  ResearchHealthPanel,
+  ResearchProgressPanel,
+} from '@/features/research-intelligence'
 import { resolveOptimizerSessionId } from '@/research/ui-gates'
 import {
   defaultRandomSearchDraft,
@@ -52,6 +62,7 @@ export function OptimizerPage() {
 
   const status = useResearchStore((state) => state.status)
   const progress = useResearchStore((state) => state.progress)
+  const liveSession = useResearchStore((state) => state.session)
   const liveReport = useResearchStore((state) => state.report)
   const error = useResearchStore((state) => state.error)
   const validationErrors = useResearchStore((state) => state.validationErrors)
@@ -65,6 +76,33 @@ export function OptimizerPage() {
 
   const archivedSession = useResearchSession(analysisSessionId)
   const report = liveReport ?? archivedSession.data?.report ?? null
+  const session = liveSession ?? archivedSession.data?.session ?? null
+
+  const intelligenceInput = useMemo(
+    () => ({
+      progress,
+      report,
+      session,
+      uiRunning: status === 'running',
+    }),
+    [progress, report, session, status],
+  )
+  const researchProgress = useMemo(
+    () => buildResearchProgressSnapshot(intelligenceInput),
+    [intelligenceInput],
+  )
+  const researchHealth = useMemo(
+    () => buildResearchHealthSnapshot(report),
+    [report],
+  )
+  const researchRecommendation = useMemo(
+    () => buildResearchRecommendation(researchProgress, researchHealth),
+    [researchProgress, researchHealth],
+  )
+  const optimizerTransparency = useMemo(
+    () => buildOptimizerTransparency(intelligenceInput),
+    [intelligenceInput],
+  )
 
   useEffect(() => {
     if (!analysisSessionId) return
@@ -397,6 +435,23 @@ export function OptimizerPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {researchProgress && (
+        <ResearchProgressPanel snapshot={researchProgress} />
+      )}
+
+      {optimizerTransparency && (
+        <OptimizerTransparencyPanel snapshot={optimizerTransparency} />
+      )}
+
+      {(researchHealth || researchRecommendation) && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {researchHealth && <ResearchHealthPanel snapshot={researchHealth} />}
+          {researchRecommendation && (
+            <NextRecommendationPanel recommendation={researchRecommendation} />
+          )}
+        </div>
       )}
 
       {status === 'empty' && (
