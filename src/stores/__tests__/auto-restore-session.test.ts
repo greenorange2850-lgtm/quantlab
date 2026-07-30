@@ -257,6 +257,8 @@ describe('auto restore latest session', () => {
         improvementsCount: 0,
         candidatesSinceLastImprovement: null,
         elapsedMs: 0,
+        wallElapsedMs: 0,
+        pausedMs: 0,
         estimatedRemainingMs: 0,
         status: 'COMPLETED',
       },

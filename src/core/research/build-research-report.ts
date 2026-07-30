@@ -184,5 +184,6 @@ export function buildResearchReport(
     createdAt: session.createdAt,
     completedAt: session.completedAt,
     analysis: buildResearchAnalysisNarrative(session, best),
+    partial: Boolean(session.partial),
   }
 }

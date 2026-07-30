@@ -109,11 +109,14 @@ export function liveStatusToSessionStatus(
     case 'FAILED':
       return 'failed'
     case 'CANCELLED':
+    case 'CANCELLING':
       return 'cancelled'
     case 'INITIALIZING':
     case 'EXPLORING':
     case 'IMPROVING':
     case 'PLATEAUING':
+    case 'PAUSING':
+    case 'PAUSED':
     case 'FINALIZING':
       return 'running'
   }
@@ -130,11 +133,14 @@ export function liveStatusToPhaseStatus(
     case 'IMPROVING':
       return 'improving'
     case 'PLATEAUING':
+    case 'PAUSING':
+    case 'PAUSED':
       return 'plateauing'
     case 'FINALIZING':
     case 'COMPLETED':
     case 'FAILED':
     case 'CANCELLED':
+    case 'CANCELLING':
       return 'converged'
   }
 }
