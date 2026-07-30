@@ -19,6 +19,28 @@ function canUseStorage(): boolean {
   return typeof localStorage !== 'undefined'
 }
 
+/**
+ * Canonical bag keyed by `entry.session.id`.
+ * Storage object keys can drift from `session.id` (legacy / corrupt bags);
+ * list UIs use `session.id` while Analysis looks up by that same id — both
+ * must resolve the same entry.
+ */
+function canonicalizeSessionBag(
+  raw: Record<string, PersistedResearchSession>,
+): Record<string, PersistedResearchSession> {
+  const canonical: Record<string, PersistedResearchSession> = {}
+  for (const value of Object.values(raw)) {
+    if (!value || typeof value !== 'object') continue
+    const id = value.session?.id
+    if (!id || typeof id !== 'string') continue
+    const previous = canonical[id]
+    if (!previous || (value.savedAt ?? 0) >= (previous.savedAt ?? 0)) {
+      canonical[id] = value
+    }
+  }
+  return canonical
+}
+
 function readStorage(): Record<string, PersistedResearchSession> {
   if (!canUseStorage()) return {}
   try {
@@ -26,7 +48,7 @@ function readStorage(): Record<string, PersistedResearchSession> {
     if (!raw) return {}
     const parsed = JSON.parse(raw) as unknown
     if (!parsed || typeof parsed !== 'object') return {}
-    return parsed as Record<string, PersistedResearchSession>
+    return canonicalizeSessionBag(parsed as Record<string, PersistedResearchSession>)
   } catch {
     return {}
   }
@@ -115,16 +137,57 @@ function writeStorage(map: Record<string, PersistedResearchSession>): boolean {
 
 /**
  * Load localStorage into memory once per page lifetime.
+ * Indexes by `session.id` (never by a divergent JSON object key).
+ * Rewrites durable storage when object keys drifted from session ids.
  * Merges storage → memory without clobbering newer in-memory entries.
  */
 export function ensureResearchSessionArchiveHydrated(): void {
   if (didHydrate) return
-  for (const [id, value] of Object.entries(readStorage())) {
+
+  const canonical = readStorage()
+  for (const [id, value] of Object.entries(canonical)) {
     if (!memory.has(id)) {
       memory.set(id, value)
     }
   }
+
+  // Self-heal durable bag when JSON object keys diverged from session.id.
+  if (canUseStorage()) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown
+        if (parsed && typeof parsed === 'object') {
+          const rawKeys = Object.keys(parsed as object).sort()
+          const canonicalKeys = Object.keys(canonical).sort()
+          const keysMatch =
+            rawKeys.length === canonicalKeys.length &&
+            rawKeys.every((key, index) => key === canonicalKeys[index])
+          if (!keysMatch) {
+            writeStorage(canonical)
+          }
+        }
+      }
+    } catch {
+      // Ignore heal failures — memory is already canonical for lookups.
+    }
+  }
+
   didHydrate = true
+}
+
+/** Resolve an entry by session id, repairing divergent map keys when found. */
+function resolveMemorySession(id: string): PersistedResearchSession | null {
+  const direct = memory.get(id)
+  if (direct) return direct
+
+  for (const [key, value] of memory.entries()) {
+    if (value.session.id !== id) continue
+    memory.delete(key)
+    memory.set(id, value)
+    return value
+  }
+  return null
 }
 
 export function isResearchSessionArchiveHydrated(): boolean {
@@ -188,8 +251,15 @@ function hydrate(): void {
 export function saveResearchSession(entry: PersistedResearchSession): boolean {
   hydrate()
   // Keep the full entry in memory for the current tab (Analysis / Compare).
+  // Drop any divergent keys that pointed at the same session id.
+  for (const [key, value] of memory.entries()) {
+    if (key !== entry.session.id && value.session.id === entry.session.id) {
+      memory.delete(key)
+    }
+  }
   memory.set(entry.session.id, entry)
 
+  // readStorage() already returns a canonical bag keyed by session.id.
   const stored = readStorage()
   stored[entry.session.id] = slimResearchSessionForStorage(entry)
 
@@ -213,7 +283,7 @@ export function saveResearchSession(entry: PersistedResearchSession): boolean {
 
 export function getResearchSession(id: string): PersistedResearchSession | null {
   hydrate()
-  return memory.get(id) ?? null
+  return resolveMemorySession(id)
 }
 
 export function listResearchSessionsBySavedAt(): PersistedResearchSession[] {
@@ -245,7 +315,13 @@ export async function fetchResearchSessions(): Promise<PersistedResearchSession[
 
 export function deleteResearchSession(id: string): boolean {
   hydrate()
-  const existed = memory.delete(id)
+  let existed = false
+  for (const [key, value] of memory.entries()) {
+    if (key === id || value.session.id === id) {
+      memory.delete(key)
+      existed = true
+    }
+  }
   const stored = readStorage()
   if (id in stored) {
     delete stored[id]
