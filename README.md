@@ -1,37 +1,62 @@
-# QUANTLAB
+# QuantLab
 
-Quantitative trading research platform — strategy development, event-driven backtesting, analytics, and a live dashboard.
+**Version:** `1.0.0`
 
-**Version:** `0.2.0-alpha.1`
+QuantLab is a quantitative trading **research** platform for strategy development, event-driven backtesting, parameter optimization, and research session management. Results are historical research aids — not investment advice.
 
-## Overview
+## Main features
 
-QUANTLAB is a TypeScript monorepo with a pure core engine and a React dashboard. All trading logic lives in `src/core/`; the UI is presentational only.
+- **Strategy Lab / Backtest Lab** — run Moving Average Cross backtests on live Binance markets
+- **Market Explorer** — import and inspect historical candle data
+- **Optimizer (Random Search)** — explore parameter combinations and score candidates
+- **Research Analysis** — review archived research reports
+- **Strategy Compare** — compare a baseline backtest with an optimized candidate
+- **Research Sessions** — browse, open, compare, and delete archived research sessions
+- **Dashboard** — KPIs, equity curve, trade history, and restore after refresh
+- **Mobile-ready shell** — drawer navigation below desktop breakpoints
 
+## Current workflow
+
+```text
+Strategy Lab → Backtest → Optimize → Analysis → Compare → Sessions
 ```
-Market → Strategy → Risk → Execution → Portfolio → Analytics → Dashboard
+
+1. **Strategy Lab** — pick a Binance pair / timeframe and run a backtest  
+2. **Dashboard** — review metrics (auto-restores the latest saved backtest after refresh)  
+3. **Optimizer** — run Random Search to explore parameters  
+4. **Research Analysis** — open the generated research report  
+5. **Strategy Compare** — compare baseline vs optimized candidate  
+6. **Research Sessions** — manage archived sessions (survives refresh on the same origin)
+
+## Stable production URL
+
+Use this alias for all persistence testing (localStorage is per-origin):
+
+```text
+https://quantlab-frontend.vercel.app
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design.
+Do **not** rely on ephemeral Vercel deployment URLs from GitHub/Vercel status links (`quantlab-frontend-<id>-….vercel.app`) — each host has a separate `localStorage`.
 
-## Prerequisites
+## Local development
+
+### Prerequisites
 
 - **Node.js** 20 or later
 - **npm** 10 or later
 
-## Install
+### Install
 
 ```bash
-git clone <repository-url>
-cd chart
+git clone https://github.com/greenorange2850-lgtm/quantlab.git
+cd quantlab
 npm install
 ```
 
-## Development
-
-Start the web dashboard and API server concurrently:
+### Run
 
 ```bash
+# Web dashboard + API
 npm run dev
 ```
 
@@ -40,84 +65,49 @@ npm run dev
 | Dashboard | http://localhost:5173 |
 | API | http://localhost:3001/api/v1 |
 
-### Open the dashboard
+### Typical local path
 
-1. Run `npm run dev`
-2. Open http://localhost:5173
-3. Navigate to **Strategy Lab** (`/strategy-lab`)
-4. Click **Run Backtest** — the dashboard populates automatically with real metrics
+1. Open http://localhost:5173/strategy-lab  
+2. Select a live Binance symbol and timeframe  
+3. Click **Run Backtest** — dashboard populates with pipeline metrics  
+4. Open **Optimizer** → run Random Search  
+5. Use **Research Analysis**, **Strategy Compare**, and **Research Sessions**
 
-## Run Tests
-
-```bash
-# Run all tests once
-npm run test
-
-# Watch mode
-npm run test:watch
-```
-
-## Run Backtests
-
-### Via the dashboard (recommended)
-
-1. `npm run dev`
-2. Open http://localhost:5173/strategy-lab
-3. Configure symbol, interval, and capital
-4. Click **Run Backtest**
-
-### Via CLI demos
+### Validation
 
 ```bash
-# Event-driven backtest with Binance data
-npm run demo:backtest
-
-# Full analytics report from a backtest
-npm run demo:analytics
-
-# Strategy signal evaluation
-npm run demo:strategy
-
-# Indicator calculations
-npm run demo:indicators
-```
-
-## Validation
-
-```bash
-# TypeScript type checking (all packages + app + API)
+npm test
 npm run typecheck
-
-# Lint
-npm run lint
-
-# Full monorepo production build (packages + API + web)
-npm run build
-
-# Frontend-only production build (Vite → dist/) — used by Vercel
 npm run build:web
 ```
 
-## Deployment (Vercel frontend)
+Optional package/API smoke (import → scan → analyze):
 
-The Vite dashboard is deployed from the **repository root**. Do not set Vercel Root Directory to `server/` — that package is the Express API and is hosted separately.
+```bash
+npm run build:packages
+npm run smoke
+```
 
-| Setting | Value |
-|---------|--------|
-| Framework | Vite |
-| Root Directory | `.` |
-| Build Command | `npm run build:web` |
-| Output Directory | `dist` |
+## Deployment
 
-`vercel.json` at the repo root encodes the same build settings and an SPA rewrite so React Router deep links work on refresh.
+Frontend deploys from the repository root to Vercel (`npm run build:web` → `dist/`).  
+See [docs/deployment/vercel.md](docs/deployment/vercel.md).
 
-See [docs/deployment/vercel.md](docs/deployment/vercel.md) for the full deployment checklist.
+The Express API (`server/`) is hosted separately (for example Railway). See [docs/deployment/railway.md](docs/deployment/railway.md).
 
-## Project Structure
+## Known limitations
+
+- **Not investment advice** — all results are historical research only  
+- **Optimization ≠ validation** — Random Search scores in-sample candidates; it does not prove out-of-sample robustness  
+- **Slim research archives** — durable research sessions store summaries (and equity endpoints); full candle / equity / trade series are not kept in `quantlab.research-sessions.v1` (candidate details use the backtest detail archive)  
+- **Not implemented in v1.0.0** — Trade Replay, Reports, Settings configuration UI, and advanced validation workflows (nav items marked **Soon**)  
+- **Persistence origin** — always test restore on `https://quantlab-frontend.vercel.app`; switching ephemeral deployment URLs looks like “lost” sessions even though data remains under the previous origin  
+
+## Project structure
 
 ```
-src/core/       Business logic (strategy, backtest, execution, analytics, …)
-src/features/   React dashboard components
+src/core/       Business logic (strategy, backtest, execution, analytics, research, …)
+src/features/   React feature workspaces
 src/pages/      Route pages
 src/data/       Exchange data adapters
 packages/       Shared workspace libraries
@@ -129,25 +119,12 @@ docs/           Module documentation and ADRs
 
 | Document | Description |
 |----------|-------------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture and layer responsibilities |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 | [ROADMAP.md](ROADMAP.md) | Planned features |
-| [docs/deployment/vercel.md](docs/deployment/vercel.md) | Vercel frontend deployment checklist |
-| [docs/strategy-engine.md](docs/strategy-engine.md) | Strategy framework |
-| [docs/backtesting.md](docs/backtesting.md) | Backtest engine |
-| [docs/analytics.md](docs/analytics.md) | Analytics and reports |
+| [docs/deployment/vercel.md](docs/deployment/vercel.md) | Vercel frontend checklist |
+| [docs/deployment/railway.md](docs/deployment/railway.md) | Railway API checklist |
 | [docs/adr/](docs/adr/) | Architecture decision records |
-
-## Alpha Limitations
-
-This is an **alpha** release. Known gaps:
-
-- Live trading feed is not connected (`LiveFeed` is interface-only)
-- Several navigation routes are placeholders
-- Risk engine validates config but does not yet size positions in backtests
-- Stop orders and full partial-fill simulation are stubbed
-
-See [ROADMAP.md](ROADMAP.md) for the path to v0.3 and beyond.
 
 ## License
 

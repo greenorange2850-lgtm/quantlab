@@ -73,9 +73,9 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
         </div>
         <div className="flex min-w-0 flex-col">
           <span className="text-xs font-semibold tracking-tight text-foreground leading-tight">
-            AI Trading
+            QuantLab
           </span>
-          <span className="text-[10px] text-muted-foreground leading-tight">Research OS</span>
+          <span className="text-[10px] text-muted-foreground leading-tight">v1.0.0</span>
         </div>
       </div>
 
@@ -83,6 +83,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
         {NAV_ITEMS.map((item) => {
           const Icon = iconMap[item.icon]
           const isActive = location.pathname === item.path
+          const planned = 'planned' in item && item.planned === true
 
           return (
             <Link key={item.id} to={item.path} onClick={onNavigate}>
@@ -105,6 +106,11 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
                 )}
                 {Icon && <Icon className={cn('relative h-4 w-4 shrink-0', isActive && 'text-accent')} />}
                 <span className="relative min-w-0 flex-1 truncate font-medium">{item.label}</span>
+                {planned ? (
+                  <span className="relative shrink-0 rounded border border-border px-1 py-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
+                    Soon
+                  </span>
+                ) : null}
               </motion.div>
             </Link>
           )

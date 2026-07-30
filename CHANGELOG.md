@@ -1,9 +1,71 @@
 # Changelog
 
-All notable changes to QUANTLAB are documented in this file.
+All notable changes to QuantLab are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2026-07-29
+
+First production-ready release of the QuantLab quantitative research workflow.
+
+### Added
+
+#### Backtesting
+- Strategy Lab and Backtest Lab runners with live Binance symbol/timeframe selection
+- Event-driven backtest pipeline (strategy → risk → execution → analytics → dashboard)
+- Dashboard restore of historical backtest details without rerunning the pipeline
+
+#### Live market data import
+- Market Explorer for importing, validating, and browsing historical candle data
+- Live Binance pair selector and candle loading for Strategy Lab / Optimizer runs
+
+#### Random Search optimization
+- Optimizer workspace for Moving Average Cross parameter random search
+- Candidate table with Apply Parameters, View Details, Analysis, and Compare actions
+- Research session persistence after completed searches
+
+#### Research Analysis
+- Dedicated Research Analysis workspace for archived `ResearchReport` presentation
+- Overview, performance metrics, strengths/weaknesses, risk, and rating cards
+- Deep links via `?session=<id>`
+
+#### Strategy Compare
+- Baseline backtest vs optimized candidate comparison
+- Overview metrics, improvement summary, and what-changed list from existing reports
+- Query params: `session`, `candidate`, `baseline`
+
+#### Research Sessions
+- Session list with filter, sort, Open Analysis, Compare, and Delete
+- Shared archive source of truth for Optimizer, Analysis, Compare, and Sessions
+
+#### Persistence and restore
+- Research sessions persisted under `quantlab.research-sessions.v1`
+- Slim durable payloads (summaries kept; heavy series trimmed for quota)
+- Startup hydration gates so empty states do not flash before restore
+- Latest backtest auto-restore after refresh
+- Preview/dev diagnostics for origin-scoped localStorage on Vercel
+
+#### Mobile responsiveness
+- `lg` drawer navigation with backdrop, Escape close, and body scroll lock
+- Responsive dashboard cards, tables, Strategy Lab / Market Explorer layouts
+
+#### QA and production-readiness
+- Hydration/empty-state fixes across Dashboard, Analysis, Compare, and Sessions
+- Optimizer deep-link alignment (`session` with legacy `analysis` fallback)
+- Honest Placeholder pages for Trade Replay, Reports, and Settings
+- Planned nav badges for unimplemented routes
+
+### Changed
+- Root and workspace package versions bumped to `1.0.0`
+- Branding title set to QuantLab
+
+### Known Limitations
+- Results are historical research, not investment advice
+- Optimization is not out-of-sample validation
+- Slim research archives omit full candle/equity/trade series (details remain in the backtest archive)
+- Trade Replay, Reports, Settings, and advanced validation are not implemented
+- Persistence testing must use the stable Vercel alias (`https://quantlab-frontend.vercel.app`) because `localStorage` is per-origin
 
 ## [0.2.0-alpha.1] - 2026-07-12
 
@@ -75,4 +137,5 @@ First alpha release of the QUANTLAB quantitative research platform. This release
 - Partial fills and stop orders are stubbed in the execution engine
 - VWAP, MACD, Bollinger Bands, and ATR indicators are not yet implemented
 
-[0.2.0-alpha.1]: https://github.com/quantlab/quantlab/releases/tag/v0.2.0-alpha.1
+[1.0.0]: https://github.com/greenorange2850-lgtm/quantlab/releases/tag/v1.0.0
+[0.2.0-alpha.1]: https://github.com/greenorange2850-lgtm/quantlab/releases/tag/v0.2.0-alpha.1
