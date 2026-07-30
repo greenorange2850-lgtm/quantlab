@@ -193,7 +193,21 @@ describe('resolve compare pair', () => {
       error: null,
       createdAt: 1,
       completedAt: 2,
-      progress: { completed: 1, total: 2, bestScore: 1.9, status: 'completed' },
+      progress: {
+        totalCandidates: 2,
+        candidatesTested: 1,
+        candidatesAccepted: 1,
+        candidatesRejected: 0,
+        currentCandidateScore: 1.9,
+        bestScore: 1.9,
+        bestTradeCount: 12,
+        bestCandidateParameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+        improvementsCount: 1,
+        candidatesSinceLastImprovement: 0,
+        elapsedMs: 0,
+        estimatedRemainingMs: 0,
+        status: 'COMPLETED',
+      },
     }
     const researchReport = buildResearchReport(session)
 
@@ -230,7 +244,21 @@ describe('resolve compare pair', () => {
       error: null,
       createdAt: 1,
       completedAt: 2,
-      progress: { completed: 1, total: 1, bestScore: 1.4, status: 'completed' },
+      progress: {
+        totalCandidates: 1,
+        candidatesTested: 1,
+        candidatesAccepted: 1,
+        candidatesRejected: 0,
+        currentCandidateScore: 1.4,
+        bestScore: 1.4,
+        bestTradeCount: 12,
+        bestCandidateParameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+        improvementsCount: 1,
+        candidatesSinceLastImprovement: 0,
+        elapsedMs: 0,
+        estimatedRemainingMs: 0,
+        status: 'COMPLETED',
+      },
     }
 
     const pair = buildComparePair({

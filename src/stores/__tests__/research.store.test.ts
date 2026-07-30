@@ -128,11 +128,15 @@ describe('research store random search workflow', () => {
 
     const candles = buildCandles(40)
     const progressSnapshots: number[] = []
+    const statuses: string[] = []
     const unsub = useResearchStore.subscribe((state) => {
-      if (state.progress) progressSnapshots.push(state.progress.completed)
+      if (state.progress) {
+        progressSnapshots.push(state.progress.candidatesTested)
+        statuses.push(state.progress.status)
+      }
     })
 
-    await useResearchStore.getState().startRandomSearch({
+    const result = await useResearchStore.getState().startRandomSearch({
       candles,
       config: {
         iterations: 3,
@@ -155,6 +159,12 @@ describe('research store random search workflow', () => {
     expect(state.report?.bestCandidate).not.toBeNull()
     expect(progressSnapshots).toContain(1)
     expect(progressSnapshots).toContain(3)
+    expect(statuses).toContain('INITIALIZING')
+    expect(statuses).toContain('FINALIZING')
+    expect(statuses.at(-1)).toBe('COMPLETED')
+    expect(state.progress?.status).toBe('COMPLETED')
+    expect(result?.persisted).toBe(true)
+    expect(result?.session.id).toBe(state.report!.sessionId)
     expect(runBacktestPipeline).toHaveBeenCalledTimes(3)
 
     // Generated session must appear in the shared archive-backed query list.
@@ -326,7 +336,7 @@ describe('research store random search workflow', () => {
     expect(useResearchStore.getState().report?.topCandidates).toEqual([])
   })
 
-  it('supports cancel state', async () => {
+  it('supports cancel state without persisting a partial session', async () => {
     let resolveIter!: () => void
     const gate = new Promise<void>((resolve) => {
       resolveIter = resolve
@@ -369,8 +379,62 @@ describe('research store random search workflow', () => {
     await Promise.resolve()
     useResearchStore.getState().cancelRandomSearch()
     resolveIter()
-    await run
+    const result = await run
 
     expect(useResearchStore.getState().status).toBe('cancelled')
+    expect(useResearchStore.getState().progress?.status).toBe('CANCELLED')
+    expect(result?.persisted).toBe(false)
+    expect(listResearchSessionsBySavedAt()).toHaveLength(0)
+    // UI is not stuck in running.
+    expect(useResearchStore.getState().abortController).toBeNull()
+  })
+
+  it('failure does not persist a session and leaves a FAILED progress state', async () => {
+    vi.mocked(runBacktestPipeline).mockImplementation(async () => {
+      throw new Error('pipeline exploded')
+    })
+
+    const result = await useResearchStore.getState().startRandomSearch({
+      candles: buildCandles(20),
+      config: {
+        iterations: 2,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 20,
+        initialCapital: 10_000,
+        seed: 5,
+      },
+    })
+
+    const state = useResearchStore.getState()
+    expect(state.status).toBe('failed')
+    expect(state.error).toMatch(/pipeline exploded/i)
+    expect(state.progress?.status).toBe('FAILED')
+    expect(result?.persisted).toBe(false)
+    expect(listResearchSessionsBySavedAt()).toHaveLength(0)
+    expect(state.abortController).toBeNull()
+  })
+
+  it('returns the exact newly created session id for post-completion navigation', async () => {
+    const result = await useResearchStore.getState().startRandomSearch({
+      candles: buildCandles(30),
+      config: {
+        iterations: 2,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 30,
+        initialCapital: 10_000,
+        seed: 8,
+      },
+    })
+
+    expect(result?.persisted).toBe(true)
+    expect(result?.session.id).toMatch(/^rs-/)
+    expect(result?.session.id).toBe(result?.report.sessionId)
+    expect(getResearchSession(result!.session.id)).not.toBeNull()
   })
 })

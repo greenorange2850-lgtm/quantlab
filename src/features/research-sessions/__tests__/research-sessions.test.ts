@@ -140,10 +140,19 @@ function makeSession(input: {
     createdAt: input.createdAt,
     completedAt: input.createdAt + 1,
     progress: {
-      completed: 5,
-      total: 5,
+      totalCandidates: 5,
+      candidatesTested: 5,
+      candidatesAccepted: 1,
+      candidatesRejected: 4,
+      currentCandidateScore: input.score,
       bestScore: input.score,
-      status: 'completed',
+      bestTradeCount: report.summary.totalTrades,
+      bestCandidateParameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+      improvementsCount: 1,
+      candidatesSinceLastImprovement: 0,
+      elapsedMs: 0,
+      estimatedRemainingMs: 0,
+      status: 'COMPLETED',
     },
   }
 }

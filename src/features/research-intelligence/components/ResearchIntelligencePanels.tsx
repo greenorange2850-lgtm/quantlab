@@ -86,6 +86,12 @@ export function ResearchProgressPanel({ snapshot }: ResearchProgressPanelProps) 
             size="secondary"
           />
           <MetricTile
+            label="Best Candidate Trades"
+            value={formatCountOrDash(snapshot.bestTradeCount)}
+            hint="Trade count of the current best candidate"
+            size="secondary"
+          />
+          <MetricTile
             label="Last Improvement"
             value={
               snapshot.lastImprovementAgo === null

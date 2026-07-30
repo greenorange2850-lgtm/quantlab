@@ -1,6 +1,7 @@
 import type { Candle } from '../../data/candles.js'
 import type { BacktestReport } from '../analytics/types.js'
 import type { MovingAverageCrossParams } from '../strategy/MovingAverageCrossStrategy.js'
+import type { RandomSearchPerfDiagnostics } from './cooperative-schedule.js'
 
 export type ScoringObjective =
   | 'netProfit'
@@ -52,6 +53,17 @@ export type ResearchSessionStatus =
   | 'cancelled'
   | 'failed'
 
+/** Live optimizer statuses emitted via RandomSearchProgress (distinct from session status). */
+export type RandomSearchLiveStatus =
+  | 'INITIALIZING'
+  | 'EXPLORING'
+  | 'IMPROVING'
+  | 'PLATEAUING'
+  | 'FINALIZING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+
 export interface RandomSearchCandidate {
   id: string
   parameters: MovingAverageCrossParams
@@ -61,11 +73,25 @@ export interface RandomSearchCandidate {
   backtestId: string
 }
 
+/**
+ * Typed live progress payload for Random Search.
+ * Ephemeral UI signal only — does not create or update Research Sessions.
+ */
 export interface RandomSearchProgress {
-  completed: number
-  total: number
+  totalCandidates: number
+  candidatesTested: number
+  candidatesAccepted: number
+  candidatesRejected: number
+  currentCandidateScore: number | null
   bestScore: number | null
-  status: ResearchSessionStatus
+  /** Trade count of the current best candidate (not a sum across candidates). */
+  bestTradeCount: number | null
+  bestCandidateParameters: MovingAverageCrossParams | null
+  improvementsCount: number
+  candidatesSinceLastImprovement: number | null
+  elapsedMs: number
+  estimatedRemainingMs: number | null
+  status: RandomSearchLiveStatus
 }
 
 export interface ResearchSession {
@@ -118,4 +144,15 @@ export interface RunRandomSearchOptions {
   candles: Candle[]
   onProgress?: (progress: RandomSearchProgress) => void
   signal?: AbortSignal
+  /**
+   * Injectable browser yield (tests). Defaults to `yieldToBrowser`
+   * (`scheduler.yield` or `setTimeout(0)` — not microtask-only).
+   */
+  yieldFn?: () => Promise<void>
+  /** Force a fixed candidate batch size between yields (disables adaptation). */
+  cooperativeBatchSize?: number
+  /** When true, emit/log perf diagnostics even outside DEV. */
+  enablePerfDiagnostics?: boolean
+  onPerfDiagnostics?: (diagnostics: RandomSearchPerfDiagnostics) => void
 }
+

@@ -6,6 +6,7 @@
 
 import type {
   RandomSearchCandidate,
+  RandomSearchLiveStatus,
   RandomSearchProgress,
   ResearchRating,
   ResearchReport,
@@ -32,10 +33,16 @@ export interface ResearchProgressSnapshot {
   accepted: number | null
   rejected: number | null
   currentBestScore: number | null
+  /** Trade count of the current best candidate (not summed). */
+  bestTradeCount: number | null
   /** Candidates evaluated since the last best-score improvement; null if unknown/no best. */
   lastImprovementAgo: number | null
+  improvementsCount: number | null
   status: ResearchPhaseStatus
+  liveStatus: RandomSearchLiveStatus | null
   total: number
+  elapsedMs: number | null
+  estimatedRemainingMs: number | null
   sessionStatus: ResearchSessionStatus | 'idle'
 }
 
@@ -92,6 +99,46 @@ function isTerminal(status: ResearchSessionStatus | 'idle'): boolean {
   return status === 'completed' || status === 'cancelled' || status === 'failed'
 }
 
+export function liveStatusToSessionStatus(
+  status: RandomSearchLiveStatus | null | undefined,
+): ResearchSessionStatus | null {
+  if (!status) return null
+  switch (status) {
+    case 'COMPLETED':
+      return 'completed'
+    case 'FAILED':
+      return 'failed'
+    case 'CANCELLED':
+      return 'cancelled'
+    case 'INITIALIZING':
+    case 'EXPLORING':
+    case 'IMPROVING':
+    case 'PLATEAUING':
+    case 'FINALIZING':
+      return 'running'
+  }
+}
+
+export function liveStatusToPhaseStatus(
+  status: RandomSearchLiveStatus | null | undefined,
+): ResearchPhaseStatus | null {
+  if (!status) return null
+  switch (status) {
+    case 'INITIALIZING':
+    case 'EXPLORING':
+      return 'exploring'
+    case 'IMPROVING':
+      return 'improving'
+    case 'PLATEAUING':
+      return 'plateauing'
+    case 'FINALIZING':
+    case 'COMPLETED':
+    case 'FAILED':
+    case 'CANCELLED':
+      return 'converged'
+  }
+}
+
 export function deriveResearchPhaseStatus(input: {
   tested: number
   total: number
@@ -100,7 +147,11 @@ export function deriveResearchPhaseStatus(input: {
   lastImprovementAgo: number | null
   sessionStatus: ResearchSessionStatus | 'idle'
   uiRunning?: boolean
+  liveStatus?: RandomSearchLiveStatus | null
 }): ResearchPhaseStatus {
+  const fromLive = liveStatusToPhaseStatus(input.liveStatus)
+  if (fromLive) return fromLive
+
   const {
     tested,
     total,
@@ -147,24 +198,26 @@ export function buildResearchProgressSnapshot(
 
   const candidates = session?.candidates
   const tested =
+    progress?.candidatesTested ??
     report?.candidatesEvaluated ??
     candidates?.length ??
-    progress?.completed ??
     0
   const total =
-    progress?.total ??
+    progress?.totalCandidates ??
     report?.iterationsRequested ??
     session?.config.iterations ??
     tested
 
   const accepted =
+    progress?.candidatesAccepted ??
     report?.candidatesPassingConstraints ??
     (candidates
       ? candidates.filter((candidate) => candidate.passedConstraints).length
       : null)
 
   const rejected =
-    accepted === null ? null : Math.max(0, tested - accepted)
+    progress?.candidatesRejected ??
+    (accepted === null ? null : Math.max(0, tested - accepted))
 
   const currentBestScore =
     progress?.bestScore ??
@@ -172,12 +225,22 @@ export function buildResearchProgressSnapshot(
     report?.bestCandidate?.score ??
     null
 
-  const lastImprovementAgo = candidates
-    ? deriveLastImprovementAgo(candidates)
-    : null
+  const bestTradeCount =
+    progress?.bestTradeCount ??
+    report?.bestCandidate?.report.summary.totalTrades ??
+    (session?.bestCandidateId
+      ? session.candidates.find((c) => c.id === session.bestCandidateId)?.report.summary
+          .totalTrades ?? null
+      : null)
+
+  const lastImprovementAgo =
+    progress?.candidatesSinceLastImprovement ??
+    (candidates ? deriveLastImprovementAgo(candidates) : null)
+
+  const improvementsCount = progress?.improvementsCount ?? null
 
   const sessionStatus: ResearchSessionStatus | 'idle' =
-    progress?.status ??
+    liveStatusToSessionStatus(progress?.status) ??
     session?.status ??
     report?.status ??
     'idle'
@@ -190,6 +253,7 @@ export function buildResearchProgressSnapshot(
     lastImprovementAgo,
     sessionStatus,
     uiRunning,
+    liveStatus: progress?.status ?? null,
   })
 
   return {
@@ -197,9 +261,14 @@ export function buildResearchProgressSnapshot(
     accepted,
     rejected,
     currentBestScore,
+    bestTradeCount,
     lastImprovementAgo,
+    improvementsCount,
     status,
+    liveStatus: progress?.status ?? null,
     total,
+    elapsedMs: progress?.elapsedMs ?? null,
+    estimatedRemainingMs: progress?.estimatedRemainingMs ?? null,
     sessionStatus,
   }
 }

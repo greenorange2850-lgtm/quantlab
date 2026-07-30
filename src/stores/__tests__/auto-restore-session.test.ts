@@ -245,7 +245,21 @@ describe('auto restore latest session', () => {
       error: null,
       createdAt: 1,
       completedAt: 2,
-      progress: { completed: 2, total: 2, bestScore: null, status: 'completed' },
+      progress: {
+        totalCandidates: 2,
+        candidatesTested: 2,
+        candidatesAccepted: 0,
+        candidatesRejected: 2,
+        currentCandidateScore: null,
+        bestScore: null,
+        bestTradeCount: null,
+        bestCandidateParameters: null,
+        improvementsCount: 0,
+        candidatesSinceLastImprovement: null,
+        elapsedMs: 0,
+        estimatedRemainingMs: 0,
+        status: 'COMPLETED',
+      },
     }
     const report = buildResearchReport(session)
     saveResearchSession({ session, report, savedAt: Date.now() })

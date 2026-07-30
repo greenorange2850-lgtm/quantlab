@@ -127,7 +127,7 @@ function buildSummaryText(
   const params = best.parameters
   return [
     `Historical research on ${session.config.symbol} (${session.config.interval})`,
-    `evaluated ${session.progress.completed}/${session.config.iterations} iterations`,
+    `evaluated ${session.progress.candidatesTested}/${session.config.iterations} iterations`,
     `for objective “${session.config.objective}”.`,
     `Leading candidate parameters: fast=${params.fastPeriod}, slow=${params.slowPeriod}, rsi=${params.rsiPeriod}.`,
     `Reported net profit ${summary.netProfit.toFixed(2)}, profit factor ${summary.profitFactor.toFixed(2)},`,
@@ -174,7 +174,7 @@ export function buildResearchReport(
     status: session.status,
     objective: session.config.objective,
     iterationsRequested: session.config.iterations,
-    iterationsCompleted: session.progress.completed,
+    iterationsCompleted: session.progress.candidatesTested,
     candidatesEvaluated: session.candidates.length,
     candidatesPassingConstraints: passing.length,
     bestCandidate: best,

@@ -119,7 +119,21 @@ function makeSession(id: string): ResearchSession {
     error: null,
     createdAt: 1,
     completedAt: 2,
-    progress: { completed: 1, total: 1, bestScore: 1.2, status: 'completed' },
+    progress: {
+      totalCandidates: 1,
+      candidatesTested: 1,
+      candidatesAccepted: 1,
+      candidatesRejected: 0,
+      currentCandidateScore: 1.2,
+      bestScore: 1.2,
+      bestTradeCount: report.summary.totalTrades,
+      bestCandidateParameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+      improvementsCount: 1,
+      candidatesSinceLastImprovement: 0,
+      elapsedMs: 0,
+      estimatedRemainingMs: 0,
+      status: 'COMPLETED',
+    },
   }
 }
 
