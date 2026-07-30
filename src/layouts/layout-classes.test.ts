@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   DRAWER_BACKDROP,
   KPI_GRID,
+  KPI_META_GRID,
+  KPI_PRIMARY_GRID,
+  KPI_SECONDARY_GRID,
   MAIN_CONTENT_OFFSET,
   MAIN_PADDING,
   MENU_BUTTON,
@@ -66,5 +69,12 @@ describe('layout-classes (mobile UX polish)', () => {
     expect(KPI_GRID).toContain('xl:grid-cols-11')
     expect(KPI_GRID).toContain('gap-4')
     expect(KPI_GRID).toContain('lg:gap-3')
+  })
+
+  it('exposes hierarchical KPI grids for primary / secondary / meta', () => {
+    expect(KPI_PRIMARY_GRID).toContain('sm:grid-cols-3')
+    expect(KPI_PRIMARY_GRID).toContain('gap-4')
+    expect(KPI_SECONDARY_GRID).toContain('md:grid-cols-3')
+    expect(KPI_META_GRID).toContain('lg:grid-cols-5')
   })
 })

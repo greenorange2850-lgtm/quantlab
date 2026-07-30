@@ -3,23 +3,40 @@ import { Trophy, Eye, GitCompare, Copy, Filter } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Disclosure } from '@/components/ui/disclosure'
+import { ResearchScore } from '@/components/ui/research-score'
 import { AnimatedCounter } from '@/hooks/use-animated-counter'
+import { cn, formatCurrency, formatRatio } from '@/lib/utils'
+import {
+  drawdownQuality,
+  profitFactorQuality,
+  qualityTextClass,
+  recoveryFactorQuality,
+} from '@/lib/metric-semantics'
 import type { BestStrategySummary } from '@/types'
 
 interface BestStrategyCardProps {
   strategy: BestStrategySummary
+  /** Optional net profit from the same backtest snapshot (display only). */
+  netProfit?: number
 }
 
-export function BestStrategyCard({ strategy }: BestStrategyCardProps) {
-  const metrics = [
-    { label: 'Score', value: strategy.score, suffix: '/100' },
-    { label: 'Win Rate', value: strategy.winRate, suffix: '%' },
-    { label: 'Profit Factor', value: strategy.profitFactor, decimals: 2 },
-    { label: 'Drawdown', value: strategy.drawdown, suffix: '%' },
-    { label: 'Trade Count', value: strategy.tradeCount },
-    { label: 'Expected Value', value: strategy.expectedValue, prefix: '$', decimals: 2 },
-    { label: 'Sharpe Ratio', value: strategy.sharpeRatio, decimals: 2 },
-    { label: 'Recovery Factor', value: strategy.recoveryFactor, decimals: 2 },
+export function BestStrategyCard({ strategy, netProfit }: BestStrategyCardProps) {
+  const secondary = [
+    {
+      label: 'Profit Factor',
+      value: formatRatio(strategy.profitFactor),
+      className: qualityTextClass(profitFactorQuality(strategy.profitFactor)),
+    },
+    { label: 'Win Rate', value: `${strategy.winRate.toFixed(2)}%` },
+    { label: 'Trades', value: String(strategy.tradeCount) },
+    { label: 'Average Trade', value: `$${formatRatio(strategy.expectedValue)}` },
+    { label: 'Sharpe', value: formatRatio(strategy.sharpeRatio) },
+    {
+      label: 'Recovery Factor',
+      value: formatRatio(strategy.recoveryFactor),
+      className: qualityTextClass(recoveryFactorQuality(strategy.recoveryFactor)),
+    },
   ]
 
   return (
@@ -29,7 +46,7 @@ export function BestStrategyCard({ strategy }: BestStrategyCardProps) {
       transition={{ duration: 0.5, delay: 0.4 }}
     >
       <Card glow className="relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-accent/10 to-transparent rounded-bl-full pointer-events-none" />
+        <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-bl-full bg-gradient-to-bl from-accent/10 to-transparent" />
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/15">
@@ -52,34 +69,82 @@ export function BestStrategyCard({ strategy }: BestStrategyCardProps) {
             ))}
           </div>
         </CardHeader>
-        <CardContent className="min-w-0">
-          <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {metrics.map((m) => (
-              <div key={m.label} className="min-w-0 space-y-1">
-                <p className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {m.label}
-                </p>
-                <p className="truncate font-mono text-lg font-semibold tracking-tight">
-                  <AnimatedCounter
-                    value={m.value}
-                    decimals={m.decimals ?? 0}
-                    prefix={m.prefix ?? ''}
-                    suffix={m.suffix ?? ''}
-                  />
-                </p>
-              </div>
-            ))}
+        <CardContent className="min-w-0 space-y-5">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <ResearchScore score={strategy.score} size="lg" />
+            <div className="min-w-0 space-y-1.5">
+              <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Net Profit
+              </p>
+              <p
+                className={cn(
+                  'truncate font-mono text-xl font-semibold tracking-tight sm:text-2xl',
+                  typeof netProfit === 'number' && netProfit >= 0 && 'text-success',
+                  typeof netProfit === 'number' && netProfit < 0 && 'text-danger',
+                )}
+              >
+                {typeof netProfit === 'number' ? (
+                  formatCurrency(netProfit)
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </p>
+              <p className="text-[10px] text-muted-foreground">How much it made</p>
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Max Drawdown
+              </p>
+              <p
+                className={cn(
+                  'truncate font-mono text-xl font-semibold tracking-tight sm:text-2xl',
+                  qualityTextClass(drawdownQuality(strategy.drawdown)),
+                )}
+              >
+                <AnimatedCounter value={strategy.drawdown} decimals={2} suffix="%" />
+              </p>
+              <p className="text-[10px] text-muted-foreground">How risky it is</p>
+            </div>
           </div>
+
+          <Disclosure title="More metrics">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {secondary.map((m) => (
+                <div key={m.label} className="min-w-0 space-y-1">
+                  <p className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {m.label}
+                  </p>
+                  <p
+                    className={cn(
+                      'truncate font-mono text-sm font-semibold tracking-tight',
+                      m.className,
+                    )}
+                  >
+                    {m.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Disclosure>
+
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Button size="sm" className="min-h-11 w-full sm:min-h-8 sm:w-auto">
               <Eye className="h-3.5 w-3.5" />
               View Details
             </Button>
-            <Button variant="secondary" size="sm" className="min-h-11 w-full sm:min-h-8 sm:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11 w-full sm:min-h-8 sm:w-auto"
+            >
               <GitCompare className="h-3.5 w-3.5" />
               Compare
             </Button>
-            <Button variant="ghost" size="sm" className="min-h-11 w-full sm:min-h-8 sm:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11 w-full sm:min-h-8 sm:w-auto"
+            >
               <Copy className="h-3.5 w-3.5" />
               Duplicate
             </Button>

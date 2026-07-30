@@ -20,14 +20,15 @@ import { shouldAwaitDashboardSessionHydrate } from '@/research/ui-gates'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Disclosure } from '@/components/ui/disclosure'
 
 function DashboardHydrateSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-12 w-full min-w-0 rounded-xl" />
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6 lg:gap-3">
-        {Array.from({ length: 8 }).map((_, index) => (
-          <Skeleton key={index} className="h-20 min-w-0 rounded-xl" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Skeleton key={index} className="h-28 min-w-0 rounded-xl" />
         ))}
       </div>
       <Skeleton className="h-[400px] w-full min-w-0 rounded-xl" />
@@ -75,6 +76,10 @@ export function DashboardPage() {
     )
   }
 
+  const netProfitKpi = data.kpis.find((m) => m.id === 'net-profit')
+  const netProfit =
+    typeof netProfitKpi?.value === 'number' ? netProfitKpi.value : undefined
+
   return (
     <motion.div
       className="min-w-0 space-y-6"
@@ -88,10 +93,8 @@ export function DashboardPage() {
         <Card className="border-dashed">
           <CardContent className="flex flex-col gap-3 py-6 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-balance">No backtest results yet</p>
-              <p className="mt-1 text-pretty text-xs text-muted-foreground">
-                Run a backtest in Strategy Lab to populate KPIs, equity curve, and trade history.
-              </p>
+              <p className="text-sm font-medium text-balance">No backtest yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">Run one in Strategy Lab.</p>
             </div>
             <Link to="/strategy-lab" className="w-full shrink-0 md:w-auto">
               <Button className="min-h-11 w-full md:min-h-9 md:w-auto">
@@ -111,37 +114,54 @@ export function DashboardPage() {
         </Card>
       )}
 
-      <KpiCards metrics={data.kpis} />
+      {/* First screen: good? / made? / risky? */}
+      <KpiCards metrics={data.kpis} researchScore={data.overallHealthScore} />
       <EquityCurveChart data={data.equityCurve} />
-      <MonthlyPerformance
-        monthlyProfit={data.monthlyProfit}
-        dailyHeatmap={data.dailyHeatmap}
-        weeklySummary={data.weeklySummary}
-      />
-      <TradeDistribution
-        winLoss={data.winLossDistribution}
-        longShort={data.longShortDistribution}
-        session={data.sessionDistribution}
-        timeframe={data.timeframeDistribution}
-        risk={data.riskDistribution}
-      />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <BestStrategyCard strategy={data.bestStrategy} />
-        <StrategyHealth metrics={data.strategyHealth} overallScore={data.overallHealthScore} />
-      </div>
-      <AiRecommendationPanel recommendation={data.aiRecommendation} />
-      <RecentBacktestsTable
-        data={data.recentBacktests}
-        onViewDetails={handleViewDetails}
-        activeRestoredId={restoredId}
-        isRestoring={isRestoring}
-      />
-      <PortfolioPanel portfolio={data.portfolio} />
-      <TradeHistoryTable data={data.tradeHistory} />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <MarketContextPanel context={data.marketContext} />
-        <WatchlistPanel items={data.watchlist} />
-      </div>
+
+      <Disclosure title="Strategy details">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <BestStrategyCard strategy={data.bestStrategy} netProfit={netProfit} />
+          <StrategyHealth metrics={data.strategyHealth} overallScore={data.overallHealthScore} />
+        </div>
+      </Disclosure>
+
+      <Disclosure title="Performance breakdown">
+        <div className="space-y-4">
+          <MonthlyPerformance
+            monthlyProfit={data.monthlyProfit}
+            dailyHeatmap={data.dailyHeatmap}
+            weeklySummary={data.weeklySummary}
+          />
+          <TradeDistribution
+            winLoss={data.winLossDistribution}
+            longShort={data.longShortDistribution}
+            session={data.sessionDistribution}
+            timeframe={data.timeframeDistribution}
+            risk={data.riskDistribution}
+          />
+        </div>
+      </Disclosure>
+
+      <Disclosure title="History & portfolio">
+        <div className="space-y-4">
+          <AiRecommendationPanel recommendation={data.aiRecommendation} />
+          <RecentBacktestsTable
+            data={data.recentBacktests}
+            onViewDetails={handleViewDetails}
+            activeRestoredId={restoredId}
+            isRestoring={isRestoring}
+          />
+          <PortfolioPanel portfolio={data.portfolio} />
+          <TradeHistoryTable data={data.tradeHistory} />
+        </div>
+      </Disclosure>
+
+      <Disclosure title="Market context">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <MarketContextPanel context={data.marketContext} />
+          <WatchlistPanel items={data.watchlist} />
+        </div>
+      </Disclosure>
     </motion.div>
   )
 }

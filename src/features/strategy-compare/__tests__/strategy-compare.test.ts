@@ -114,10 +114,11 @@ describe('strategy compare metrics (presentation only)', () => {
 
     const overview = buildOverviewPairs(baseline, optimized)
     expect(overview.map((item) => item.label)).toEqual([
-      'Initial Capital',
-      'Final Equity',
       'Net Profit',
       'ROI',
+      'Max Drawdown',
+      'Initial Capital',
+      'Final Equity',
       'Total Trades',
     ])
 

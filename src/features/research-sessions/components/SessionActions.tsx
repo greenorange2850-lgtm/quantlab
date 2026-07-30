@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
-import { ArrowLeftRight, Brain, Loader2, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Eye, Loader2, MoreHorizontal, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface SessionActionsProps {
   sessionId: string
@@ -9,34 +11,63 @@ interface SessionActionsProps {
 }
 
 export function SessionActions({ sessionId, deleting, onDelete }: SessionActionsProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
       <Link to={`/research-analysis?session=${sessionId}`} className="w-full sm:w-auto">
-        <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
-          <Brain className="mr-2 h-4 w-4" />
-          Open Analysis
+        <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">
+          <Eye className="mr-2 h-4 w-4" />
+          View Details
         </Button>
       </Link>
       <Link to={`/strategy-compare?session=${sessionId}`} className="w-full sm:w-auto">
-        <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
+        <Button variant="outline" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
           <ArrowLeftRight className="mr-2 h-4 w-4" />
           Compare
         </Button>
       </Link>
-      <Button
-        type="button"
-        variant="ghost"
-        className="min-h-11 w-full text-danger hover:text-danger sm:min-h-9 sm:w-auto"
-        disabled={deleting}
-        onClick={() => onDelete(sessionId)}
-      >
-        {deleting ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <Trash2 className="mr-2 h-4 w-4" />
-        )}
-        Delete
-      </Button>
+
+      <div className="relative w-full sm:w-auto">
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <MoreHorizontal className="mr-2 h-4 w-4" />
+          More
+        </Button>
+        {menuOpen ? (
+          <div
+            role="menu"
+            className={cn(
+              'absolute right-0 z-20 mt-1 min-w-[10rem] rounded-lg border border-border',
+              'bg-card-solid/95 p-1 shadow-xl backdrop-blur-xl',
+            )}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-danger hover:bg-danger/10"
+              disabled={deleting}
+              onClick={() => {
+                setMenuOpen(false)
+                onDelete(sessionId)
+              }}
+            >
+              {deleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Delete
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

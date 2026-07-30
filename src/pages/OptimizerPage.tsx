@@ -394,8 +394,11 @@ export function OptimizerPage() {
 
       {status === 'empty' && (
         <Card className="border-dashed">
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Search finished but no candidates passed the configured constraints.
+          <CardContent className="py-8 text-center">
+            <p className="text-sm font-medium">No candidates passed</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Relax constraints and run Random Search again.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -416,12 +419,41 @@ export function OptimizerPage() {
           </CardHeader>
           <CardContent className="min-w-0 space-y-4">
             {report.bestCandidate && (
-              <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 space-y-2">
+              <div className="space-y-3 rounded-lg border border-accent/30 bg-accent/5 p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-medium">Best candidate</p>
                   <Badge variant="accent" className="text-[10px]">
-                    score {report.bestCandidate.score.toFixed(3)}
+                    score {report.bestCandidate.score.toFixed(2)}
                   </Badge>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Score
+                    </p>
+                    <p className="font-mono text-lg font-semibold tabular-nums">
+                      {report.bestCandidate.score.toFixed(2)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Is this strategy good?</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Net Profit
+                    </p>
+                    <p className="font-mono text-lg font-semibold tabular-nums">
+                      {formatCurrency(report.bestCandidate.report.summary.netProfit)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">How much it made</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Max Drawdown
+                    </p>
+                    <p className="font-mono text-lg font-semibold tabular-nums text-danger">
+                      {formatPercent(-report.bestCandidate.report.summary.maxDrawdown * 100)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">How risky it is</p>
+                  </div>
                 </div>
                 <p className="font-mono text-xs text-muted-foreground">
                   fast={report.bestCandidate.parameters.fastPeriod} · slow=
@@ -449,15 +481,16 @@ export function OptimizerPage() {
                       {candidate.parameters.fastPeriod}/{candidate.parameters.slowPeriod}/
                       {candidate.parameters.rsiPeriod}
                     </span>
-                    <span className="font-mono text-xs">{candidate.score.toFixed(2)}</span>
+                    <span className="font-mono text-xs font-semibold">
+                      {candidate.score.toFixed(2)}
+                    </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
-                    <span>PF {candidate.report.summary.profitFactor.toFixed(2)}</span>
-                    <span>WR {(candidate.report.summary.winRate * 100).toFixed(1)}%</span>
-                    <span>DD {formatPercent(-candidate.report.summary.maxDrawdown * 100)}</span>
-                    <span>{candidate.report.summary.totalTrades} trades</span>
-                    <span className="col-span-2">
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <span className="font-mono">
                       Net {formatCurrency(candidate.report.summary.netProfit)}
+                    </span>
+                    <span className="font-mono text-muted-foreground">
+                      DD {formatPercent(-candidate.report.summary.maxDrawdown * 100)}
                     </span>
                   </div>
                 </button>
@@ -499,7 +532,7 @@ export function OptimizerPage() {
                         {formatPercent(-candidate.report.summary.maxDrawdown * 100)}
                       </td>
                       <td className="px-3 py-2 font-mono">
-                        {(candidate.report.summary.winRate * 100).toFixed(1)}%
+                        {(candidate.report.summary.winRate * 100).toFixed(2)}%
                       </td>
                       <td className="px-3 py-2 font-mono">
                         {candidate.report.summary.totalTrades}
@@ -514,18 +547,8 @@ export function OptimizerPage() {
             </div>
 
             {selected && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <Button
-                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
-                  onClick={() => {
-                    applyParameters(selected.parameters)
-                    navigate('/strategy-lab')
-                  }}
-                >
-                  Apply Parameters
-                </Button>
-                <Button
-                  variant="secondary"
                   className="min-h-11 w-full sm:min-h-9 sm:w-auto"
                   onClick={() => {
                     void restoreBacktest(selected.backtestId).then(() => {
@@ -536,16 +559,7 @@ export function OptimizerPage() {
                   View Details
                 </Button>
                 <Button
-                  variant="secondary"
-                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
-                  onClick={() => {
-                    navigate(`/research-analysis?session=${report.sessionId}`)
-                  }}
-                >
-                  View Analysis
-                </Button>
-                <Button
-                  variant="secondary"
+                  variant="outline"
                   className="min-h-11 w-full sm:min-h-9 sm:w-auto"
                   onClick={() => {
                     navigate(
@@ -554,6 +568,25 @@ export function OptimizerPage() {
                   }}
                 >
                   Compare
+                </Button>
+                <Button
+                  variant="outline"
+                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                  onClick={() => {
+                    applyParameters(selected.parameters)
+                    navigate('/strategy-lab')
+                  }}
+                >
+                  Apply Parameters
+                </Button>
+                <Button
+                  variant="outline"
+                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                  onClick={() => {
+                    navigate(`/research-analysis?session=${report.sessionId}`)
+                  }}
+                >
+                  View Analysis
                 </Button>
                 <p className="w-full text-[11px] text-muted-foreground">
                   Apply Parameters updates Strategy Lab fields only — it does not save or rerun.
@@ -572,8 +605,8 @@ export function OptimizerPage() {
               to={`/research-analysis?session=${report.sessionId}`}
               className="w-full sm:w-auto"
             >
-              <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
-                Open full analysis
+              <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">
+                View Details
               </Button>
             </Link>
           </CardHeader>

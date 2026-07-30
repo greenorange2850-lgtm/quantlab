@@ -29,12 +29,12 @@ export function MetricsComparison({ rows }: MetricsComparisonProps) {
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="min-w-0 space-y-3">
-        <div className="space-y-2 md:hidden">
+      <CardContent className="min-w-0 space-y-4">
+        <div className="space-y-3 md:hidden">
           {rows.map((row) => (
             <div
               key={row.label}
-              className="space-y-2 rounded-lg border border-border/60 px-3 py-3"
+              className="space-y-2 rounded-lg border border-border/60 px-3.5 py-3.5"
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium">{row.label}</p>

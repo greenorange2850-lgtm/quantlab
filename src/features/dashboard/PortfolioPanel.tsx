@@ -127,7 +127,7 @@ export function PortfolioPanel({ portfolio }: PortfolioPanelProps) {
           ) : (
             <EmptyState
               title="No open positions"
-              description="Portfolio balances reflect the latest backtest account snapshot."
+              description="Balances update after a backtest."
               className="py-8"
             />
           )}

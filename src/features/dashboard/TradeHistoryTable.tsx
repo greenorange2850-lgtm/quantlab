@@ -152,10 +152,7 @@ export function TradeHistoryTable({ data }: TradeHistoryTableProps) {
         </CardHeader>
         <CardContent className="min-w-0">
           {data.length === 0 ? (
-            <EmptyState
-              title="No trades yet"
-              description="Run a backtest in Strategy Lab to populate trade history."
-            />
+            <EmptyState title="No trades yet" description="Run a backtest in Strategy Lab." />
           ) : (
             <>
               <div className="min-w-0 overflow-x-auto">

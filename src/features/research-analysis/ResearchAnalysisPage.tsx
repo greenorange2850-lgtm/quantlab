@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Disclosure } from '@/components/ui/disclosure'
 import {
   useLatestResearchSession,
   useResearchSession,
@@ -105,10 +106,8 @@ export function ResearchAnalysisPage() {
         <Card hover={false} className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
             <div className="space-y-1">
-              <p className="text-sm font-medium">No research report available.</p>
-              <p className="mx-auto max-w-sm text-pretty text-xs text-muted-foreground">
-                Run Random Search to generate your first research report.
-              </p>
+              <p className="text-sm font-medium">No research report</p>
+              <p className="text-xs text-muted-foreground">Run Random Search in Optimizer.</p>
             </div>
             <Link to="/optimizer" className="w-full sm:w-auto">
               <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">
@@ -131,30 +130,30 @@ export function ResearchAnalysisPage() {
       />
 
       <ResearchOverview report={report} />
-      <PerformanceMetrics report={report} />
 
-      <section className="space-y-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold tracking-tight">Research Analysis</h3>
+      <Disclosure title="Performance metrics">
+        <PerformanceMetrics report={report} />
+      </Disclosure>
+
+      <Disclosure title="Research analysis narrative">
+        <div className="space-y-3">
           <p className="text-pretty text-xs text-muted-foreground">
-            Narrative packaged by <code className="text-foreground">buildResearchReport()</code>{' '}
-            from existing BacktestReport fields — not marketed as a best strategy.
+            From existing BacktestReport fields — not marketed as a best strategy.
           </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="lg:col-span-2">
-            <SummaryCard analysis={report.analysis} />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="lg:col-span-2">
+              <SummaryCard analysis={report.analysis} />
+            </div>
+            <StrengthsCard analysis={report.analysis} />
+            <WeaknessesCard analysis={report.analysis} />
+            <SuggestionsCard analysis={report.analysis} />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
+              <RiskCard analysis={report.analysis} />
+              <RatingCard analysis={report.analysis} />
+            </div>
           </div>
-          <StrengthsCard analysis={report.analysis} />
-          <WeaknessesCard analysis={report.analysis} />
-          <SuggestionsCard analysis={report.analysis} />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
-            <RiskCard analysis={report.analysis} />
-            <RatingCard analysis={report.analysis} />
-          </div>
         </div>
-      </section>
+      </Disclosure>
     </div>
   )
 }

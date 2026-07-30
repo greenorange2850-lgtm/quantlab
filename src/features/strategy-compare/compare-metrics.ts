@@ -56,7 +56,7 @@ function formatSigned(value: number, decimals = 2): string {
   return `${sign}${value.toFixed(decimals)}`
 }
 
-function formatSignedPercent(value: number, decimals = 1): string {
+function formatSignedPercent(value: number, decimals = 2): string {
   const sign = value > 0 ? '+' : ''
   return `${sign}${value.toFixed(decimals)}%`
 }
@@ -68,16 +68,6 @@ export function buildOverviewPairs(
 ): OverviewPair[] {
   return [
     {
-      label: 'Initial Capital',
-      baseline: formatPlainMoney(baseline.config.initialCapital),
-      optimized: formatPlainMoney(optimized.config.initialCapital),
-    },
-    {
-      label: 'Final Equity',
-      baseline: formatPlainMoney(baseline.summary.finalBalance),
-      optimized: formatPlainMoney(optimized.summary.finalBalance),
-    },
-    {
       label: 'Net Profit',
       baseline: formatMoney(baseline.summary.netProfit),
       optimized: formatMoney(optimized.summary.netProfit),
@@ -88,12 +78,30 @@ export function buildOverviewPairs(
       optimized: formatSignedPercent(roiPercent(optimized)),
     },
     {
+      label: 'Max Drawdown',
+      baseline: formatSignedPercent(-baseline.summary.maxDrawdown * 100),
+      optimized: formatSignedPercent(-optimized.summary.maxDrawdown * 100),
+    },
+    {
+      label: 'Initial Capital',
+      baseline: formatPlainMoney(baseline.config.initialCapital),
+      optimized: formatPlainMoney(optimized.config.initialCapital),
+    },
+    {
+      label: 'Final Equity',
+      baseline: formatPlainMoney(baseline.summary.finalBalance),
+      optimized: formatPlainMoney(optimized.summary.finalBalance),
+    },
+    {
       label: 'Total Trades',
       baseline: String(baseline.summary.totalTrades),
       optimized: String(optimized.summary.totalTrades),
     },
   ]
 }
+
+/** Labels shown above the fold in comparison overview. */
+export const COMPARE_SNAPSHOT_LABELS = new Set(['Net Profit', 'ROI', 'Max Drawdown'])
 
 /** Metric rows with previous/current/diff — no new analytics formulas. */
 export function buildMetricCompareRows(
@@ -122,16 +130,16 @@ export function buildMetricCompareRows(
     },
     {
       label: 'Max Drawdown',
-      previous: `${(ddPrev * 100).toFixed(1)}%`,
-      current: `${(ddCurr * 100).toFixed(1)}%`,
+      previous: `${(ddPrev * 100).toFixed(2)}%`,
+      current: `${(ddCurr * 100).toFixed(2)}%`,
       difference: formatSignedPercent((ddCurr - ddPrev) * 100),
       direction: directionLower(ddPrev, ddCurr),
       higherIsBetter: false,
     },
     {
       label: 'Win Rate',
-      previous: `${(wrPrev * 100).toFixed(1)}%`,
-      current: `${(wrCurr * 100).toFixed(1)}%`,
+      previous: `${(wrPrev * 100).toFixed(2)}%`,
+      current: `${(wrCurr * 100).toFixed(2)}%`,
       difference: formatSignedPercent((wrCurr - wrPrev) * 100),
       direction: directionHigher(wrPrev, wrCurr),
       higherIsBetter: true,

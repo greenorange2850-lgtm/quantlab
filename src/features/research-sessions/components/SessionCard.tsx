@@ -1,6 +1,9 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatCurrency, formatPercent } from '@/lib/utils'
+import { Disclosure } from '@/components/ui/disclosure'
+import { MetricTile } from '@/features/research-analysis/components/MetricTile'
+import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils'
+import { drawdownQuality, qualityToTone } from '@/lib/metric-semantics'
 import type { SessionListItem } from '../session-list-model'
 import { SessionActions } from './SessionActions'
 
@@ -39,60 +42,63 @@ export function SessionCard({ item, deleting, onDelete }: SessionCardProps) {
         <p className="text-xs text-muted-foreground">{formatDate(item.researchDate)}</p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Metric label="Best Score" value={item.bestScore === null ? '—' : item.bestScore.toFixed(3)} />
-          <Metric
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <MetricTile
+            label="Best Score"
+            value={item.bestScore === null ? '—' : formatNumber(item.bestScore, 2)}
+            hint="Is this strategy good?"
+            size="primary"
+          />
+          <MetricTile
             label="Net Profit"
             value={item.netProfit === null ? '—' : formatCurrency(item.netProfit)}
+            hint="How much it made"
             tone={
               item.netProfit === null ? 'muted' : item.netProfit >= 0 ? 'positive' : 'negative'
             }
+            size="primary"
           />
-          <Metric
-            label="ROI"
-            value={item.roiPercent === null ? '—' : formatPercent(item.roiPercent)}
-            tone={
-              item.roiPercent === null ? 'muted' : item.roiPercent >= 0 ? 'positive' : 'negative'
+          <MetricTile
+            label="Max Drawdown"
+            value={
+              item.maxDrawdown === null
+                ? '—'
+                : formatPercent(-item.maxDrawdown * 100)
             }
-          />
-          <Metric
-            label="Total Trades"
-            value={item.totalTrades === null ? '—' : String(item.totalTrades)}
+            hint="How risky it is"
+            tone={
+              item.maxDrawdown === null
+                ? 'muted'
+                : qualityToTone(drawdownQuality(item.maxDrawdown))
+            }
+            size="primary"
           />
         </div>
+
+        <Disclosure title="More metrics" variant="plain">
+          <div className="grid grid-cols-2 gap-3">
+            <MetricTile
+              label="ROI"
+              value={item.roiPercent === null ? '—' : formatPercent(item.roiPercent)}
+              tone={
+                item.roiPercent === null
+                  ? 'muted'
+                  : item.roiPercent >= 0
+                    ? 'positive'
+                    : 'negative'
+              }
+              size="secondary"
+            />
+            <MetricTile
+              label="Trades"
+              value={item.totalTrades === null ? '—' : String(item.totalTrades)}
+              size="secondary"
+            />
+          </div>
+        </Disclosure>
 
         <SessionActions sessionId={item.id} deleting={deleting} onDelete={onDelete} />
       </CardContent>
     </Card>
-  )
-}
-
-function Metric({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string
-  value: string
-  tone?: 'default' | 'positive' | 'negative' | 'muted'
-}) {
-  const toneClass =
-    tone === 'positive'
-      ? 'text-success'
-      : tone === 'negative'
-        ? 'text-danger'
-        : tone === 'muted'
-          ? 'text-muted-foreground'
-          : 'text-foreground'
-
-  return (
-    <div className="min-w-0 rounded-lg border border-border/60 bg-white/[0.02] px-3 py-2">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p className={`mt-1 truncate font-mono text-sm font-semibold tabular-nums ${toneClass}`}>
-        {value}
-      </p>
-    </div>
   )
 }
