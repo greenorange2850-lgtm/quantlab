@@ -19,8 +19,9 @@ import {
   ResearchPeriodSelect,
   defaultResearchPeriodSelection,
 } from '@/components/market/ResearchPeriodSelect'
-import { useBinanceKlines } from '@/api/queries/binance-market'
+import { binanceMarketKeys, useBinanceKlines } from '@/api/queries/binance-market'
 import { useResearchSession } from '@/api/queries/research-sessions'
+import { ResearchPeriodDiagnosticsPanel } from '@/components/dev/ResearchPeriodDiagnosticsPanel'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import {
   type ParameterRange,
@@ -34,8 +35,6 @@ import {
   resolveResearchPeriod,
   type ResearchPeriodSelection,
 } from '@/data/research-period'
-import { formatCurrency, formatPercent, cn } from '@/lib/utils'
-import { Disclosure } from '@/components/ui/disclosure'
 import {
   buildOptimizerTransparency,
   buildResearchHealthSnapshot,
@@ -46,6 +45,9 @@ import {
   ResearchHealthPanel,
   ResearchProgressPanel,
 } from '@/features/research-intelligence'
+import { formatCurrency, formatPercent, cn } from '@/lib/utils'
+import { Disclosure } from '@/components/ui/disclosure'
+import { recordPeriodUiSnapshot } from '@/research/period-diagnostics'
 import { resolveOptimizerSessionId } from '@/research/ui-gates'
 import {
   defaultRandomSearchDraft,
@@ -168,6 +170,49 @@ export function OptimizerPage() {
     report?.topCandidates.find((candidate) => candidate.id === selectedCandidateId) ??
     report?.bestCandidate ??
     null
+
+  const periodDiagLive = useMemo(() => {
+    const loaded = candlesQuery.data
+    const datasetStartMs = loaded?.[0]?.time ?? null
+    const datasetEndMs = loaded?.at(-1)?.time ?? null
+    const queryKey = binanceMarketKeys.klines(
+      symbol,
+      interval,
+      resolvedPeriod.period?.startMs ?? null,
+      resolvedPeriod.period?.endMs ?? null,
+      BINANCE_KLINES_PAGE_LIMIT,
+    )
+    return {
+      at: Date.now(),
+      preset: periodSelection.preset,
+      resolvedStartMs: resolvedPeriod.period?.startMs ?? null,
+      resolvedEndMs: resolvedPeriod.period?.endMs ?? null,
+      queryKey: [...queryKey],
+      loadedCandleCount: loaded?.length ?? null,
+      datasetStartMs,
+      datasetEndMs,
+      sessionId: session?.id ?? report?.sessionId ?? null,
+      displayedSessionId: analysisSessionId ?? session?.id ?? report?.sessionId ?? null,
+      configStartMs: report?.config.startDate ?? session?.config.startDate ?? null,
+      configEndMs: report?.config.endDate ?? session?.config.endDate ?? null,
+      configLimit: report?.config.limit ?? session?.config.limit ?? null,
+      analysisTradeCount: report?.bestCandidate?.report.summary.totalTrades ?? null,
+      analysisPeriodLabel: null,
+    }
+  }, [
+    analysisSessionId,
+    candlesQuery.data,
+    interval,
+    periodSelection.preset,
+    report,
+    resolvedPeriod.period,
+    session,
+    symbol,
+  ])
+
+  useEffect(() => {
+    recordPeriodUiSnapshot(periodDiagLive)
+  }, [periodDiagLive])
 
   const updateRange = (name: ParameterRange['name'], field: 'min' | 'max' | 'step', raw: string) => {
     const value = Number(raw)
@@ -745,6 +790,8 @@ export function OptimizerPage() {
           </CardContent>
         </Card>
       )}
+
+      <ResearchPeriodDiagnosticsPanel live={periodDiagLive} />
     </div>
   )
 }

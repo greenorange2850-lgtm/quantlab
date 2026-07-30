@@ -5,6 +5,7 @@ import {
   clipCandlesToRange,
   mergeCandlePages,
 } from '../research-period.js'
+import { recordPeriodFetchSnapshot } from '../../research/period-diagnostics.js'
 import type { CandleInterval, GetCandlesParams, MarketDataProvider } from './MarketDataProvider.js'
 
 /** Public market-data host (no API key). Prefer over the trading API host for read-only klines/exchangeInfo. */
@@ -76,18 +77,38 @@ export class BinanceProvider implements MarketDataProvider {
         pageLimit: Math.min(Math.max(1, limit || BINANCE_KLINES_PAGE_LIMIT), BINANCE_KLINES_PAGE_LIMIT),
         maxCandles: maxCandles ?? RESEARCH_PERIOD_MAX_CANDLES,
         signal,
+        requestLimit: limit,
       })
     }
 
     // Legacy limit-only path: single request for the latest N candles.
     validatePageLimit(limit)
-    return this.fetchPage({
+    const candles = await this.fetchPage({
       symbol,
       interval,
       limit,
       signal,
       allowEmpty: false,
     })
+    recordPeriodFetchSnapshot({
+      at: Date.now(),
+      source: 'binance-provider',
+      symbol,
+      interval,
+      received: {
+        limit,
+        startTime: null,
+        endTime: null,
+        hasRange: false,
+      },
+      paginationRequests: 1,
+      candleCountBeforeClip: candles.length,
+      candleCountAfterClip: candles.length,
+      datasetStartMs: candles[0]?.time ?? null,
+      datasetEndMs: candles.at(-1)?.time ?? null,
+      mode: 'limit-only',
+    })
+    return candles
   }
 
   private async fetchRange(input: {
@@ -98,6 +119,7 @@ export class BinanceProvider implements MarketDataProvider {
     pageLimit: number
     maxCandles: number
     signal?: AbortSignal
+    requestLimit: number
   }): Promise<Candle[]> {
     if (input.endTime < input.startTime) {
       throw new Error('endTime must be on or after startTime')
@@ -105,6 +127,7 @@ export class BinanceProvider implements MarketDataProvider {
 
     const pages: Candle[][] = []
     let cursor = input.startTime
+    let paginationRequests = 0
 
     while (cursor <= input.endTime) {
       if (input.signal?.aborted) {
@@ -120,6 +143,7 @@ export class BinanceProvider implements MarketDataProvider {
         signal: input.signal,
         allowEmpty: true,
       })
+      paginationRequests += 1
 
       if (page.length === 0) break
 
@@ -143,6 +167,7 @@ export class BinanceProvider implements MarketDataProvider {
     }
 
     const merged = mergeCandlePages(pages)
+    const beforeClip = merged.length
     const clipped = clipCandlesToRange(merged, input.startTime, input.endTime)
     if (clipped.length === 0) {
       throw new Error('Binance API returned no candle data for the selected research period')
@@ -152,6 +177,26 @@ export class BinanceProvider implements MarketDataProvider {
         `Requested research period requires more than ${input.maxCandles} candles. Narrow the calendar range or use a higher timeframe.`,
       )
     }
+
+    recordPeriodFetchSnapshot({
+      at: Date.now(),
+      source: 'binance-provider',
+      symbol: input.symbol,
+      interval: input.interval,
+      received: {
+        limit: input.requestLimit,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        hasRange: true,
+      },
+      paginationRequests,
+      candleCountBeforeClip: beforeClip,
+      candleCountAfterClip: clipped.length,
+      datasetStartMs: clipped[0]?.time ?? null,
+      datasetEndMs: clipped.at(-1)?.time ?? null,
+      mode: 'calendar-range',
+    })
+
     return clipped
   }
 
