@@ -13,17 +13,38 @@ import {
 } from '@/data/providers/BinanceProvider'
 import type { Candle } from '@/data/candles'
 import type { CandleInterval } from '@/data/providers/MarketDataProvider'
+import { BINANCE_KLINES_PAGE_LIMIT } from '@/data/research-period'
 
 const EXCHANGE_INFO_STALE_MS = 30 * 60 * 1000
 
 const binanceProvider = new BinanceProvider(BINANCE_MARKET_DATA_BASE_URL)
 
+export interface BinanceKlinesQueryParams {
+  symbol: string
+  interval: string
+  /** Inclusive start (ms). Pair with endTime for calendar-range fetch. */
+  startTime?: number
+  /** Inclusive end (ms). Pair with startTime for calendar-range fetch. */
+  endTime?: number
+  /**
+   * Legacy latest-N fetch size when start/end are omitted.
+   * Also used as per-request page size for ranged fetches (≤1000).
+   */
+  limit?: number
+}
+
 export const binanceMarketKeys = {
   all: ['binance-market'] as const,
   exchangeInfo: () => [...binanceMarketKeys.all, 'exchangeInfo'] as const,
   tradingPairs: () => [...binanceMarketKeys.all, 'tradingPairs'] as const,
-  klines: (symbol: string, interval: string, limit: number) =>
-    [...binanceMarketKeys.all, 'klines', symbol, interval, limit] as const,
+  klines: (
+    symbol: string,
+    interval: string,
+    startTime: number | null,
+    endTime: number | null,
+    limit: number,
+  ) =>
+    [...binanceMarketKeys.all, 'klines', symbol, interval, startTime, endTime, limit] as const,
 }
 
 async function loadTradingPairs(signal?: AbortSignal): Promise<BinanceTradingPair[]> {
@@ -55,26 +76,63 @@ export function useFilteredBinanceTradingPairs(
   }
 }
 
+/**
+ * Load Binance klines for Strategy Lab / Optimizer.
+ * Prefer calendar start/end — provider paginates; never silently falls back to latest 500.
+ */
 export function useBinanceKlines(
   symbol: string | null,
   interval: CandleInterval | string | null,
-  limit: number,
+  range: {
+    startTime: number | null
+    endTime: number | null
+    /** Legacy limit-only mode when start/end are null. */
+    limit?: number
+  },
 ) {
-  const enabled = Boolean(symbol?.trim() && interval?.trim() && Number.isInteger(limit) && limit > 0)
+  const startTime = range.startTime
+  const endTime = range.endTime
+  const hasRange =
+    startTime !== null &&
+    endTime !== null &&
+    Number.isFinite(startTime) &&
+    Number.isFinite(endTime)
+  const legacyLimit = range.limit ?? 500
+  const pageLimit = BINANCE_KLINES_PAGE_LIMIT
+
+  const enabled =
+    Boolean(symbol?.trim() && interval?.trim()) &&
+    (hasRange || (Number.isInteger(legacyLimit) && legacyLimit > 0))
 
   return useQuery({
-    queryKey: binanceMarketKeys.klines(symbol ?? '', interval ?? '', limit),
-    queryFn: ({ signal }): Promise<Candle[]> =>
-      binanceProvider.getCandles({
+    queryKey: binanceMarketKeys.klines(
+      symbol ?? '',
+      interval ?? '',
+      hasRange ? startTime : null,
+      hasRange ? endTime : null,
+      hasRange ? pageLimit : legacyLimit,
+    ),
+    queryFn: ({ signal }): Promise<Candle[]> => {
+      if (hasRange) {
+        return binanceProvider.getCandles({
+          symbol: symbol!,
+          interval: interval as CandleInterval,
+          limit: pageLimit,
+          startTime: startTime!,
+          endTime: endTime!,
+          signal,
+        })
+      }
+      return binanceProvider.getCandles({
         symbol: symbol!,
         interval: interval as CandleInterval,
-        limit,
+        limit: legacyLimit,
         signal,
-      }),
+      })
+    },
     enabled,
     staleTime: 60_000,
     retry: 1,
-    // Abort in-flight request when key changes (TanStack Query cancels via signal).
     refetchOnWindowFocus: false,
   })
 }

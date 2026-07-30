@@ -51,17 +51,43 @@ export class MockMarketDataProvider implements MarketDataProvider {
   }
 
   async getCandles(params: GetCandlesParams): Promise<Candle[]> {
-    const { limit, interval } = params
-    if (!Number.isInteger(limit) || limit < 1) {
-      throw new Error('limit must be a positive integer')
+    const { interval, startTime, endTime } = params
+    const stepMs = resolveIntervalMs(interval)
+
+    let count: number
+    let firstTime: number
+
+    if (
+      startTime !== undefined &&
+      endTime !== undefined &&
+      Number.isFinite(startTime) &&
+      Number.isFinite(endTime)
+    ) {
+      if (endTime < startTime) {
+        throw new Error('endTime must be on or after startTime')
+      }
+      firstTime = startTime
+      count = Math.max(1, Math.floor((endTime - startTime) / stepMs) + 1)
+      const max = params.maxCandles ?? 20_000
+      if (count > max) {
+        throw new Error(
+          `Requested research period requires more than ${max} candles. Narrow the calendar range or use a higher timeframe.`,
+        )
+      }
+    } else {
+      const { limit } = params
+      if (!Number.isInteger(limit) || limit < 1) {
+        throw new Error('limit must be a positive integer')
+      }
+      count = limit
+      firstTime = this.startTime
     }
 
     const rng = createRng(this.seed)
-    const stepMs = resolveIntervalMs(interval)
     const candles: Candle[] = []
     let close = this.basePrice
 
-    for (let i = 0; i < limit; i++) {
+    for (let i = 0; i < count; i++) {
       const drift = (rng() - 0.48) * 2
       const open = close
       close = Math.max(1, open + drift)
@@ -69,9 +95,11 @@ export class MockMarketDataProvider implements MarketDataProvider {
       const high = Math.max(open, close) + wick
       const low = Math.min(open, close) - wick
       const volume = 100 + Math.floor(rng() * 900)
+      const time = firstTime + i * stepMs
+      if (endTime !== undefined && time > endTime) break
 
       candles.push({
-        time: this.startTime + i * stepMs,
+        time,
         open,
         high,
         low,

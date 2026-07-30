@@ -113,13 +113,29 @@ export class HistoricalFeed implements MarketFeed {
       throw new Error(`symbol ${params.symbol} is not subscribed`)
     }
 
-    const limit = params.limit ?? 500
-    const rawCandles = await this.provider.getCandles({
-      symbol: params.symbol,
-      interval: params.timeframe,
-      limit,
-    })
+    const hasCalendarRange =
+      params.startDate !== undefined &&
+      params.endDate !== undefined &&
+      Number.isFinite(params.startDate) &&
+      Number.isFinite(params.endDate)
 
+    const rawCandles = await this.provider.getCandles(
+      hasCalendarRange
+        ? {
+            symbol: params.symbol,
+            interval: params.timeframe,
+            limit: params.limit ?? 1000,
+            startTime: params.startDate,
+            endTime: params.endDate,
+          }
+        : {
+            symbol: params.symbol,
+            interval: params.timeframe,
+            limit: params.limit ?? 500,
+          },
+    )
+
+    // Provider already clips calendar ranges; keep filter for limit-only + optional bounds.
     const candles = filterByDateRange(rawCandles, params.startDate, params.endDate)
     this.loadedCandles.set(params.symbol, candles)
 
