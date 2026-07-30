@@ -1,4 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom'
+import { useMemo } from 'react'
 import { AlertCircle, Brain, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,16 @@ import {
   useResearchSessionArchiveReady,
 } from '@/api/queries/research-sessions'
 import { buildResearchReport } from '@/core/research'
+import {
+  buildOptimizerTransparency,
+  buildResearchHealthSnapshot,
+  buildResearchProgressSnapshot,
+  buildResearchRecommendation,
+  NextRecommendationPanel,
+  OptimizerTransparencyPanel,
+  ResearchHealthPanel,
+  ResearchProgressPanel,
+} from '@/features/research-intelligence'
 import { shouldAwaitResearchArchive } from '@/research/ui-gates'
 import { ResearchOverview } from './components/ResearchOverview'
 import { PerformanceMetrics } from './components/PerformanceMetrics'
@@ -54,6 +65,30 @@ export function ResearchAnalysisPage() {
   const activeQuery = sessionId ? byIdQuery : latestQuery
   const entry = activeQuery.data
   const report = entry ? buildResearchReport(entry.session) : null
+
+  const researchProgress = useMemo(
+    () =>
+      buildResearchProgressSnapshot({
+        progress: entry?.session.progress ?? null,
+        report,
+        session: entry?.session ?? null,
+      }),
+    [entry, report],
+  )
+  const researchHealth = useMemo(() => buildResearchHealthSnapshot(report), [report])
+  const researchRecommendation = useMemo(
+    () => buildResearchRecommendation(researchProgress, researchHealth),
+    [researchProgress, researchHealth],
+  )
+  const optimizerTransparency = useMemo(
+    () =>
+      buildOptimizerTransparency({
+        progress: entry?.session.progress ?? null,
+        report,
+        session: entry?.session ?? null,
+      }),
+    [entry, report],
+  )
 
   if (
     shouldAwaitResearchArchive({
@@ -129,6 +164,21 @@ export function ResearchAnalysisPage() {
       />
 
       <ResearchOverview report={report} />
+
+      {researchProgress && <ResearchProgressPanel snapshot={researchProgress} />}
+
+      {(researchHealth || researchRecommendation) && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {researchHealth && <ResearchHealthPanel snapshot={researchHealth} />}
+          {researchRecommendation && (
+            <NextRecommendationPanel recommendation={researchRecommendation} />
+          )}
+        </div>
+      )}
+
+      {optimizerTransparency && (
+        <OptimizerTransparencyPanel snapshot={optimizerTransparency} />
+      )}
 
       <Disclosure title="Performance metrics">
         <PerformanceMetrics report={report} />
