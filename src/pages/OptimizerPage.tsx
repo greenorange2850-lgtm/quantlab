@@ -15,16 +15,28 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { SymbolSelect } from '@/components/market/SymbolSelect'
 import { TimeframeSelect } from '@/components/market/TimeframeSelect'
-import { useBinanceKlines } from '@/api/queries/binance-market'
+import {
+  ResearchPeriodSelect,
+  defaultResearchPeriodSelection,
+} from '@/components/market/ResearchPeriodSelect'
+import { binanceMarketKeys, useBinanceKlines } from '@/api/queries/binance-market'
 import { useResearchSession } from '@/api/queries/research-sessions'
+import { ResearchPeriodDiagnosticsPanel } from '@/components/dev/ResearchPeriodDiagnosticsPanel'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import {
+  formatDurationMs,
+  formatLiveStatusLabel,
   type ParameterRange,
   type ScoringObjective,
 } from '@/core/research'
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
-import { formatCurrency, formatPercent, cn } from '@/lib/utils'
-import { Disclosure } from '@/components/ui/disclosure'
+import {
+  BINANCE_KLINES_PAGE_LIMIT,
+  estimateCandleCount,
+  formatPeriodSpan,
+  resolveResearchPeriod,
+  type ResearchPeriodSelection,
+} from '@/data/research-period'
 import {
   buildOptimizerTransparency,
   buildResearchHealthSnapshot,
@@ -37,10 +49,9 @@ import {
   ResearchHealthPanel,
   ResearchProgressPanel,
 } from '@/features/research-intelligence'
-import {
-  formatDurationMs,
-  formatLiveStatusLabel,
-} from '@/core/research'
+import { formatCurrency, formatPercent, cn } from '@/lib/utils'
+import { Disclosure } from '@/components/ui/disclosure'
+import { recordPeriodUiSnapshot } from '@/research/period-diagnostics'
 import { resolveOptimizerSessionId } from '@/research/ui-gates'
 import {
   defaultRandomSearchDraft,
@@ -122,7 +133,9 @@ export function OptimizerPage() {
   const [interval, setInterval] = useState<BacktestTimeframe>(
     defaultBacktestPipelineParams.interval as BacktestTimeframe,
   )
-  const [limit, setLimit] = useState(String(defaultBacktestPipelineParams.limit))
+  const [periodSelection, setPeriodSelection] = useState<ResearchPeriodSelection>(
+    defaultResearchPeriodSelection,
+  )
   const [initialCapital, setInitialCapital] = useState(
     String(defaultBacktestPipelineParams.initialCapital),
   )
@@ -135,20 +148,77 @@ export function OptimizerPage() {
   const [minimumTrades, setMinimumTrades] = useState('')
   const [minimumProfitFactor, setMinimumProfitFactor] = useState('')
 
-  const parsedLimit = useMemo(() => {
-    const value = Number(limit)
-    return Number.isFinite(value) && value >= 1
-      ? Math.min(Math.floor(value), 1000)
-      : defaultBacktestPipelineParams.limit
-  }, [limit])
+  const resolvedPeriod = useMemo(() => {
+    try {
+      return { period: resolveResearchPeriod(periodSelection), error: null as string | null }
+    } catch (err) {
+      return {
+        period: null,
+        error: err instanceof Error ? err.message : 'Invalid research period',
+      }
+    }
+  }, [periodSelection])
 
-  const candlesQuery = useBinanceKlines(symbol, interval, parsedLimit)
+  const candlesQuery = useBinanceKlines(symbol, interval, {
+    startTime: resolvedPeriod.period?.startMs ?? null,
+    endTime: resolvedPeriod.period?.endMs ?? null,
+  })
   const candlesReady = Boolean(candlesQuery.data?.length)
+  const estimatedCandles = resolvedPeriod.period
+    ? estimateCandleCount(
+        resolvedPeriod.period.startMs,
+        resolvedPeriod.period.endMs,
+        interval,
+      )
+    : 0
   const isRunning = status === 'running'
   const selected =
     report?.topCandidates.find((candidate) => candidate.id === selectedCandidateId) ??
     report?.bestCandidate ??
     null
+
+  const periodDiagLive = useMemo(() => {
+    const loaded = candlesQuery.data
+    const datasetStartMs = loaded?.[0]?.time ?? null
+    const datasetEndMs = loaded?.at(-1)?.time ?? null
+    const queryKey = binanceMarketKeys.klines(
+      symbol,
+      interval,
+      resolvedPeriod.period?.startMs ?? null,
+      resolvedPeriod.period?.endMs ?? null,
+      BINANCE_KLINES_PAGE_LIMIT,
+    )
+    return {
+      at: Date.now(),
+      preset: periodSelection.preset,
+      resolvedStartMs: resolvedPeriod.period?.startMs ?? null,
+      resolvedEndMs: resolvedPeriod.period?.endMs ?? null,
+      queryKey: [...queryKey],
+      loadedCandleCount: loaded?.length ?? null,
+      datasetStartMs,
+      datasetEndMs,
+      sessionId: session?.id ?? report?.sessionId ?? null,
+      displayedSessionId: analysisSessionId ?? session?.id ?? report?.sessionId ?? null,
+      configStartMs: report?.config.startDate ?? session?.config.startDate ?? null,
+      configEndMs: report?.config.endDate ?? session?.config.endDate ?? null,
+      configLimit: report?.config.limit ?? session?.config.limit ?? null,
+      analysisTradeCount: report?.bestCandidate?.report.summary.totalTrades ?? null,
+      analysisPeriodLabel: null,
+    }
+  }, [
+    analysisSessionId,
+    candlesQuery.data,
+    interval,
+    periodSelection.preset,
+    report,
+    resolvedPeriod.period,
+    session,
+    symbol,
+  ])
+
+  useEffect(() => {
+    recordPeriodUiSnapshot(periodDiagLive)
+  }, [periodDiagLive])
 
   const updateRange = (name: ParameterRange['name'], field: 'min' | 'max' | 'step', raw: string) => {
     const value = Number(raw)
@@ -163,7 +233,7 @@ export function OptimizerPage() {
 
   const handleStart = async () => {
     clearError()
-    if (!candlesQuery.data?.length) return
+    if (!candlesQuery.data?.length || !resolvedPeriod.period) return
 
     const maxDd = parseOptionalNumber(maxDrawdownPercent)
     const result = await startRandomSearch({
@@ -174,7 +244,9 @@ export function OptimizerPage() {
         objective,
         symbol,
         interval,
-        limit: parsedLimit,
+        limit: BINANCE_KLINES_PAGE_LIMIT,
+        startDate: resolvedPeriod.period.startMs,
+        endDate: resolvedPeriod.period.endMs,
         initialCapital: Number(initialCapital) || defaultBacktestPipelineParams.initialCapital,
         constraints: {
           maxDrawdown: maxDd !== undefined ? maxDd / 100 : undefined,
@@ -244,15 +316,12 @@ export function OptimizerPage() {
               </label>
               <TimeframeSelect value={interval} onChange={setInterval} disabled={isRunning} />
             </div>
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Candle limit
-              </label>
-              <Input
-                value={limit}
+            <div className="min-w-0 space-y-2 md:col-span-2">
+              <ResearchPeriodSelect
+                selection={periodSelection}
+                onChange={setPeriodSelection}
                 disabled={isRunning}
-                onChange={(event) => setLimit(event.target.value)}
-                className="w-full bg-white/[0.03]"
+                idPrefix="optimizer-period"
               />
             </div>
             <div className="min-w-0 space-y-2">
@@ -369,6 +438,46 @@ export function OptimizerPage() {
             </Disclosure>
           </div>
 
+          <div className="rounded-lg border border-border/60 bg-white/[0.02] px-3 py-2.5 text-xs text-muted-foreground space-y-1">
+            {resolvedPeriod.error && <p className="text-danger">{resolvedPeriod.error}</p>}
+            {resolvedPeriod.period && (
+              <p>
+                Interval <span className="font-mono text-foreground">{interval}</span>
+                {' · '}
+                Period <span className="text-foreground">{resolvedPeriod.period.label}</span>
+                {' · '}
+                Est. ~{estimatedCandles.toLocaleString()} candles (
+                {formatPeriodSpan(resolvedPeriod.period.startMs, resolvedPeriod.period.endMs)})
+              </p>
+            )}
+            {(candlesQuery.isLoading || candlesQuery.isFetching) && (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Loading shared dataset for all optimizer candidates…
+              </span>
+            )}
+            {candlesReady && candlesQuery.data && resolvedPeriod.period && (
+              <p>
+                Loaded {candlesQuery.data.length.toLocaleString()} candles
+                {' · '}
+                coverage{' '}
+                {formatPeriodSpan(
+                  candlesQuery.data[0]!.time,
+                  candlesQuery.data[candlesQuery.data.length - 1]!.time,
+                )}
+                {' · '}
+                same dataset for every candidate
+              </p>
+            )}
+            {candlesQuery.isError && (
+              <p className="text-danger">
+                {candlesQuery.error instanceof Error
+                  ? candlesQuery.error.message
+                  : 'Failed to load candles'}
+              </p>
+            )}
+          </div>
+
           {(validationErrors.length > 0 || error) && status !== 'running' && (
             <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger space-y-1">
               <div className="flex items-center gap-2 font-medium">
@@ -384,7 +493,12 @@ export function OptimizerPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Button
               className="min-h-11 w-full sm:min-h-9 sm:w-auto"
-              disabled={isRunning || !candlesReady || candlesQuery.isFetching}
+              disabled={
+                isRunning ||
+                !resolvedPeriod.period ||
+                !candlesReady ||
+                candlesQuery.isFetching
+              }
               onClick={() => void handleStart()}
             >
               {isRunning ? (
@@ -754,6 +868,8 @@ export function OptimizerPage() {
           </CardContent>
         </Card>
       )}
+
+      <ResearchPeriodDiagnosticsPanel live={periodDiagLive} />
     </div>
   )
 }

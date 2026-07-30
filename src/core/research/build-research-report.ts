@@ -7,6 +7,10 @@ import type {
   ResearchSession,
   RandomSearchCandidate,
 } from './types.js'
+import {
+  estimateCandleCount,
+  formatSampleSizeMessage,
+} from '../../data/research-period.js'
 
 /**
  * Package existing BacktestReport / session fields into a presentation narrative.
@@ -63,7 +67,25 @@ export function buildResearchAnalysisNarrative(
   if (summary.totalTrades >= 20) {
     strengths.push(`${summary.totalTrades} trades provide a usable historical sample.`)
   } else {
-    weaknesses.push(`Only ${summary.totalTrades} trades — sample size is limited.`)
+    const curve = best.report.equityCurve
+    const startMs = session.config.startDate ?? curve[0]?.time
+    const endMs = session.config.endDate ?? curve.at(-1)?.time
+    const candleCount =
+      curve.length > 2
+        ? curve.length
+        : startMs !== undefined && endMs !== undefined
+          ? estimateCandleCount(startMs, endMs, session.config.interval)
+          : session.config.limit
+
+    weaknesses.push(
+      formatSampleSizeMessage({
+        totalTrades: summary.totalTrades,
+        candleCount,
+        interval: session.config.interval,
+        startMs,
+        endMs,
+      }),
+    )
     suggestions.push('Extend the research period or lower filters to gather more trades.')
   }
 

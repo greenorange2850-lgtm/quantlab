@@ -55,6 +55,55 @@ describe('HistoricalFeed', () => {
     expect(candles[0]?.time).toBe(1_000 + 3_600_000)
     expect(candles.at(-1)?.time).toBe(1_000 + 3 * 3_600_000)
   })
+
+  it('propagates calendar start/end into the provider fetch (not limit-only)', async () => {
+    const calls: unknown[] = []
+    const provider = {
+      getCandles: async (params: unknown) => {
+        calls.push(params)
+        return [
+          {
+            time: 2_000,
+            open: 1,
+            high: 1,
+            low: 1,
+            close: 1,
+            volume: 1,
+          },
+          {
+            time: 5_000,
+            open: 1,
+            high: 1,
+            low: 1,
+            close: 1,
+            volume: 1,
+          },
+        ]
+      },
+    }
+    const feed = new HistoricalFeed(provider)
+    feed.subscribe({ symbol: SYMBOL, timeframe: '15m' })
+    await feed.connect()
+
+    await feed.loadHistorical({
+      symbol: SYMBOL,
+      timeframe: '15m',
+      limit: 1000,
+      startDate: 2_000,
+      endDate: 5_000,
+    })
+
+    expect(calls).toEqual([
+      {
+        symbol: SYMBOL,
+        interval: '15m',
+        limit: 1000,
+        startTime: 2_000,
+        endTime: 5_000,
+      },
+    ])
+    await feed.disconnect()
+  })
 })
 
 describe('ReplayFeed', () => {

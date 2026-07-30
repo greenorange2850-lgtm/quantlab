@@ -31,7 +31,15 @@ export interface RandomSearchConfig {
   seed?: number
   symbol: string
   interval: string
+  /**
+   * Legacy candle-count hint / per-page size. Calendar research uses
+   * startDate/endDate; limit must not silently truncate the period.
+   */
   limit: number
+  /** Inclusive research window start (ms). */
+  startDate?: number
+  /** Inclusive research window end (ms). */
+  endDate?: number
   initialCapital: number
   commissionPercent?: number
   positionSizePercent?: number

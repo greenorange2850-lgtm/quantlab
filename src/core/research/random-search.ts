@@ -139,6 +139,8 @@ export async function runRandomSearch(
         symbol: config.symbol,
         interval: config.interval,
         limit: config.limit,
+        startDate: config.startDate,
+        endDate: config.endDate,
         initialCapital: config.initialCapital,
         commissionPercent: config.commissionPercent ?? 0.1,
         positionSizePercent: config.positionSizePercent ?? 100,

@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { AlertCircle, Brain, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import {
   useResearchSessionArchiveReady,
 } from '@/api/queries/research-sessions'
 import { buildResearchReport } from '@/core/research'
+import { ResearchPeriodDiagnosticsPanel } from '@/components/dev/ResearchPeriodDiagnosticsPanel'
 import {
   buildOptimizerTransparency,
   buildResearchHealthSnapshot,
@@ -22,6 +23,7 @@ import {
   ResearchHealthPanel,
   ResearchProgressPanel,
 } from '@/features/research-intelligence'
+import { recordPeriodUiSnapshot } from '@/research/period-diagnostics'
 import { shouldAwaitResearchArchive } from '@/research/ui-gates'
 import { ResearchOverview } from './components/ResearchOverview'
 import { PerformanceMetrics } from './components/PerformanceMetrics'
@@ -65,6 +67,41 @@ export function ResearchAnalysisPage() {
   const activeQuery = sessionId ? byIdQuery : latestQuery
   const entry = activeQuery.data
   const report = entry ? buildResearchReport(entry.session) : null
+
+  const periodDiagLive = useMemo(() => {
+    const curve = report?.bestCandidate?.report.equityCurve ?? []
+    const configStart = report?.config.startDate ?? null
+    const configEnd = report?.config.endDate ?? null
+    const datasetStartMs = configStart ?? curve[0]?.time ?? null
+    const datasetEndMs = configEnd ?? curve.at(-1)?.time ?? null
+    const periodLabel =
+      configStart != null && configEnd != null
+        ? 'config.startDate/endDate'
+        : curve.length > 0
+          ? 'equity-curve fallback (config dates missing)'
+          : null
+    return {
+      at: Date.now(),
+      preset: null,
+      resolvedStartMs: configStart,
+      resolvedEndMs: configEnd,
+      queryKey: null,
+      loadedCandleCount: null,
+      datasetStartMs,
+      datasetEndMs,
+      sessionId: entry?.session.id ?? report?.sessionId ?? null,
+      displayedSessionId: sessionId ?? entry?.session.id ?? report?.sessionId ?? null,
+      configStartMs: configStart,
+      configEndMs: configEnd,
+      configLimit: report?.config.limit ?? null,
+      analysisTradeCount: report?.bestCandidate?.report.summary.totalTrades ?? null,
+      analysisPeriodLabel: periodLabel,
+    }
+  }, [entry, report, sessionId])
+
+  useEffect(() => {
+    recordPeriodUiSnapshot(periodDiagLive)
+  }, [periodDiagLive])
 
   const researchProgress = useMemo(
     () =>
@@ -203,6 +240,8 @@ export function ResearchAnalysisPage() {
           </div>
         </div>
       </Disclosure>
+
+      <ResearchPeriodDiagnosticsPanel live={periodDiagLive} />
     </div>
   )
 }
