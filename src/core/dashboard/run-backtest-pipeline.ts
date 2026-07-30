@@ -22,6 +22,10 @@ export interface RunBacktestPipelineParams {
   symbol: string
   interval: string
   limit: number
+  /** Inclusive research window start (ms) — used when candles are not prefetched. */
+  startDate?: number
+  /** Inclusive research window end (ms) — used when candles are not prefetched. */
+  endDate?: number
   initialCapital: number
   commissionPercent: number
   positionSizePercent: number
@@ -49,7 +53,7 @@ export interface RunBacktestPipelineResult {
 export const defaultBacktestPipelineParams: RunBacktestPipelineParams = {
   symbol: 'BTCUSDT',
   interval: '1h',
-  limit: 500,
+  limit: 1000,
   initialCapital: 10_000,
   commissionPercent: 0.1,
   positionSizePercent: 100,
@@ -104,6 +108,8 @@ export async function runBacktestPipeline(
         symbol: params.symbol,
         timeframe: params.interval,
         limit: params.limit,
+        startDate: params.startDate,
+        endDate: params.endDate,
       },
       strategy,
       backtestConfig,

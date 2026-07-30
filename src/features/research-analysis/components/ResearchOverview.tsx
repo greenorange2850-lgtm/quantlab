@@ -14,6 +14,16 @@ import type { ResearchReport } from '@/core/research'
 import { MetricTile } from './MetricTile'
 
 function formatResearchPeriod(report: ResearchReport): string {
+  if (report.config.startDate != null && report.config.endDate != null) {
+    const fmt = (ms: number) =>
+      new Date(ms).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    return `${fmt(report.config.startDate)} → ${fmt(report.config.endDate)}`
+  }
+
   const curve = report.bestCandidate?.report.equityCurve ?? []
   const first = curve[0]?.time
   const last = curve.at(-1)?.time

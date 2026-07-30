@@ -7,12 +7,23 @@ import { Input } from '@/components/ui/input'
 import { Disclosure } from '@/components/ui/disclosure'
 import { SymbolSelect } from '@/components/market/SymbolSelect'
 import { TimeframeSelect } from '@/components/market/TimeframeSelect'
+import {
+  ResearchPeriodSelect,
+  defaultResearchPeriodSelection,
+} from '@/components/market/ResearchPeriodSelect'
 import { useBinanceKlines } from '@/api/queries/binance-market'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import { DEFAULT_MA_CROSS_PARAMS, type MovingAverageCrossParams } from '@/core/strategy'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { useResearchStore } from '@/stores/research.store'
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
+import {
+  BINANCE_KLINES_PAGE_LIMIT,
+  estimateCandleCount,
+  formatPeriodSpan,
+  resolveResearchPeriod,
+  type ResearchPeriodSelection,
+} from '@/data/research-period'
 
 interface BacktestSetupFormProps {
   title: string
@@ -34,7 +45,9 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
   const [interval, setInterval] = useState<BacktestTimeframe>(
     defaultBacktestPipelineParams.interval as BacktestTimeframe,
   )
-  const [limit, setLimit] = useState(String(defaultBacktestPipelineParams.limit))
+  const [periodSelection, setPeriodSelection] = useState<ResearchPeriodSelection>(
+    defaultResearchPeriodSelection,
+  )
   const [initialCapital, setInitialCapital] = useState(
     String(defaultBacktestPipelineParams.initialCapital),
   )
@@ -50,20 +63,35 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
     clearAppliedParameters()
   }, [appliedParameters, clearAppliedParameters])
 
-  const parsedLimit = useMemo(() => {
-    const value = Number(limit)
-    return Number.isFinite(value) && value >= 1
-      ? Math.min(Math.floor(value), 1000)
-      : defaultBacktestPipelineParams.limit
-  }, [limit])
+  const resolvedPeriod = useMemo(() => {
+    try {
+      return { period: resolveResearchPeriod(periodSelection), error: null as string | null }
+    } catch (err) {
+      return {
+        period: null,
+        error: err instanceof Error ? err.message : 'Invalid research period',
+      }
+    }
+  }, [periodSelection])
 
-  const candlesQuery = useBinanceKlines(symbol, interval, parsedLimit)
+  const candlesQuery = useBinanceKlines(symbol, interval, {
+    startTime: resolvedPeriod.period?.startMs ?? null,
+    endTime: resolvedPeriod.period?.endMs ?? null,
+  })
 
   const candlesLoading = candlesQuery.isLoading || candlesQuery.isFetching
   const candlesError = candlesQuery.isError
   const candlesReady = Boolean(candlesQuery.data && candlesQuery.data.length > 0)
+  const estimatedCandles = resolvedPeriod.period
+    ? estimateCandleCount(
+        resolvedPeriod.period.startMs,
+        resolvedPeriod.period.endMs,
+        interval,
+      )
+    : 0
 
-  const canRun = candlesReady && !candlesLoading && !isRunning
+  const canRun =
+    Boolean(resolvedPeriod.period) && candlesReady && !candlesLoading && !isRunning
 
   const updateParam = (key: keyof MovingAverageCrossParams, raw: string) => {
     const value = Number(raw)
@@ -73,14 +101,16 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
   }
 
   const handleRunBacktest = async () => {
-    if (!candlesQuery.data?.length) return
+    if (!candlesQuery.data?.length || !resolvedPeriod.period) return
 
     const parsedCapital = Number(initialCapital)
 
     await runBacktest({
       symbol,
       interval,
-      limit: parsedLimit,
+      limit: BINANCE_KLINES_PAGE_LIMIT,
+      startDate: resolvedPeriod.period.startMs,
+      endDate: resolvedPeriod.period.endMs,
       initialCapital: Number.isFinite(parsedCapital)
         ? parsedCapital
         : defaultBacktestPipelineParams.initialCapital,
@@ -111,7 +141,7 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
           <p className="text-pretty text-[11px] text-muted-foreground">
-            Evaluates the current parameters once.
+            Evaluates the current parameters once over the selected calendar period.
           </p>
 
           {appliedNotice && (
@@ -152,15 +182,12 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
               />
             </div>
 
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Candle Limit
-              </label>
-              <Input
-                value={limit}
-                onChange={(event) => setLimit(event.target.value)}
-                inputMode="numeric"
-                className="w-full bg-white/[0.03]"
+            <div className="min-w-0 space-y-2 md:col-span-2">
+              <ResearchPeriodSelect
+                selection={periodSelection}
+                onChange={setPeriodSelection}
+                disabled={isRunning}
+                idPrefix="strategy-lab-period"
               />
             </div>
 
@@ -215,17 +242,36 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
             </div>
           </Disclosure>
 
-          <div className="rounded-lg border border-border/60 bg-white/[0.02] px-3 py-2.5 text-xs text-muted-foreground">
+          <div className="rounded-lg border border-border/60 bg-white/[0.02] px-3 py-2.5 text-xs text-muted-foreground space-y-1">
+            {resolvedPeriod.error && (
+              <p className="text-danger">{resolvedPeriod.error}</p>
+            )}
+            {resolvedPeriod.period && (
+              <p>
+                Interval <span className="font-mono text-foreground">{interval}</span>
+                {' · '}
+                Period <span className="text-foreground">{resolvedPeriod.period.label}</span>
+                {' · '}
+                Est. ~{estimatedCandles.toLocaleString()} candles (
+                {formatPeriodSpan(resolvedPeriod.period.startMs, resolvedPeriod.period.endMs)})
+              </p>
+            )}
             {candlesLoading && (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading {symbol} {interval} candles from Binance…
+                Loading {symbol} {interval} candles for the selected period…
               </span>
             )}
-            {!candlesLoading && candlesReady && (
-              <span>
-                Ready: {candlesQuery.data?.length ?? 0} candles for {symbol} · {interval}
-              </span>
+            {!candlesLoading && candlesReady && resolvedPeriod.period && (
+              <p>
+                Ready: {candlesQuery.data?.length ?? 0} candles loaded
+                {' · '}
+                coverage{' '}
+                {formatPeriodSpan(
+                  candlesQuery.data![0]!.time,
+                  candlesQuery.data![candlesQuery.data!.length - 1]!.time,
+                )}
+              </p>
             )}
             {!candlesLoading && candlesError && (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

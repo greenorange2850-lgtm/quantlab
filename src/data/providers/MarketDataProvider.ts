@@ -21,7 +21,20 @@ export type CandleInterval =
 export interface GetCandlesParams {
   symbol: string
   interval: CandleInterval
+  /**
+   * Per-request page size when paginating (1–1000), or total candles for
+   * limit-only (legacy) fetches without startTime/endTime.
+   */
   limit: number
+  /** Inclusive range start (ms). When set with endTime, provider paginates. */
+  startTime?: number
+  /** Inclusive range end (ms). When set with startTime, provider paginates. */
+  endTime?: number
+  /**
+   * Hard ceiling on total candles for a calendar-range fetch.
+   * Defaults to RESEARCH_PERIOD_MAX_CANDLES in BinanceProvider.
+   */
+  maxCandles?: number
   signal?: AbortSignal
 }
 

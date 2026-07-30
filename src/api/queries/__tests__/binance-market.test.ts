@@ -19,16 +19,15 @@ const sampleKline: BinanceKlineRaw = [
 ]
 
 describe('binanceMarketKeys', () => {
-  it('changes kline query key when symbol or timeframe changes', () => {
-    const a = binanceMarketKeys.klines('BTCUSDT', '1h', 500)
-    const b = binanceMarketKeys.klines('ETHUSDT', '1h', 500)
-    const c = binanceMarketKeys.klines('BTCUSDT', '4h', 500)
-    const d = binanceMarketKeys.klines('BTCUSDT', '1h', 200)
+  it('includes calendar bounds in the kline query key (no silent limit-only key)', () => {
+    const limitOnly = binanceMarketKeys.klines('BTCUSDT', '15m', null, null, 500)
+    const ranged = binanceMarketKeys.klines('BTCUSDT', '15m', 100, 200, 1000)
+    const otherRange = binanceMarketKeys.klines('BTCUSDT', '15m', 100, 300, 1000)
 
-    expect(a).not.toEqual(b)
-    expect(a).not.toEqual(c)
-    expect(a).not.toEqual(d)
-    expect(a).toEqual(['binance-market', 'klines', 'BTCUSDT', '1h', 500])
+    expect(limitOnly).toEqual(['binance-market', 'klines', 'BTCUSDT', '15m', null, null, 500])
+    expect(ranged).not.toEqual(limitOnly)
+    expect(ranged).not.toEqual(otherRange)
+    expect(ranged).toEqual(['binance-market', 'klines', 'BTCUSDT', '15m', 100, 200, 1000])
   })
 })
 
