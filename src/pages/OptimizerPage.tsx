@@ -30,17 +30,25 @@ import {
   buildResearchHealthSnapshot,
   buildResearchProgressSnapshot,
   buildResearchRecommendation,
+  formatCountOrDash,
+  formatScoreOrDash,
   NextRecommendationPanel,
   OptimizerTransparencyPanel,
   ResearchHealthPanel,
   ResearchProgressPanel,
 } from '@/features/research-intelligence'
+import {
+  formatDurationMs,
+  formatLiveStatusLabel,
+} from '@/core/research'
 import { resolveOptimizerSessionId } from '@/research/ui-gates'
 import {
   defaultRandomSearchDraft,
   useResearchStore,
 } from '@/stores/research.store'
 import { useBacktestStore } from '@/stores/backtest.store'
+import { MetricTile } from '@/features/research-analysis/components/MetricTile'
+import { KPI_SECONDARY_GRID } from '@/layouts/layout-classes'
 
 const OBJECTIVES: { id: ScoringObjective; label: string }[] = [
   { id: 'profitFactor', label: 'Profit Factor' },
@@ -158,7 +166,7 @@ export function OptimizerPage() {
     if (!candlesQuery.data?.length) return
 
     const maxDd = parseOptionalNumber(maxDrawdownPercent)
-    await startRandomSearch({
+    const result = await startRandomSearch({
       candles: candlesQuery.data,
       config: {
         iterations: Number(iterations),
@@ -175,7 +183,26 @@ export function OptimizerPage() {
         },
       },
     })
+
+    // Navigate only after a completed session is safely persisted.
+    // Do not navigate on failure or cancellation.
+    if (result?.persisted && result.session.status === 'completed') {
+      navigate(`/research-analysis?session=${result.session.id}`)
+    }
   }
+
+  const showLiveProgress =
+    isRunning ||
+    (progress !== null &&
+      (progress.status === 'CANCELLED' ||
+        progress.status === 'FAILED' ||
+        progress.status === 'FINALIZING' ||
+        progress.status === 'COMPLETED'))
+
+  const progressPercent =
+    progress && progress.totalCandidates > 0
+      ? Math.min(100, (progress.candidatesTested / progress.totalCandidates) * 100)
+      : 0
 
   return (
     <div className="mx-auto w-full max-w-5xl min-w-0 space-y-6">
@@ -399,45 +426,98 @@ export function OptimizerPage() {
         </CardContent>
       </Card>
 
-      {(isRunning || progress) && (
+      {showLiveProgress && progress && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Progress</CardTitle>
+          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-base">Live Research Progress</CardTitle>
+            <Badge variant="accent" className="w-fit text-[10px]">
+              {formatLiveStatusLabel(progress.status)}
+            </Badge>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-              <span>
-                {progress?.completed ?? 0} / {progress?.total ?? iterations} iterations
-              </span>
-              <span>
-                Best score:{' '}
-                <span className="font-mono text-foreground">
-                  {progress?.bestScore === null || progress?.bestScore === undefined
-                    ? '—'
-                    : progress.bestScore.toFixed(3)}
-                </span>
-              </span>
-              <Badge variant="accent" className="text-[10px] capitalize">
-                {status}
-              </Badge>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/5">
-              <div
-                className="h-full rounded-full bg-accent transition-all"
-                style={{
-                  width: `${
-                    progress && progress.total > 0
-                      ? Math.min(100, (progress.completed / progress.total) * 100)
-                      : 0
-                  }%`,
-                }}
+          <CardContent className="space-y-4 text-sm">
+            <p className="text-xs text-muted-foreground">
+              Ephemeral optimizer signal — the Research Session is persisted only when the run
+              completes successfully.
+            </p>
+            <div className={KPI_SECONDARY_GRID}>
+              <MetricTile
+                label="Candidates Tested"
+                value={`${progress.candidatesTested} / ${progress.totalCandidates}`}
+                size="secondary"
+              />
+              <MetricTile
+                label="Accepted"
+                value={formatCountOrDash(progress.candidatesAccepted)}
+                size="secondary"
+              />
+              <MetricTile
+                label="Rejected"
+                value={formatCountOrDash(progress.candidatesRejected)}
+                size="secondary"
+                tone="muted"
+              />
+              <MetricTile
+                label="Current Best Research Score"
+                value={formatScoreOrDash(progress.bestScore)}
+                size="secondary"
+              />
+              <MetricTile
+                label="Best Candidate Trades"
+                value={formatCountOrDash(progress.bestTradeCount)}
+                hint="Trade count of the current best candidate"
+                size="secondary"
+              />
+              <MetricTile
+                label="Improvements Found"
+                value={formatCountOrDash(progress.improvementsCount)}
+                size="secondary"
+              />
+              <MetricTile
+                label="Candidates Since Last Improvement"
+                value={formatCountOrDash(progress.candidatesSinceLastImprovement)}
+                size="secondary"
+                tone="muted"
+              />
+              <MetricTile
+                label="Elapsed Time"
+                value={formatDurationMs(progress.elapsedMs)}
+                size="secondary"
+                tone="muted"
+              />
+              <MetricTile
+                label="Estimated Time Remaining"
+                value={formatDurationMs(progress.estimatedRemainingMs)}
+                size="secondary"
+                tone="muted"
+              />
+              <MetricTile
+                label="Live Status"
+                value={formatLiveStatusLabel(progress.status)}
+                size="secondary"
               />
             </div>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+                <span>Progress</span>
+                <span className="font-mono tabular-nums">{progressPercent.toFixed(0)}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                <div
+                  className="h-full rounded-full bg-accent transition-all"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+            {status === 'failed' && error && (
+              <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+                {error}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {researchProgress && (
+      {researchProgress && !isRunning && (
         <ResearchProgressPanel snapshot={researchProgress} />
       )}
 
@@ -468,8 +548,8 @@ export function OptimizerPage() {
       {status === 'cancelled' && (
         <Card>
           <CardContent className="py-4 text-xs text-muted-foreground">
-            Random Search cancelled after {progress?.completed ?? 0} iterations.
-            Partial results are available below when present.
+            Random Search cancelled after {progress?.candidatesTested ?? 0} candidates.
+            No Research Session was persisted for this cancelled run.
           </CardContent>
         </Card>
       )}

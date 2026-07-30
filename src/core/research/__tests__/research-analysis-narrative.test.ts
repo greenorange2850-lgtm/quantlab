@@ -82,10 +82,21 @@ function baseSession(candidates: RandomSearchCandidate[]): ResearchSession {
     createdAt: 1,
     completedAt: 2,
     progress: {
-      completed: candidates.length,
-      total: 5,
+      totalCandidates: 5,
+      candidatesTested: candidates.length,
+      candidatesAccepted: candidates.filter((c) => c.passedConstraints).length,
+      candidatesRejected: candidates.filter((c) => !c.passedConstraints).length,
+      currentCandidateScore: candidates[0]?.score ?? null,
       bestScore: candidates[0]?.score ?? null,
-      status: 'completed',
+      bestTradeCount: candidates[0]?.report.summary.totalTrades ?? null,
+      bestCandidateParameters: candidates[0]
+        ? { ...candidates[0].parameters }
+        : null,
+      improvementsCount: candidates[0] ? 1 : 0,
+      candidatesSinceLastImprovement: candidates[0] ? 0 : null,
+      elapsedMs: 0,
+      estimatedRemainingMs: 0,
+      status: 'COMPLETED',
     },
   }
 }

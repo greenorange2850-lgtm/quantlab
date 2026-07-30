@@ -104,7 +104,21 @@ describe('buildResearchReport', () => {
       error: null,
       createdAt: 1,
       completedAt: 2,
-      progress: { completed: 3, total: 3, bestScore: 2, status: 'completed' },
+      progress: {
+        totalCandidates: 3,
+        candidatesTested: 3,
+        candidatesAccepted: 2,
+        candidatesRejected: 1,
+        currentCandidateScore: 3,
+        bestScore: 2,
+        bestTradeCount: 8,
+        bestCandidateParameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+        improvementsCount: 1,
+        candidatesSinceLastImprovement: 1,
+        elapsedMs: 0,
+        estimatedRemainingMs: 0,
+        status: 'COMPLETED',
+      },
     }
 
     const report = buildResearchReport(session)

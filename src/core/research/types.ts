@@ -44,6 +44,17 @@ export type ResearchSessionStatus =
   | 'cancelled'
   | 'failed'
 
+/** Live optimizer statuses emitted via RandomSearchProgress (distinct from session status). */
+export type RandomSearchLiveStatus =
+  | 'INITIALIZING'
+  | 'EXPLORING'
+  | 'IMPROVING'
+  | 'PLATEAUING'
+  | 'FINALIZING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+
 export interface RandomSearchCandidate {
   id: string
   parameters: MovingAverageCrossParams
@@ -53,11 +64,25 @@ export interface RandomSearchCandidate {
   backtestId: string
 }
 
+/**
+ * Typed live progress payload for Random Search.
+ * Ephemeral UI signal only — does not create or update Research Sessions.
+ */
 export interface RandomSearchProgress {
-  completed: number
-  total: number
+  totalCandidates: number
+  candidatesTested: number
+  candidatesAccepted: number
+  candidatesRejected: number
+  currentCandidateScore: number | null
   bestScore: number | null
-  status: ResearchSessionStatus
+  /** Trade count of the current best candidate (not a sum across candidates). */
+  bestTradeCount: number | null
+  bestCandidateParameters: MovingAverageCrossParams | null
+  improvementsCount: number
+  candidatesSinceLastImprovement: number | null
+  elapsedMs: number
+  estimatedRemainingMs: number | null
+  status: RandomSearchLiveStatus
 }
 
 export interface ResearchSession {

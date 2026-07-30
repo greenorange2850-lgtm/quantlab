@@ -4,6 +4,7 @@ export type {
   RandomSearchConstraints,
   RandomSearchConfig,
   ResearchSessionStatus,
+  RandomSearchLiveStatus,
   RandomSearchCandidate,
   RandomSearchProgress,
   ResearchSession,
@@ -26,6 +27,21 @@ export {
   buildResearchReport,
   buildResearchAnalysisNarrative,
 } from './build-research-report.js'
+export {
+  createEmptyProgress,
+  deriveLiveSearchStatus,
+  estimateRemainingMs,
+  formatDurationMs,
+  formatLiveStatusLabel,
+  withElapsed,
+  buildProgressPayload,
+  DEFAULT_PROGRESS_THROTTLE_MS,
+} from './progress.js'
+export {
+  createThrottledProgressHandler,
+  type ThrottledProgressHandler,
+  type ThrottledProgressHandlerOptions,
+} from './progress-throttle.js'
 
 import type { ParameterRange } from './types.js'
 

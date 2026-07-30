@@ -285,7 +285,21 @@ describe('buildResearchProgressSnapshot + recommendation', () => {
       error: null,
       createdAt: 1,
       completedAt: 2,
-      progress: { completed: 4, total: 4, bestScore: 1.4, status: 'completed' },
+      progress: {
+        totalCandidates: 4,
+        candidatesTested: 4,
+        candidatesAccepted: 3,
+        candidatesRejected: 1,
+        currentCandidateScore: 1.2,
+        bestScore: 1.4,
+        bestTradeCount: 40,
+        bestCandidateParameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+        improvementsCount: 2,
+        candidatesSinceLastImprovement: 1,
+        elapsedMs: 1000,
+        estimatedRemainingMs: 0,
+        status: 'COMPLETED',
+      },
     } satisfies ResearchSession
 
     const report = {
@@ -350,7 +364,21 @@ describe('buildResearchProgressSnapshot + recommendation', () => {
 
   it('recommends continue search while improving', () => {
     const progress = buildResearchProgressSnapshot({
-      progress: { completed: 12, total: 40, bestScore: 1.5, status: 'running' },
+      progress: {
+        totalCandidates: 40,
+        candidatesTested: 12,
+        candidatesAccepted: 2,
+        candidatesRejected: 10,
+        currentCandidateScore: 1.5,
+        bestScore: 1.5,
+        bestTradeCount: 40,
+        bestCandidateParameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+        improvementsCount: 2,
+        candidatesSinceLastImprovement: 0,
+        elapsedMs: 1200,
+        estimatedRemainingMs: 2800,
+        status: 'IMPROVING',
+      },
       report: null,
       session: {
         id: 'live',
@@ -372,7 +400,21 @@ describe('buildResearchProgressSnapshot + recommendation', () => {
         error: null,
         createdAt: 1,
         completedAt: null,
-        progress: { completed: 12, total: 40, bestScore: 1.5, status: 'running' },
+        progress: {
+          totalCandidates: 40,
+          candidatesTested: 12,
+          candidatesAccepted: 2,
+          candidatesRejected: 10,
+          currentCandidateScore: 1.5,
+          bestScore: 1.5,
+          bestTradeCount: 40,
+          bestCandidateParameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+          improvementsCount: 2,
+          candidatesSinceLastImprovement: 0,
+          elapsedMs: 1200,
+          estimatedRemainingMs: 2800,
+          status: 'IMPROVING',
+        },
       },
       uiRunning: true,
     })
@@ -384,7 +426,21 @@ describe('buildResearchProgressSnapshot + recommendation', () => {
   it('recommends adjusting search when nothing passed', () => {
     const report = emptyReport()
     const progress = buildResearchProgressSnapshot({
-      progress: { completed: 10, total: 10, bestScore: null, status: 'completed' },
+      progress: {
+        totalCandidates: 10,
+        candidatesTested: 10,
+        candidatesAccepted: 0,
+        candidatesRejected: 10,
+        currentCandidateScore: 0.5,
+        bestScore: null,
+        bestTradeCount: null,
+        bestCandidateParameters: null,
+        improvementsCount: 0,
+        candidatesSinceLastImprovement: null,
+        elapsedMs: 500,
+        estimatedRemainingMs: 0,
+        status: 'COMPLETED',
+      },
       report,
       session: null,
     })

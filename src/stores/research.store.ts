@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type { Candle } from '@/data/candles'
 import {
   buildResearchReport,
+  createEmptyProgress,
+  createThrottledProgressHandler,
   DEFAULT_MA_CROSS_RANGES,
   runRandomSearch,
   validateRandomSearchConfig,
@@ -30,6 +32,13 @@ export type ResearchUiStatus =
   | 'failed'
   | 'empty'
 
+export type StartRandomSearchResult = {
+  session: ResearchSession
+  report: ResearchReport
+  /** True when a completed Research Session was persisted. */
+  persisted: boolean
+}
+
 interface ResearchState {
   status: ResearchUiStatus
   progress: RandomSearchProgress | null
@@ -45,7 +54,7 @@ interface ResearchState {
   startRandomSearch: (input: {
     config: RandomSearchConfig
     candles: Candle[]
-  }) => Promise<void>
+  }) => Promise<StartRandomSearchResult | null>
   cancelRandomSearch: () => void
   applyParameters: (params: MovingAverageCrossParams) => void
   clearAppliedParameters: () => void
@@ -55,12 +64,13 @@ interface ResearchState {
   reset: () => void
 }
 
-const initialProgress = (total: number): RandomSearchProgress => ({
-  completed: 0,
-  total,
-  bestScore: null,
-  status: 'running',
-})
+function markProgressCompleted(progress: RandomSearchProgress): RandomSearchProgress {
+  return {
+    ...progress,
+    status: 'COMPLETED',
+    estimatedRemainingMs: 0,
+  }
+}
 
 export const useResearchStore = create<ResearchState>((set, get) => ({
   status: 'idle',
@@ -110,7 +120,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       status,
       session: entry.session,
       report: entry.report,
-      progress: entry.session.progress,
+      progress: markProgressCompleted(entry.session.progress),
       error: entry.session.error,
       selectedCandidateId: entry.report.bestCandidate?.id ?? null,
       validationErrors: [],
@@ -129,7 +139,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
         error: 'A Random Search is already running',
         validationErrors: ['A Random Search is already running'],
       })
-      return
+      return null
     }
 
     const issues = validateRandomSearchConfig({
@@ -141,14 +151,22 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
         status: 'failed',
         validationErrors: issues.map((issue) => issue.message),
         error: issues.map((issue) => issue.message).join('; '),
+        progress: {
+          ...createEmptyProgress(config.iterations),
+          status: 'FAILED',
+        },
       })
-      return
+      return null
     }
 
     const controller = new AbortController()
+    const throttled = createThrottledProgressHandler((progress) => {
+      set({ progress })
+    })
+
     set({
       status: 'running',
-      progress: initialProgress(config.iterations),
+      progress: createEmptyProgress(config.iterations),
       session: null,
       report: null,
       error: null,
@@ -162,40 +180,56 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       candles,
       signal: controller.signal,
       onProgress: (progress) => {
-        set({ progress })
+        throttled.emit(progress)
       },
     })
 
-    const report = buildResearchReport(session)
-    saveResearchSession({ session, report, savedAt: Date.now() })
-    // Keep TanStack Query list/detail/latest in sync with the archive.
-    syncResearchSessionQueries()
+    throttled.flush()
+    throttled.dispose()
 
-    // Archive candidate reports so View Details can restore without rerun.
-    for (const candidate of session.candidates) {
-      const summary = createBacktestSummaryFromReport(
-        candidate.report,
-        {
-          strategyName: 'Moving Average Cross',
-          strategyVersion: `rs-${candidate.parameters.fastPeriod}-${candidate.parameters.slowPeriod}-${candidate.parameters.rsiPeriod}`,
-          timeframe: config.interval.toUpperCase(),
-        },
-        candidate.backtestId,
-      )
-      saveBacktestDetail(
-        buildPersistedDetail({
-          id: candidate.backtestId,
-          report: candidate.report,
-          context: {
+    const report = buildResearchReport(session)
+
+    // Persist only the final completed Research Session — never mid-run progress,
+    // cancelled, or failed partial runs.
+    let persisted = false
+    if (session.status === 'completed') {
+      const completedProgress = markProgressCompleted(session.progress)
+      session.progress = completedProgress
+
+      saveResearchSession({ session, report, savedAt: Date.now() })
+      syncResearchSessionQueries()
+      persisted = true
+
+      for (const candidate of session.candidates) {
+        const summary = createBacktestSummaryFromReport(
+          candidate.report,
+          {
             strategyName: 'Moving Average Cross',
-            strategyVersion: summary.version,
-            timeframe: summary.timeframe,
-            // Omit candles — shared localStorage quota with research sessions.
-            // Report metrics are enough to restore dashboards without rerun.
+            strategyVersion: `rs-${candidate.parameters.fastPeriod}-${candidate.parameters.slowPeriod}-${candidate.parameters.rsiPeriod}`,
+            timeframe: config.interval.toUpperCase(),
           },
-          existingSummary: summary,
-        }),
-      )
+          candidate.backtestId,
+        )
+        saveBacktestDetail(
+          buildPersistedDetail({
+            id: candidate.backtestId,
+            report: candidate.report,
+            context: {
+              strategyName: 'Moving Average Cross',
+              strategyVersion: summary.version,
+              timeframe: summary.timeframe,
+              // Omit candles — shared localStorage quota with research sessions.
+              // Report metrics are enough to restore dashboards without rerun.
+            },
+            existingSummary: summary,
+          }),
+        )
+      }
+
+      // COMPLETED only after the Research Session is safely stored.
+      set({
+        progress: completedProgress,
+      })
     }
 
     let status: ResearchUiStatus = session.status
@@ -212,6 +246,8 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       abortController: null,
       selectedCandidateId: report.bestCandidate?.id ?? null,
     })
+
+    return { session, report, persisted }
   },
 }))
 
