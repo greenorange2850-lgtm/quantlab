@@ -42,6 +42,13 @@ export {
   type ThrottledProgressHandler,
   type ThrottledProgressHandlerOptions,
 } from './progress-throttle.js'
+export {
+  yieldToBrowser,
+  createAdaptiveBatchController,
+  TARGET_BATCH_BUDGET_MS,
+  type RandomSearchPerfDiagnostics,
+  type AdaptiveBatchController,
+} from './cooperative-schedule.js'
 
 import type { ParameterRange } from './types.js'
 

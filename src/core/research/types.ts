@@ -1,6 +1,7 @@
 import type { Candle } from '../../data/candles.js'
 import type { BacktestReport } from '../analytics/types.js'
 import type { MovingAverageCrossParams } from '../strategy/MovingAverageCrossStrategy.js'
+import type { RandomSearchPerfDiagnostics } from './cooperative-schedule.js'
 
 export type ScoringObjective =
   | 'netProfit'
@@ -143,4 +144,15 @@ export interface RunRandomSearchOptions {
   candles: Candle[]
   onProgress?: (progress: RandomSearchProgress) => void
   signal?: AbortSignal
+  /**
+   * Injectable browser yield (tests). Defaults to `yieldToBrowser`
+   * (`scheduler.yield` or `setTimeout(0)` — not microtask-only).
+   */
+  yieldFn?: () => Promise<void>
+  /** Force a fixed candidate batch size between yields (disables adaptation). */
+  cooperativeBatchSize?: number
+  /** When true, emit/log perf diagnostics even outside DEV. */
+  enablePerfDiagnostics?: boolean
+  onPerfDiagnostics?: (diagnostics: RandomSearchPerfDiagnostics) => void
 }
+

@@ -2,6 +2,13 @@ import { runBacktestPipeline } from '../dashboard/run-backtest-pipeline.js'
 import { DEFAULT_MA_CROSS_PARAMS } from '../strategy/MovingAverageCrossStrategy.js'
 import type { MovingAverageCrossParams } from '../strategy/MovingAverageCrossStrategy.js'
 import {
+  createAdaptiveBatchController,
+  createPerfDiagnosticsTracker,
+  isPerfDiagnosticsEnabled,
+  logRandomSearchPerfDiagnostics,
+  yieldToBrowser,
+} from './cooperative-schedule.js'
+import {
   buildProgressPayload,
   createEmptyProgress,
   deriveLiveSearchStatus,
@@ -60,11 +67,17 @@ function snapshotProgress(
  *
  * Live progress is ephemeral: FINALIZING is emitted before return on success.
  * COMPLETED is reserved for the store after the Research Session is persisted.
+ *
+ * Cooperative scheduling: prefetched-candle backtests are CPU-synchronous.
+ * Awaiting them only queues microtasks, which still starve paint/input on mobile.
+ * Between candidate batches we yield via `scheduler.yield` / `setTimeout(0)` so
+ * the browser can paint progress and process Cancel.
  */
 export async function runRandomSearch(
   options: RunRandomSearchOptions,
 ): Promise<ResearchSession> {
   const { config, candles, onProgress, signal } = options
+  const yieldFn = options.yieldFn ?? yieldToBrowser
   const issues = validateRandomSearchConfig({
     iterations: config.iterations,
     parameterRanges: config.parameterRanges,
@@ -118,20 +131,73 @@ export async function runRandomSearch(
     return session
   }
 
+  const perf = createPerfDiagnosticsTracker()
+  const collectPerf = isPerfDiagnosticsEnabled(options.enablePerfDiagnostics)
+  const searchStartedAt = performance.now()
+
+  function finishPerf() {
+    if (!collectPerf) return
+    const diagnostics = perf.snapshot(performance.now() - searchStartedAt)
+    options.onPerfDiagnostics?.(diagnostics)
+    if (options.enablePerfDiagnostics !== false) {
+      logRandomSearchPerfDiagnostics(diagnostics)
+    }
+  }
+
   // Initial progress before the first candidate.
   emit('INITIALIZING')
+  // Let the browser paint INITIALIZING before heavy candidate work.
+  await yieldFn()
+  if (collectPerf) perf.noteYield()
+  if (signal?.aborted) {
+    session.status = 'cancelled'
+    session.completedAt = Date.now()
+    emit('CANCELLED')
+    finishPerf()
+    return session
+  }
 
   let bestScore = Number.NEGATIVE_INFINITY
   let bestId: string | null = null
   const baseSeed = config.seed ?? Date.now()
 
+  const batcher = createAdaptiveBatchController({
+    fixedBatchSize: options.cooperativeBatchSize,
+  })
+  let batchStartedAt = performance.now()
+  let openBatchCandidates = 0
+
+  const closeOpenBatch = () => {
+    if (openBatchCandidates <= 0) return
+    const durationMs = performance.now() - batchStartedAt
+    batcher.recordBatch(openBatchCandidates, durationMs)
+    if (collectPerf) perf.noteBatch(openBatchCandidates, durationMs)
+    openBatchCandidates = 0
+  }
+
   try {
     for (let i = 0; i < config.iterations; i++) {
       if (signal?.aborted) {
+        closeOpenBatch()
         session.status = 'cancelled'
         session.completedAt = Date.now()
         emit('CANCELLED')
+        finishPerf()
         return session
+      }
+
+      if (batcher.shouldYieldBefore(i, performance.now())) {
+        closeOpenBatch()
+        await yieldFn()
+        if (collectPerf) perf.noteYield()
+        if (signal?.aborted) {
+          session.status = 'cancelled'
+          session.completedAt = Date.now()
+          emit('CANCELLED')
+          finishPerf()
+          return session
+        }
+        batchStartedAt = performance.now()
       }
 
       const parameters = sampleStrategyParams(config.parameterRanges, baseSeed + i)
@@ -197,18 +263,26 @@ export async function runRandomSearch(
         justImproved: tracker.justImproved,
       })
       emit(liveStatus)
+
+      batcher.noteCandidate()
+      openBatchCandidates += 1
     }
+
+    closeOpenBatch()
 
     // Finalizing before report/session persistence (COMPLETED emitted by store after save).
     session.status = 'completed'
     session.completedAt = Date.now()
     emit('FINALIZING')
+    finishPerf()
     return session
   } catch (error: unknown) {
+    closeOpenBatch()
     if (signal?.aborted) {
       session.status = 'cancelled'
       session.completedAt = Date.now()
       emit('CANCELLED')
+      finishPerf()
       return session
     }
 
@@ -216,6 +290,7 @@ export async function runRandomSearch(
     session.error = error instanceof Error ? error.message : 'Random Search failed'
     session.completedAt = Date.now()
     emit('FAILED')
+    finishPerf()
     return session
   }
 }
