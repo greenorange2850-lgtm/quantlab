@@ -145,8 +145,9 @@ export function ResearchSessionsPage() {
         <EmptyState />
       ) : visibleItems.length === 0 ? (
         <Card hover={false} className="border-dashed">
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            No sessions match the current filters.
+          <CardContent className="py-8 text-center">
+            <p className="text-sm font-medium">No matching sessions</p>
+            <p className="mt-1 text-xs text-muted-foreground">Clear filters to see all sessions.</p>
           </CardContent>
         </Card>
       ) : (
@@ -170,7 +171,7 @@ function Header({ count }: { count?: number }) {
         <div className="min-w-0">
           <h2 className="text-lg font-semibold tracking-tight">Research Sessions</h2>
           <p className="text-pretty text-xs text-muted-foreground">
-            Browse and manage previously generated research sessions.
+            Browse archived research sessions.
           </p>
           {typeof count === 'number' ? (
             <p className="mt-1 text-[11px] text-muted-foreground">

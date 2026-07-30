@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Disclosure } from '@/components/ui/disclosure'
 import {
   useLatestResearchSession,
   useResearchSession,
@@ -158,10 +159,8 @@ export function StrategyComparePage() {
         <Card hover={false} className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
             <div className="space-y-1">
-              <p className="text-sm font-medium">No optimized candidate available.</p>
-              <p className="mx-auto max-w-sm text-pretty text-xs text-muted-foreground">
-                Run Random Search in the Optimizer and select a candidate to compare.
-              </p>
+              <p className="text-sm font-medium">No optimized candidate</p>
+              <p className="text-xs text-muted-foreground">Run Random Search, then select a candidate.</p>
             </div>
             <Link to="/optimizer" className="w-full sm:w-auto">
               <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">
@@ -182,11 +181,8 @@ export function StrategyComparePage() {
         <Card hover={false} className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
             <div className="space-y-1">
-              <p className="text-sm font-medium">Baseline backtest required.</p>
-              <p className="mx-auto max-w-sm text-pretty text-xs text-muted-foreground">
-                Run a baseline backtest in Strategy Lab, then compare it with the optimized
-                candidate.
-              </p>
+              <p className="text-sm font-medium">Baseline backtest required</p>
+              <p className="text-xs text-muted-foreground">Run a backtest in Strategy Lab first.</p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <Link to="/strategy-lab" className="w-full sm:w-auto">
@@ -221,21 +217,17 @@ export function StrategyComparePage() {
       />
 
       <ComparisonOverview pairs={overview} />
-      <MetricsComparison rows={metrics} />
 
-      <section className="space-y-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold tracking-tight">Comparison Insights</h3>
-          <p className="text-pretty text-xs text-muted-foreground">
-            Summary and change list generated from existing comparison values only — no new
-            analytics.
-          </p>
-        </div>
+      <Disclosure title="Metrics comparison">
+        <MetricsComparison rows={metrics} />
+      </Disclosure>
+
+      <Disclosure title="Comparison insights">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <ImprovementSummary headline={headline} />
           <WhatsChangedCard items={changed} />
         </div>
-      </section>
+      </Disclosure>
 
       <ValidationNotice />
     </div>

@@ -4,7 +4,7 @@ import { FlaskConical, Play, Loader2, AlertCircle, RefreshCw, Sparkles } from 'l
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Disclosure } from '@/components/ui/disclosure'
 import { SymbolSelect } from '@/components/market/SymbolSelect'
 import { TimeframeSelect } from '@/components/market/TimeframeSelect'
 import { useBinanceKlines } from '@/api/queries/binance-market'
@@ -111,16 +111,12 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
           <p className="text-pretty text-[11px] text-muted-foreground">
-            <strong className="text-foreground">Run Backtest</strong> evaluates the current
-            parameters once.{' '}
-            <strong className="text-foreground">Random Search</strong> explores many combinations
-            in the Optimizer.
+            Evaluates the current parameters once.
           </p>
 
           {appliedNotice && (
             <div className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-accent">
-              Parameters applied from Random Search. Review and click Run Backtest when ready —
-              nothing was saved or rerun automatically.
+              Parameters applied from Random Search. Review and run when ready.
             </div>
           )}
 
@@ -168,41 +164,7 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
               />
             </div>
 
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Fast EMA
-              </label>
-              <Input
-                value={String(strategyParams.fastPeriod)}
-                onChange={(event) => updateParam('fastPeriod', event.target.value)}
-                inputMode="numeric"
-                className="w-full bg-white/[0.03]"
-              />
-            </div>
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Slow EMA
-              </label>
-              <Input
-                value={String(strategyParams.slowPeriod)}
-                onChange={(event) => updateParam('slowPeriod', event.target.value)}
-                inputMode="numeric"
-                className="w-full bg-white/[0.03]"
-              />
-            </div>
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                RSI Period
-              </label>
-              <Input
-                value={String(strategyParams.rsiPeriod)}
-                onChange={(event) => updateParam('rsiPeriod', event.target.value)}
-                inputMode="numeric"
-                className="w-full bg-white/[0.03]"
-              />
-            </div>
-
-            <div className="min-w-0 space-y-2">
+            <div className="min-w-0 space-y-2 md:col-span-2">
               <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Initial Capital
               </label>
@@ -210,10 +172,48 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
                 value={initialCapital}
                 onChange={(event) => setInitialCapital(event.target.value)}
                 inputMode="decimal"
-                className="w-full bg-white/[0.03]"
+                className="w-full bg-white/[0.03] md:max-w-xs"
               />
             </div>
           </div>
+
+          <Disclosure title="Strategy parameters">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="min-w-0 space-y-2">
+                <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Fast EMA
+                </label>
+                <Input
+                  value={String(strategyParams.fastPeriod)}
+                  onChange={(event) => updateParam('fastPeriod', event.target.value)}
+                  inputMode="numeric"
+                  className="w-full bg-white/[0.03]"
+                />
+              </div>
+              <div className="min-w-0 space-y-2">
+                <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Slow EMA
+                </label>
+                <Input
+                  value={String(strategyParams.slowPeriod)}
+                  onChange={(event) => updateParam('slowPeriod', event.target.value)}
+                  inputMode="numeric"
+                  className="w-full bg-white/[0.03]"
+                />
+              </div>
+              <div className="min-w-0 space-y-2">
+                <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  RSI Period
+                </label>
+                <Input
+                  value={String(strategyParams.rsiPeriod)}
+                  onChange={(event) => updateParam('rsiPeriod', event.target.value)}
+                  inputMode="numeric"
+                  className="w-full bg-white/[0.03]"
+                />
+              </div>
+            </div>
+          </Disclosure>
 
           <div className="rounded-lg border border-border/60 bg-white/[0.02] px-3 py-2.5 text-xs text-muted-foreground">
             {candlesLoading && (
@@ -280,7 +280,7 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
             </Button>
 
             <Link to="/optimizer" className="w-full sm:w-auto">
-              <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
+              <Button variant="outline" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
                 <Sparkles className="mr-2 h-4 w-4" />
                 Random Search
               </Button>
@@ -288,15 +288,11 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
 
             {hasBacktest && (
               <Link to="/" className="w-full sm:w-auto">
-                <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
+                <Button variant="ghost" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
                   View Dashboard
                 </Button>
               </Link>
             )}
-
-            <Badge variant="outline" className="w-fit text-[10px]">
-              Live Binance market data
-            </Badge>
           </div>
         </CardContent>
       </Card>

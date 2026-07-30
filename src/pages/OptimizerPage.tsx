@@ -24,6 +24,7 @@ import {
 } from '@/core/research'
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
+import { Disclosure } from '@/components/ui/disclosure'
 import { resolveOptimizerSessionId } from '@/research/ui-gates'
 import {
   defaultRandomSearchDraft,
@@ -148,9 +149,7 @@ export function OptimizerPage() {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold tracking-tight">Random Search</h2>
             <p className="text-pretty text-xs text-muted-foreground">
-              Explore parameter combinations. This is not a single backtest —{' '}
-              <span className="text-foreground">Run Backtest</span> evaluates one setup;{' '}
-              <span className="text-foreground">Random Search</span> samples many.
+              Sample many parameter combinations. Use Strategy Lab for a single backtest.
             </p>
           </div>
         </div>
@@ -232,69 +231,77 @@ export function OptimizerPage() {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Parameter ranges
-            </p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              {ranges.map((range) => (
-                <div key={range.name} className="min-w-0 rounded-lg border border-border/60 p-3 space-y-2">
-                  <p className="font-mono text-xs font-medium">{range.name}</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['min', 'max', 'step'] as const).map((field) => (
-                      <div key={field} className="min-w-0 space-y-1">
-                        <label className="text-[10px] uppercase text-muted-foreground">{field}</label>
-                        <Input
-                          value={String(range[field])}
-                          disabled={isRunning}
-                          onChange={(event) => updateRange(range.name, field, event.target.value)}
-                          className="h-9 bg-white/[0.03] px-2 text-xs"
-                        />
-                      </div>
-                    ))}
+          <div className="space-y-4">
+            <Disclosure title="Parameter ranges">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                {ranges.map((range) => (
+                  <div
+                    key={range.name}
+                    className="min-w-0 space-y-2 rounded-lg border border-border/60 p-3"
+                  >
+                    <p className="font-mono text-xs font-medium">{range.name}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['min', 'max', 'step'] as const).map((field) => (
+                        <div key={field} className="min-w-0 space-y-1">
+                          <label className="text-[10px] uppercase text-muted-foreground">
+                            {field}
+                          </label>
+                          <Input
+                            value={String(range[field])}
+                            disabled={isRunning}
+                            onChange={(event) =>
+                              updateRange(range.name, field, event.target.value)
+                            }
+                            className="h-9 bg-white/[0.03] px-2 text-xs"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                ))}
+              </div>
+            </Disclosure>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Max drawdown % (optional)
-              </label>
-              <Input
-                value={maxDrawdownPercent}
-                disabled={isRunning}
-                placeholder="e.g. 20"
-                onChange={(event) => setMaxDrawdownPercent(event.target.value)}
-                className="w-full bg-white/[0.03]"
-              />
-            </div>
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Min trades (optional)
-              </label>
-              <Input
-                value={minimumTrades}
-                disabled={isRunning}
-                placeholder="e.g. 10"
-                onChange={(event) => setMinimumTrades(event.target.value)}
-                className="w-full bg-white/[0.03]"
-              />
-            </div>
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Min profit factor (optional)
-              </label>
-              <Input
-                value={minimumProfitFactor}
-                disabled={isRunning}
-                placeholder="e.g. 1.2"
-                onChange={(event) => setMinimumProfitFactor(event.target.value)}
-                className="w-full bg-white/[0.03]"
-              />
-            </div>
+            <Disclosure title="Constraints (optional)">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="min-w-0 space-y-2">
+                  <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Max drawdown %
+                  </label>
+                  <Input
+                    value={maxDrawdownPercent}
+                    disabled={isRunning}
+                    placeholder="e.g. 20"
+                    onChange={(event) => setMaxDrawdownPercent(event.target.value)}
+                    className="w-full bg-white/[0.03]"
+                  />
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Min trades
+                  </label>
+                  <Input
+                    value={minimumTrades}
+                    disabled={isRunning}
+                    placeholder="e.g. 10"
+                    onChange={(event) => setMinimumTrades(event.target.value)}
+                    className="w-full bg-white/[0.03]"
+                  />
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Min profit factor
+                  </label>
+                  <Input
+                    value={minimumProfitFactor}
+                    disabled={isRunning}
+                    placeholder="e.g. 1.2"
+                    onChange={(event) => setMinimumProfitFactor(event.target.value)}
+                    className="w-full bg-white/[0.03]"
+                  />
+                </div>
+              </div>
+            </Disclosure>
           </div>
 
           {(validationErrors.length > 0 || error) && status !== 'running' && (
@@ -348,7 +355,7 @@ export function OptimizerPage() {
               </Button>
             )}
             <Badge variant="outline" className="w-fit text-[10px]">
-              Uses existing backtest pipeline + report metrics
+              Existing pipeline metrics
             </Badge>
           </div>
         </CardContent>
@@ -394,8 +401,11 @@ export function OptimizerPage() {
 
       {status === 'empty' && (
         <Card className="border-dashed">
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Search finished but no candidates passed the configured constraints.
+          <CardContent className="py-8 text-center">
+            <p className="text-sm font-medium">No candidates passed</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Relax constraints and run Random Search again.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -416,12 +426,33 @@ export function OptimizerPage() {
           </CardHeader>
           <CardContent className="min-w-0 space-y-4">
             {report.bestCandidate && (
-              <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-medium">Best candidate</p>
-                  <Badge variant="accent" className="text-[10px]">
-                    score {report.bestCandidate.score.toFixed(3)}
-                  </Badge>
+              <div className="space-y-3 rounded-lg border border-accent/30 bg-accent/5 p-4">
+                <p className="text-sm font-medium">Best candidate</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Score
+                    </p>
+                    <p className="font-mono text-lg font-semibold tabular-nums">
+                      {report.bestCandidate.score.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Net Profit
+                    </p>
+                    <p className="font-mono text-lg font-semibold tabular-nums">
+                      {formatCurrency(report.bestCandidate.report.summary.netProfit)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Max Drawdown
+                    </p>
+                    <p className="font-mono text-lg font-semibold tabular-nums text-danger">
+                      {formatPercent(-report.bestCandidate.report.summary.maxDrawdown * 100)}
+                    </p>
+                  </div>
                 </div>
                 <p className="font-mono text-xs text-muted-foreground">
                   fast={report.bestCandidate.parameters.fastPeriod} · slow=
@@ -449,15 +480,16 @@ export function OptimizerPage() {
                       {candidate.parameters.fastPeriod}/{candidate.parameters.slowPeriod}/
                       {candidate.parameters.rsiPeriod}
                     </span>
-                    <span className="font-mono text-xs">{candidate.score.toFixed(2)}</span>
+                    <span className="font-mono text-xs font-semibold">
+                      {candidate.score.toFixed(2)}
+                    </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
-                    <span>PF {candidate.report.summary.profitFactor.toFixed(2)}</span>
-                    <span>WR {(candidate.report.summary.winRate * 100).toFixed(1)}%</span>
-                    <span>DD {formatPercent(-candidate.report.summary.maxDrawdown * 100)}</span>
-                    <span>{candidate.report.summary.totalTrades} trades</span>
-                    <span className="col-span-2">
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <span className="font-mono">
                       Net {formatCurrency(candidate.report.summary.netProfit)}
+                    </span>
+                    <span className="font-mono text-muted-foreground">
+                      DD {formatPercent(-candidate.report.summary.maxDrawdown * 100)}
                     </span>
                   </div>
                 </button>
@@ -465,16 +497,13 @@ export function OptimizerPage() {
             </div>
 
             <div className="hidden min-w-0 overflow-x-auto md:block">
-              <table className="w-full min-w-[720px] text-left text-xs">
+              <table className="w-full min-w-[480px] text-left text-xs">
                 <thead>
                   <tr className="border-b border-border text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="px-3 py-2">Params</th>
                     <th className="px-3 py-2">Score</th>
-                    <th className="px-3 py-2">PF</th>
-                    <th className="px-3 py-2">Max DD</th>
-                    <th className="px-3 py-2">Win Rate</th>
-                    <th className="px-3 py-2">Trades</th>
                     <th className="px-3 py-2">Net Profit</th>
+                    <th className="px-3 py-2">Max DD</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -491,21 +520,12 @@ export function OptimizerPage() {
                         {candidate.parameters.fastPeriod}/{candidate.parameters.slowPeriod}/
                         {candidate.parameters.rsiPeriod}
                       </td>
-                      <td className="px-3 py-2 font-mono">{candidate.score.toFixed(3)}</td>
+                      <td className="px-3 py-2 font-mono">{candidate.score.toFixed(2)}</td>
                       <td className="px-3 py-2 font-mono">
-                        {candidate.report.summary.profitFactor.toFixed(2)}
+                        {formatCurrency(candidate.report.summary.netProfit)}
                       </td>
                       <td className="px-3 py-2 font-mono text-danger">
                         {formatPercent(-candidate.report.summary.maxDrawdown * 100)}
-                      </td>
-                      <td className="px-3 py-2 font-mono">
-                        {(candidate.report.summary.winRate * 100).toFixed(1)}%
-                      </td>
-                      <td className="px-3 py-2 font-mono">
-                        {candidate.report.summary.totalTrades}
-                      </td>
-                      <td className="px-3 py-2 font-mono">
-                        {formatCurrency(candidate.report.summary.netProfit)}
                       </td>
                     </tr>
                   ))}
@@ -514,18 +534,8 @@ export function OptimizerPage() {
             </div>
 
             {selected && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <Button
-                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
-                  onClick={() => {
-                    applyParameters(selected.parameters)
-                    navigate('/strategy-lab')
-                  }}
-                >
-                  Apply Parameters
-                </Button>
-                <Button
-                  variant="secondary"
                   className="min-h-11 w-full sm:min-h-9 sm:w-auto"
                   onClick={() => {
                     void restoreBacktest(selected.backtestId).then(() => {
@@ -536,16 +546,7 @@ export function OptimizerPage() {
                   View Details
                 </Button>
                 <Button
-                  variant="secondary"
-                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
-                  onClick={() => {
-                    navigate(`/research-analysis?session=${report.sessionId}`)
-                  }}
-                >
-                  View Analysis
-                </Button>
-                <Button
-                  variant="secondary"
+                  variant="outline"
                   className="min-h-11 w-full sm:min-h-9 sm:w-auto"
                   onClick={() => {
                     navigate(
@@ -555,9 +556,32 @@ export function OptimizerPage() {
                 >
                   Compare
                 </Button>
-                <p className="w-full text-[11px] text-muted-foreground">
-                  Apply Parameters updates Strategy Lab fields only — it does not save or rerun.
-                </p>
+                <Disclosure title="More actions" variant="plain" className="w-full sm:w-auto">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      variant="outline"
+                      className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                      onClick={() => {
+                        applyParameters(selected.parameters)
+                        navigate('/strategy-lab')
+                      }}
+                    >
+                      Apply Parameters
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                      onClick={() => {
+                        navigate(`/research-analysis?session=${report.sessionId}`)
+                      }}
+                    >
+                      View Analysis
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Apply Parameters updates Strategy Lab fields only.
+                  </p>
+                </Disclosure>
               </div>
             )}
           </CardContent>
@@ -572,25 +596,19 @@ export function OptimizerPage() {
               to={`/research-analysis?session=${report.sessionId}`}
               className="w-full sm:w-auto"
             >
-              <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
-                Open full analysis
+              <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">
+                View Details
               </Button>
             </Link>
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
             <p className="text-pretty">
-              Session <span className="font-mono text-foreground">{report.sessionId}</span> ·{' '}
-              {report.candidatesEvaluated} evaluated · {report.candidatesPassingConstraints} passed
-              constraints · objective <span className="text-foreground">{report.objective}</span>
+              <span className="font-mono text-foreground">{report.sessionId}</span>
+              {' · '}
+              {report.candidatesEvaluated} evaluated
+              {' · '}
+              {report.candidatesPassingConstraints} passed
             </p>
-            {report.bestCandidate && (
-              <p className="font-mono text-foreground">
-                Best score {report.bestCandidate.score.toFixed(3)} · PF{' '}
-                {report.bestCandidate.report.summary.profitFactor.toFixed(2)} · DD{' '}
-                {formatPercent(-report.bestCandidate.report.summary.maxDrawdown * 100)} · Net{' '}
-                {formatCurrency(report.bestCandidate.report.summary.netProfit)}
-              </p>
-            )}
             {archivedSession.isError && analysisSessionId && !liveReport && (
               <p className="text-danger">
                 {archivedSession.error instanceof Error

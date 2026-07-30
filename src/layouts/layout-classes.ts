@@ -45,3 +45,12 @@ export const TOP_NAV_ACTIONS =
 /** KPI grid spacing: roomier on phones/tablets; desktop gap unchanged. */
 export const KPI_GRID =
   'grid min-w-0 grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6 lg:gap-3 xl:grid-cols-11'
+
+/** Primary KPI row — Net Profit / PF / Max DD emphasis. */
+export const KPI_PRIMARY_GRID = 'grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3'
+
+/** Secondary KPI row — Win Rate / Trades / Avg RR. */
+export const KPI_SECONDARY_GRID = 'grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3'
+
+/** Meta KPI row — strategy labels and streaks. */
+export const KPI_META_GRID = 'grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5'

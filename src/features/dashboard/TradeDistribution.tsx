@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Disclosure } from '@/components/ui/disclosure'
 import type { DistributionItem } from '@/types'
 
 interface TradeDistributionProps {
@@ -60,7 +61,7 @@ function DonutChart({
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2">
+        <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
           {data.map((item) => (
             <div key={item.name} className="flex items-center gap-1.5 text-[10px]">
               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
@@ -81,34 +82,40 @@ export function TradeDistribution({
   timeframe,
   risk,
 }: TradeDistributionProps) {
-  const charts = [
+  const primary = [
     { data: winLoss, title: 'Win vs Loss' },
     { data: longShort, title: 'Long vs Short' },
-    { data: session, title: 'Session Distribution' },
-    { data: timeframe, title: 'Timeframe Distribution' },
-    { data: risk, title: 'Risk Distribution' },
+  ]
+  const secondary = [
+    { data: session, title: 'Session' },
+    { data: timeframe, title: 'Timeframe' },
+    { data: risk, title: 'Risk' },
   ]
 
   return (
     <motion.div
+      className="space-y-4"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.35 }}
     >
-      <h2 className="text-sm font-semibold mb-3">Trade Distribution</h2>
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-        {charts.map((chart, i) => (
-          <motion.div
-            key={chart.title}
-            className="min-w-0"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.4 + i * 0.05 }}
-          >
+      <h2 className="mb-1 text-sm font-semibold">Trade Distribution</h2>
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+        {primary.map((chart) => (
+          <div key={chart.title} className="min-w-0">
             <DonutChart data={chart.data} title={chart.title} />
-          </motion.div>
+          </div>
         ))}
       </div>
+      <Disclosure title="More distributions">
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
+          {secondary.map((chart) => (
+            <div key={chart.title} className="min-w-0">
+              <DonutChart data={chart.data} title={chart.title} />
+            </div>
+          ))}
+        </div>
+      </Disclosure>
     </motion.div>
   )
 }

@@ -1,5 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatPercent } from '@/lib/utils'
+import { Disclosure } from '@/components/ui/disclosure'
+import {
+  formatCurrencyAbsolute,
+  formatPercentUnsigned,
+  formatRatio,
+} from '@/lib/utils'
+import {
+  expectancyQuality,
+  profitFactorQuality,
+  qualityToTone,
+} from '@/lib/metric-semantics'
 import type { ResearchReport } from '@/core/research'
 import { MetricTile } from './MetricTile'
 
@@ -7,7 +17,7 @@ interface PerformanceMetricsProps {
   report: ResearchReport
 }
 
-/** Reuses existing BacktestReport / statistics fields only — no recalculation. */
+/** Secondary performance metrics — Max Drawdown lives in the Research Snapshot. */
 export function PerformanceMetrics({ report }: PerformanceMetricsProps) {
   const backtest = report.bestCandidate?.report
   const summary = backtest?.summary
@@ -18,50 +28,50 @@ export function PerformanceMetrics({ report }: PerformanceMetricsProps) {
     <Card hover={false}>
       <CardHeader>
         <CardTitle className="text-base">Performance Metrics</CardTitle>
-        <p className="text-pretty text-xs text-muted-foreground">
-          Existing report metrics only. Sharpe is shown when present on the report.
-        </p>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <MetricTile
             label="Profit Factor"
-            value={summary ? summary.profitFactor.toFixed(2) : '—'}
-            tone={summary ? 'default' : 'muted'}
-          />
-          <MetricTile
-            label="Sharpe Ratio"
-            value="Unavailable"
-            hint="Not stored on BacktestReport"
-            tone="muted"
-          />
-          <MetricTile
-            label="Max Drawdown"
-            value={
-              summary ? formatPercent(-summary.maxDrawdown * 100) : '—'
-            }
-            tone={summary ? 'negative' : 'muted'}
+            value={summary ? formatRatio(summary.profitFactor) : '—'}
+            tone={summary ? qualityToTone(profitFactorQuality(summary.profitFactor)) : 'muted'}
+            size="secondary"
           />
           <MetricTile
             label="Win Rate"
-            value={summary ? `${(summary.winRate * 100).toFixed(1)}%` : '—'}
+            value={summary ? formatPercentUnsigned(summary.winRate * 100) : '—'}
             tone={summary ? 'default' : 'muted'}
+            size="secondary"
           />
           <MetricTile
             label="Average Trade"
             value={
-              averageTrade === undefined ? '—' : averageTrade.toFixed(2)
+              averageTrade === undefined ? '—' : formatCurrencyAbsolute(averageTrade)
             }
-            hint={averageTrade === undefined ? undefined : 'statistics.averageTrade'}
             tone={averageTrade === undefined ? 'muted' : 'default'}
+            size="secondary"
           />
           <MetricTile
             label="Expectancy"
-            value={expectancy === undefined ? '—' : expectancy.toFixed(2)}
-            hint={expectancy === undefined ? undefined : 'summary.expectancy'}
-            tone={expectancy === undefined ? 'muted' : 'default'}
+            value={expectancy === undefined ? '—' : formatRatio(expectancy)}
+            tone={
+              expectancy === undefined
+                ? 'muted'
+                : qualityToTone(expectancyQuality(expectancy))
+            }
+            size="secondary"
           />
         </div>
+
+        <Disclosure title="Unavailable metrics" variant="plain">
+          <MetricTile
+            label="Sharpe"
+            value="Unavailable"
+            hint="Not stored on BacktestReport"
+            tone="muted"
+            size="meta"
+          />
+        </Disclosure>
       </CardContent>
     </Card>
   )

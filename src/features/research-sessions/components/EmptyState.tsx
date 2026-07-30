@@ -8,10 +8,8 @@ export function EmptyState() {
     <Card hover={false} className="border-dashed">
       <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
         <div className="space-y-1">
-          <p className="text-sm font-medium">No research sessions yet.</p>
-          <p className="mx-auto max-w-sm text-pretty text-xs text-muted-foreground">
-            Run Random Search in the Optimizer to save your first research session.
-          </p>
+          <p className="text-sm font-medium">No research sessions yet</p>
+          <p className="text-xs text-muted-foreground">Run Random Search in Optimizer.</p>
         </div>
         <Link to="/optimizer" className="w-full sm:w-auto">
           <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">

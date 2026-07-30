@@ -10,10 +10,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { ZoomIn, Calendar } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
 import type { EquityPoint } from '@/types'
 
@@ -33,8 +31,8 @@ const CustomTooltip = ({
   if (!active || !payload?.length) return null
 
   return (
-    <div className="rounded-lg border border-border bg-card-solid/95 backdrop-blur-xl p-3 shadow-xl">
-      <p className="text-[10px] text-muted-foreground mb-2">{label}</p>
+    <div className="rounded-lg border border-border bg-card-solid/95 p-3 shadow-xl backdrop-blur-xl">
+      <p className="mb-2 text-[10px] text-muted-foreground">{label}</p>
       {payload.map((entry) => (
         <div key={entry.name} className="flex items-center gap-2 text-xs">
           <div className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
@@ -56,36 +54,18 @@ export function EquityCurveChart({ data }: EquityCurveChartProps) {
       transition={{ duration: 0.5, delay: 0.2 }}
     >
       <Card glow className="col-span-full min-w-0">
-        <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <CardTitle className="text-base">Equity Curve</CardTitle>
-            <p className="mt-0.5 text-pretty text-xs text-muted-foreground">
-              Strategy performance vs Buy & Hold benchmark
-            </p>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Button
-              variant={showBuyHold ? 'secondary' : 'ghost'}
-              size="sm"
-              className="min-h-11 sm:min-h-8"
-              onClick={() => setShowBuyHold(!showBuyHold)}
-            >
-              Compare Buy & Hold
-            </Button>
-            <Button variant="ghost" size="sm" className="hidden min-h-11 sm:inline-flex sm:min-h-8">
-              <Calendar className="mr-1.5 h-3.5 w-3.5" />
-              Date Filter
-            </Button>
-            <Button variant="ghost" size="icon" className="hidden h-11 w-11 sm:inline-flex sm:h-8 sm:w-8">
-              <ZoomIn className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+        <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-base">Equity Curve</CardTitle>
+          <Button
+            variant={showBuyHold ? 'outline' : 'ghost'}
+            size="sm"
+            className="min-h-11 w-full sm:min-h-8 sm:w-auto"
+            onClick={() => setShowBuyHold(!showBuyHold)}
+          >
+            {showBuyHold ? 'Hide Buy & Hold' : 'Show Buy & Hold'}
+          </Button>
         </CardHeader>
-        <CardContent className="min-w-0 pb-4">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <Badge variant="accent">Strategy</Badge>
-            {showBuyHold && <Badge variant="outline">Buy & Hold</Badge>}
-          </div>
+        <CardContent className="min-w-0 pb-4 pt-2">
           <div className="h-[240px] w-full min-w-0 sm:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
@@ -120,7 +100,7 @@ export function EquityCurveChart({ data }: EquityCurveChartProps) {
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend
-                  wrapperStyle={{ fontSize: '11px', paddingTop: '12px' }}
+                  wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
                   iconType="circle"
                   iconSize={8}
                 />

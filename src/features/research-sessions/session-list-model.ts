@@ -21,6 +21,7 @@ export interface SessionListItem {
   bestScore: number | null
   netProfit: number | null
   roiPercent: number | null
+  maxDrawdown: number | null
   totalTrades: number | null
   status: string
   savedAt: number
@@ -33,6 +34,7 @@ export function toSessionListItem(entry: PersistedResearchSession): SessionListI
   const best = report.bestCandidate
   const capital = report.config.initialCapital
   const netProfit = best?.report.summary.netProfit ?? null
+  const maxDrawdown = best?.report.summary.maxDrawdown ?? null
   const roiPercent =
     netProfit === null || capital <= 0 ? null : (netProfit / capital) * 100
 
@@ -45,6 +47,7 @@ export function toSessionListItem(entry: PersistedResearchSession): SessionListI
     bestScore: best?.score ?? entry.session.progress.bestScore,
     netProfit,
     roiPercent,
+    maxDrawdown,
     totalTrades: best?.report.summary.totalTrades ?? null,
     status: report.status,
     savedAt: entry.savedAt,
