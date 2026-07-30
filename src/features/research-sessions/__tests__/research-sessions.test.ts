@@ -11,6 +11,8 @@ import {
   clearResearchSessionArchive,
   deleteResearchSession,
   ensureResearchSessionArchiveHydrated,
+  fetchResearchSession,
+  getResearchSession,
   isResearchSessionArchiveHydrated,
   listResearchSessionsBySavedAt,
   resetResearchSessionMemory,
@@ -445,6 +447,110 @@ describe('research sessions archive + query sync', () => {
 
     resetResearchSessionMemory()
     expect(listResearchSessionsBySavedAt()[0]?.session.id).toBe('rs-quota')
+  })
+
+  it('resolves Analysis lookup when storage object key diverges from session.id', async () => {
+    const session = makeSession({
+      id: 'rs-1785400000001',
+      symbol: 'BTCUSDT',
+      interval: '1h',
+      createdAt: 1_785_400_000_001,
+      score: 1.9,
+      netProfit: 120,
+    })
+    const entry = {
+      session,
+      report: buildResearchReport(session),
+      savedAt: 1_785_400_000_100,
+    }
+
+    // Simulate a durable bag whose JSON key is not session.id (list uses values,
+    // Analysis looks up by session.id — this mismatch caused "not found").
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        'orphan-storage-key': entry,
+        'rs-other': {
+          ...entry,
+          session: { ...makeSession({
+            id: 'rs-other',
+            symbol: 'ETHUSDT',
+            interval: '1h',
+            createdAt: 1,
+            score: 1.1,
+            netProfit: 10,
+          }) },
+          report: buildResearchReport(makeSession({
+            id: 'rs-other',
+            symbol: 'ETHUSDT',
+            interval: '1h',
+            createdAt: 1,
+            score: 1.1,
+            netProfit: 10,
+          })),
+          savedAt: 50,
+        },
+      }),
+    )
+
+    resetResearchSessionMemory()
+    expect(isResearchSessionArchiveHydrated()).toBe(false)
+
+    // Diagnostics-like aggregate signal: bag is non-empty.
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as object
+    expect(Object.keys(raw).length).toBeGreaterThan(0)
+
+    ensureResearchSessionArchiveHydrated()
+    expect(isResearchSessionArchiveHydrated()).toBe(true)
+
+    // List surfaces the canonical session id…
+    const listed = listResearchSessionsBySavedAt().map((item) => item.session.id)
+    expect(listed).toContain('rs-1785400000001')
+
+    // …and Analysis get/fetch must resolve that same id (not the orphan key).
+    expect(getResearchSession('rs-1785400000001')?.session.id).toBe('rs-1785400000001')
+    await expect(fetchResearchSession('rs-1785400000001')).resolves.toMatchObject({
+      session: { id: 'rs-1785400000001' },
+    })
+
+    // Durable bag is self-healed to canonical keys.
+    const healed = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as Record<string, unknown>
+    expect(healed).toHaveProperty('rs-1785400000001')
+    expect(healed).not.toHaveProperty('orphan-storage-key')
+  })
+
+  it('keeps get-by-id aligned with list after save → reload (Analysis round-trip)', async () => {
+    const session = makeSession({
+      id: 'rs-roundtrip',
+      symbol: 'SOLUSDT',
+      interval: '4h',
+      createdAt: 900,
+      score: 2.0,
+      netProfit: 220,
+    })
+    saveResearchSession({
+      session,
+      report: buildResearchReport(session),
+      savedAt: 901,
+    })
+    syncResearchSessionQueries()
+
+    resetResearchSessionMemory()
+    appQueryClient.clear()
+
+    ensureResearchSessionArchiveHydrated()
+    syncResearchSessionQueries()
+
+    const id = 'rs-roundtrip'
+    expect(listResearchSessionsBySavedAt()[0]?.session.id).toBe(id)
+    expect(getResearchSession(id)?.report.sessionId).toBe(id)
+    await expect(fetchResearchSession(id)).resolves.toMatchObject({
+      session: { id },
+      report: { sessionId: id },
+    })
+    expect(appQueryClient.getQueryData(researchSessionKeys.detail(id))).toMatchObject({
+      session: { id },
+    })
   })
 })
 

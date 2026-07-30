@@ -8,7 +8,6 @@ import {
   fetchResearchSessions,
   getLatestResearchSession,
   getResearchSession,
-  isResearchSessionArchiveHydrated,
   listResearchSessionsBySavedAt,
   removeResearchSession,
   type PersistedResearchSession,
@@ -52,18 +51,19 @@ export function syncResearchSessionQueries(
 }
 
 /**
- * Gates UI until the research archive has been hydrated from localStorage.
- * Prevents a flash of “0 sessions archived” before restore finishes.
+ * Gates UI until the research archive has been hydrated from localStorage
+ * and TanStack Query caches have been synced from that archive.
+ * Always syncs on mount — even when another caller (e.g. diagnostics) already
+ * hydrated — so Analysis/Sessions/Compare share one source of truth.
  */
 export function useResearchSessionArchiveReady(): boolean {
-  const [ready, setReady] = useState(() => isResearchSessionArchiveHydrated())
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    if (ready) return
     ensureResearchSessionArchiveHydrated()
     syncResearchSessionQueries()
     setReady(true)
-  }, [ready])
+  }, [])
 
   return ready
 }
