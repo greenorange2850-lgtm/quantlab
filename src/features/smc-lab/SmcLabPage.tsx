@@ -55,6 +55,7 @@ import { SmcCursorControls, type SmcPlaySpeed } from './components/SmcCursorCont
 import { SmcEventInspector } from './components/SmcEventInspector'
 import { SmcEventList, type SmcEventFilter } from './components/SmcEventList'
 import {
+  layersForDensityPreset,
   loadSmcLabPreferences,
   saveSmcLabPreferences,
   saveSmcNamedConfig,
@@ -73,6 +74,7 @@ import {
   type SmcLabExportPayload,
   type SmcManualAnnotation,
   type SmcReviewRecord,
+  type SmcSavedLabConfig,
   type SmcSmartVisibilityPresetPref,
   type SmcVisibilityModePref,
   type SmcWrongTag,
@@ -89,7 +91,10 @@ import {
 import { SmcGoldenChartCompare, SmcValidationDashboard } from './validation'
 import { buildLabVisibilityPipelineDiagnostics } from './visibility-pipeline'
 import { projectSwingChartMarkers } from './dow-label'
-import type { SmcSavedLabConfig } from './persistence/types'
+import {
+  mergeDowProtectedSwings,
+  projectDowChartVisibility,
+} from './dow-visibility'
 
 const CHART_WINDOW = 72
 const FOCUS_PAD = 16
@@ -319,31 +324,81 @@ export function SmcLabPage() {
     )
   }, [selectedZoneId, lifecycleProjection])
 
+  /**
+   * Dow chart visibility — density + intelligence gates that protect external Dow
+   * labels under Minimal/Balanced. Toggle only affects suffix formatting later.
+   * Does not re-run detection or change the Dow algorithm / id join.
+   */
+  const dowChartVisibility = useMemo(
+    () =>
+      projectDowChartVisibility({
+        classifiedSwings: progressive.classifiedSwings,
+        swingClassification: dowTheoryView.swingClassification,
+        bySwingId: dowTheoryView.bySwingId,
+        densityPreset,
+        visibilityMode: visibilityMode as SmcVisibilityMode,
+        intelligence: detection.intelligence,
+        structureEvents: lifecycleProjection.structureEvents,
+        selectedEventId,
+        visibleIndex,
+        showDowTheoryLabels: layers.dowTheoryLabels ?? true,
+      }),
+    [
+      progressive.classifiedSwings,
+      dowTheoryView.swingClassification,
+      dowTheoryView.bySwingId,
+      densityPreset,
+      visibilityMode,
+      detection.intelligence,
+      lifecycleProjection.structureEvents,
+      selectedEventId,
+      visibleIndex,
+      layers.dowTheoryLabels,
+    ],
+  )
+
   /** Structure events filtered by smart visibility relevance (chart only). */
   const chartStructure = useMemo(() => {
-    if (smartVisibilityPreset === 'debug') {
-      return {
-        swings: progressiveVisible.swings,
-        classifiedSwings: progressiveVisible.classifiedSwings,
-        bosEvents: progressiveVisible.bosEvents,
-        chochEvents: progressiveVisible.chochEvents,
-        displacementEvents: progressiveVisible.displacementEvents,
+    const base = (() => {
+      if (smartVisibilityPreset === 'debug') {
+        return {
+          swings: progressiveVisible.swings,
+          classifiedSwings: progressiveVisible.classifiedSwings,
+          bosEvents: progressiveVisible.bosEvents,
+          chochEvents: progressiveVisible.chochEvents,
+          displacementEvents: progressiveVisible.displacementEvents,
+        }
       }
-    }
-    const visibleIds = new Set(
-      lifecycleProjection.structureEvents.filter((s) => s.visible).map((s) => s.eventId),
-    )
-    // Setup focus / active-only may hide recent context — keep layer toggles as secondary.
-    const keep = <T extends { id: string }>(events: T[]) =>
-      events.filter((e) => visibleIds.has(e.id))
+      const visibleIds = new Set(
+        lifecycleProjection.structureEvents.filter((s) => s.visible).map((s) => s.eventId),
+      )
+      // Setup focus / active-only may hide recent context — keep layer toggles as secondary.
+      const keep = <T extends { id: string }>(events: T[]) =>
+        events.filter((e) => visibleIds.has(e.id))
+      return {
+        swings: keep(progressiveVisible.swings),
+        classifiedSwings: keep(progressiveVisible.classifiedSwings),
+        bosEvents: keep(progressiveVisible.bosEvents),
+        chochEvents: keep(progressiveVisible.chochEvents),
+        displacementEvents: keep(progressiveVisible.displacementEvents),
+      }
+    })()
+
+    // Re-introduce Dow-protected swings stripped by ranking/lifecycle so the
+    // Dow labels toggle is not silently dependent on Debug mode.
     return {
-      swings: keep(progressiveVisible.swings),
-      classifiedSwings: keep(progressiveVisible.classifiedSwings),
-      bosEvents: keep(progressiveVisible.bosEvents),
-      chochEvents: keep(progressiveVisible.chochEvents),
-      displacementEvents: keep(progressiveVisible.displacementEvents),
+      ...base,
+      classifiedSwings: mergeDowProtectedSwings(
+        base.classifiedSwings,
+        dowChartVisibility.visibleSwings,
+      ),
     }
-  }, [progressiveVisible, lifecycleProjection.structureEvents, smartVisibilityPreset])
+  }, [
+    progressiveVisible,
+    lifecycleProjection.structureEvents,
+    smartVisibilityPreset,
+    dowChartVisibility.visibleSwings,
+  ])
 
   /** Rendered swing marker dump for Dow join proof / diagnostics (pre-density). */
   const chartDowMarkers = useMemo(() => {
@@ -604,6 +659,18 @@ export function SmcLabPage() {
       return withSmcVisibilityMode(prev, mode as SmcVisibilityMode)
     })
   }, [])
+
+  /** Density / Debug shortcuts for Dow label empty-state notice (no re-detect). */
+  const showStructureDowView = useCallback(() => {
+    setDensityPreset('structure')
+    setLayers(layersForDensityPreset('structure'))
+  }, [])
+
+  const showDebugDowView = useCallback(() => {
+    setDensityPreset('full-debug')
+    setLayers(layersForDensityPreset('full-debug'))
+    handleVisibilityMode('debug')
+  }, [handleVisibilityMode])
 
   const handleSmartVisibilityPreset = useCallback(
     (preset: SmcSmartVisibilityPresetPref) => {
@@ -1182,6 +1249,20 @@ export function SmcLabPage() {
         dowBySwingId={dowTheoryView.bySwingId ?? detection.dowTheory?.bySwingId ?? {}}
       />
 
+      {dowChartVisibility.notice ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+          <p>{dowChartVisibility.notice.message}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="secondary" onClick={showStructureDowView}>
+              Show Structure view
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={showDebugDowView}>
+              Show Debug view
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <Card hover={false}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Dow Theory</CardTitle>
@@ -1207,17 +1288,21 @@ export function SmcLabPage() {
           </span>
           <span className="w-full font-mono text-[10px] text-muted-foreground">
             Chart markers:{' '}
-            {chartDowMarkers.length === 0
+            {chartDowMarkers.filter((m) => m.dowLabel != null).length === 0
               ? '—'
               : chartDowMarkers
                   .filter((m) => m.dowLabel != null)
                   .slice(0, 8)
                   .map((m) => m.text)
-                  .join(' · ') ||
-                chartDowMarkers
-                  .slice(0, 4)
-                  .map((m) => m.text)
                   .join(' · ')}
+          </span>
+          <span className="w-full font-mono text-[10px] text-muted-foreground">
+            Dow visibility · classified {dowChartVisibility.diagnostics.classifiedDowCount} ·
+            density {dowChartVisibility.diagnostics.densityEligibleDowCount} · ranking{' '}
+            {dowChartVisibility.diagnostics.rankingVisibleDowCount} · chart{' '}
+            {dowChartVisibility.diagnostics.chartRenderedDowCount} · hidden density{' '}
+            {dowChartVisibility.diagnostics.hiddenByDensity} · hidden ranking{' '}
+            {dowChartVisibility.diagnostics.hiddenByRanking}
           </span>
         </CardContent>
       </Card>
