@@ -117,6 +117,15 @@ const DEFAULT_PREFS: SmcLabPreferences = {
   layerToggles: { ...DEFAULT_SMC_LAYER_TOGGLES },
   densityPreset: 'structure',
   visibilityMode: 'balanced',
+  smartVisibilityPreset: 'balanced',
+  zoneLifecycle: {
+    showActive: true,
+    showTouched: true,
+    showMitigatedFilled: false,
+    showInvalidated: false,
+    extendActiveZonesRight: true,
+    fadeOldActiveZones: true,
+  },
   playSpeed: 1,
   compareProfileId: null,
 }
@@ -164,6 +173,16 @@ export function loadSmcLabPreferences(): SmcLabPreferences {
       activeProfileId: parsed.activeProfileId ?? 'quantlab-default',
       densityPreset: parsed.densityPreset ?? 'structure',
       visibilityMode: parsed.visibilityMode ?? 'balanced',
+      smartVisibilityPreset: parsed.smartVisibilityPreset ?? 'balanced',
+      zoneLifecycle: {
+        showActive: true,
+        showTouched: true,
+        showMitigatedFilled: false,
+        showInvalidated: false,
+        extendActiveZonesRight: true,
+        fadeOldActiveZones: true,
+        ...parsed.zoneLifecycle,
+      },
       compareProfileId: parsed.compareProfileId ?? null,
       detectorConfig: parsed.detectorConfig
         ? cloneSmcDetectorConfig(parsed.detectorConfig)
