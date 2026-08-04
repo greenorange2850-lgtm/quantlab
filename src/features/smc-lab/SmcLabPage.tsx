@@ -107,14 +107,30 @@ function findEvent(detection: SmcDetectionResult, id: string | null): SmcEvent |
   return flattenDetectionEvents(detection).find((e) => e.id === id) ?? null
 }
 
-function eventPrice(event: SmcEvent): number {
-  if ('price' in event && typeof event.price === 'number') return event.price
-  if ('closePrice' in event && typeof event.closePrice === 'number') return event.closePrice
-  if ('close' in event && typeof event.close === 'number') return event.close
-  if ('level' in event && typeof event.level === 'number') return event.level
+function fingerprintPrice(event: SmcEvent, candles: readonly { close: number }[]): number {
+  if ('price' in event && typeof event.price === 'number' && Number.isFinite(event.price)) {
+    return event.price
+  }
+  if (
+    'closePrice' in event &&
+    typeof event.closePrice === 'number' &&
+    Number.isFinite(event.closePrice)
+  ) {
+    return event.closePrice
+  }
+  if ('close' in event && typeof event.close === 'number' && Number.isFinite(event.close)) {
+    return event.close
+  }
+  if ('level' in event && typeof event.level === 'number' && Number.isFinite(event.level)) {
+    return event.level
+  }
+  if ('sweptLevel' in event && typeof event.sweptLevel === 'number') return event.sweptLevel
   if ('midpoint' in event && typeof event.midpoint === 'number') return event.midpoint
   if ('zoneHigh' in event && typeof event.zoneHigh === 'number') return event.zoneHigh
-  return 0
+  const close = candles[event.candleIndex]?.close
+  if (close != null && Number.isFinite(close)) return close
+  // Never invent 0 — use NaN so fingerprints stay honest when data is absent.
+  return Number.NaN
 }
 
 /**
@@ -394,7 +410,7 @@ export function SmcLabPage() {
       kind: selectedEvent.kind,
       candleIndex: selectedEvent.candleIndex,
       timestamp: selectedEvent.timestamp,
-      price: eventPrice(selectedEvent),
+      price: fingerprintPrice(selectedEvent, candles),
       brokenSwingId:
         'brokenSwingId' in selectedEvent ? selectedEvent.brokenSwingId : undefined,
       profileId: activeProfileId,
@@ -724,6 +740,7 @@ export function SmcLabPage() {
       {/* 6. Event List */}
       <SmcEventList
         detection={progressive}
+        candles={candles}
         reviewsByEventId={reviewsByEventId}
         filter={eventFilter}
         selectedEventId={selectedEventId}
@@ -781,8 +798,11 @@ export function SmcLabPage() {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             <div>
-              <p className="text-muted-foreground">Detected</p>
+              <p className="text-muted-foreground">Detected (unique reviewable)</p>
               <p className="font-mono">{summary.overall.detected}</p>
+              <p className="text-[10px] text-muted-foreground">
+                Lifecycle updates excluded: {summary.lifecycleUpdateCount}
+              </p>
             </div>
             <div>
               <p className="text-muted-foreground">Reviewed</p>
@@ -868,19 +888,43 @@ export function SmcLabPage() {
         </div>
       </Disclosure>
 
-      {import.meta.env.DEV && invariants ? (
+      {invariants ? (
         <Card hover={false} className={invariants.ok ? '' : 'border-danger/40'}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Invariant report (dev)</CardTitle>
+            <CardTitle className="text-sm">Invariant report</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
-            <p>Invalid bullish BOS: {invariants.invalidBullishBosCount}</p>
-            <p>Invalid bearish BOS: {invariants.invalidBearishBosCount}</p>
-            <p>BOS before confirmation: {invariants.bosBeforeConfirmationCount}</p>
-            <p>CHoCH without prior structure: {invariants.chochWithoutPriorStructureCount}</p>
-            <p>FVG invalid geometry: {invariants.fvgInvalidGeometryCount}</p>
-            <p>Dependency missing: {invariants.dependencyReferenceMissingCount}</p>
-            <p>Complete: {detectionComplete && invariants.ok ? 'yes' : 'no'}</p>
+          <CardContent className="space-y-2 text-[11px]">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <p>Invalid bullish BOS: {invariants.invalidBullishBosCount}</p>
+              <p>Invalid bearish BOS: {invariants.invalidBearishBosCount}</p>
+              <p>BOS before confirmation: {invariants.bosBeforeConfirmationCount}</p>
+              <p>Duplicate break of same swing: {invariants.repeatedSwingBreakCount}</p>
+              <p>BOS+CHoCH same swing: {invariants.duplicateBreakOfSameSwingCount}</p>
+              <p>CHoCH without opposing structure: {invariants.chochWithoutPriorStructureCount}</p>
+              <p>Invalid bullish CHoCH: {invariants.invalidBullishChochCount}</p>
+              <p>Invalid bearish CHoCH: {invariants.invalidBearishChochCount}</p>
+              <p>Invalid FVG geometry: {invariants.fvgInvalidGeometryCount}</p>
+              <p>Sweep without penetration: {invariants.sweepWithoutPenetrationCount}</p>
+              <p>Sweep without close reclaim: {invariants.sweepWithoutCloseReclaimCount}</p>
+              <p>Repeated consumed-level sweep: {invariants.repeatedConsumedLevelSweepCount}</p>
+              <p>Order Block after source break: {invariants.orderBlockAfterSourceBreakCount}</p>
+              <p>Missing dependency reference: {invariants.dependencyReferenceMissingCount}</p>
+              <p>Event timestamp mismatch: {invariants.eventTimestampMismatchCount}</p>
+              <p>Artificial zero display value: {invariants.artificialZeroDisplayValueCount}</p>
+              <p className="font-medium">
+                Status:{' '}
+                {detectionComplete && invariants.ok
+                  ? 'COMPLETE (0 failures)'
+                  : 'FAILED'}
+              </p>
+            </div>
+            {!invariants.ok && detection.diagnostics.invariantDetails?.length ? (
+              <ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-4 text-danger">
+                {detection.diagnostics.invariantDetails.slice(0, 20).map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -951,33 +995,81 @@ export function SmcLabPage() {
 
       {/* 10–11. Diagnostics + Import/Export */}
       <Disclosure title="Diagnostics">
-        <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
-          <p>Detector {detection.diagnostics.detectorVersion}</p>
-          <p>Status {detection.diagnostics.detectionStatus}</p>
-          <p>Structure {detection.structureState}</p>
-          <p>Candles {detection.diagnostics.candleCount}</p>
-          <p>Visible through {visibleIndex}</p>
-          <p>Profile {activeProfileId}</p>
-          <p>
-            Internal / External {detection.diagnostics.internalSwings} /{' '}
-            {detection.diagnostics.externalSwings}
-          </p>
-          <p>Valid BOS {detection.diagnostics.validBosEvents}</p>
-          <p>Valid CHoCH {detection.diagnostics.validChochEvents}</p>
-          <p>Displacement {detection.diagnostics.displacementEvents}</p>
-          <p>FVG {detection.diagnostics.fvgEvents}</p>
-          <p>Equal levels {detection.diagnostics.equalLevelEvents}</p>
-          <p>Sweeps {detection.diagnostics.liquiditySweepEvents}</p>
-          <p>Order Blocks {detection.diagnostics.orderBlockEvents}</p>
-          <p>Duration {detection.diagnostics.computationDurationMs.toFixed(1)} ms</p>
-          <p>
-            Window {windowStart}–{windowStart + Math.max(0, windowCandles.length - 1)}
-          </p>
-          {detection.diagnostics.moduleTimings.map((t) => (
-            <p key={t.module}>
-              {t.module}: {t.status} ({t.durationMs.toFixed(1)} ms)
-            </p>
-          ))}
+        <div className="space-y-3 text-[11px]">
+          {(() => {
+            const s = detection.diagnostics.summary
+            const b = detection.diagnostics.structureBreakCounts
+            const sweep = detection.diagnostics.liquiditySweepDiagnostics
+            const breakdown = detection.diagnostics.eventCountBreakdown
+            return (
+              <>
+                <div className="rounded-lg border border-border/60 bg-white/[0.02] p-3 font-mono leading-relaxed">
+                  <p>{s.candleCount} candles</p>
+                  <p className="mt-2">Unique reviewable events: {s.uniqueReviewableEvents}</p>
+                  <p>Lifecycle updates: {s.lifecycleUpdates}</p>
+                  <p>
+                    Visible events:{' '}
+                    {windowCandles.length > 0
+                      ? flattenDetectionEvents(progressive).filter(
+                          (e) =>
+                            e.candleIndex >= windowStart &&
+                            e.candleIndex < windowStart + windowCandles.length,
+                        ).length
+                      : 0}
+                  </p>
+                  <p>Total events: {s.totalEvents}</p>
+                  <p className="mt-2">External swings: {s.externalSwings}</p>
+                  <p>Internal swings: {s.internalSwings}</p>
+                  <p className="mt-2">External BOS: {s.externalBos}</p>
+                  <p>Internal BOS: {s.internalBos}</p>
+                  <p>External CHoCH: {s.externalChoch}</p>
+                  <p>Internal CHoCH: {s.internalChoch}</p>
+                  <p className="mt-2">Liquidity levels: {s.liquidityLevels}</p>
+                  <p>Raw sweep candidates: {s.rawSweepCandidates}</p>
+                  <p>Unique valid sweeps: {s.uniqueValidSweeps}</p>
+                  <p>Duplicates suppressed: {s.duplicateSweepsSuppressed}</p>
+                  <p>Consumed attempts ignored: {s.consumedAttemptsIgnored}</p>
+                  <p className="mt-2">
+                    Invariants: {s.invariantFailures} failure
+                    {s.invariantFailures === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <p>Detector {detection.diagnostics.detectorVersion}</p>
+                  <p>Status {detection.diagnostics.detectionStatus}</p>
+                  <p>Structure {detection.structureState}</p>
+                  <p>Profile {activeProfileId}</p>
+                  <p>Internal Bullish BOS {b.internalBullishBos}</p>
+                  <p>Internal Bearish BOS {b.internalBearishBos}</p>
+                  <p>External Bullish BOS {b.externalBullishBos}</p>
+                  <p>External Bearish BOS {b.externalBearishBos}</p>
+                  <p>Internal Bullish CHoCH {b.internalBullishChoch}</p>
+                  <p>Internal Bearish CHoCH {b.internalBearishChoch}</p>
+                  <p>External Bullish CHoCH {b.externalBullishChoch}</p>
+                  <p>External Bearish CHoCH {b.externalBearishChoch}</p>
+                  <p>FVG created {breakdown.fvgCreated}</p>
+                  <p>FVG touched {breakdown.fvgTouched}</p>
+                  <p>FVG half filled {breakdown.fvgHalfFilled}</p>
+                  <p>FVG fully filled {breakdown.fvgFullyFilled}</p>
+                  <p>FVG invalidated {breakdown.fvgInvalidated}</p>
+                  <p>Unique FVG zones {breakdown.uniqueFvgZones}</p>
+                  <p>OB created {breakdown.orderBlockCreated}</p>
+                  <p>OB touched {breakdown.orderBlockTouched}</p>
+                  <p>OB mitigated {breakdown.orderBlockMitigated}</p>
+                  <p>OB invalidated {breakdown.orderBlockInvalidated}</p>
+                  <p>Unique OB zones {breakdown.uniqueOrderBlockZones}</p>
+                  <p>Canonical levels {sweep.canonicalLevelsConsidered}</p>
+                  <p>Duration {detection.diagnostics.computationDurationMs.toFixed(1)} ms</p>
+                </div>
+                <p className="text-muted-foreground">{breakdown.explanation}</p>
+                {detection.diagnostics.moduleTimings.map((t) => (
+                  <p key={t.module}>
+                    {t.module}: {t.status} ({t.durationMs.toFixed(1)} ms)
+                  </p>
+                ))}
+              </>
+            )
+          })()}
         </div>
       </Disclosure>
 

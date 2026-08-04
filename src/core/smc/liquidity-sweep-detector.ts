@@ -4,15 +4,17 @@ import type {
   SmcDisplacementEvent,
   SmcEqualLevelEvent,
   SmcLiquiditySweepConfig,
+  SmcLiquiditySweepDiagnostics,
   SmcLiquiditySweepEvent,
   SmcSwingEvent,
 } from './types'
 
 export interface LiquiditySweepDetectionInternal {
   events: SmcLiquiditySweepEvent[]
+  diagnostics: SmcLiquiditySweepDiagnostics
 }
 
-interface SweepLevel {
+interface MemberLevel {
   id: string
   price: number
   confirmedAtIndex: number
@@ -21,14 +23,36 @@ interface SweepLevel {
   equalLevelId: string | null
 }
 
-function collectLevels(
+interface CanonicalLevel {
+  id: string
+  side: 'HIGH' | 'LOW'
+  price: number
+  confirmedAtIndex: number
+  candleIndex: number
+  scope: 'INTERNAL' | 'EXTERNAL' | 'BOTH'
+  memberIds: string[]
+  equalLevelId: string | null
+}
+
+function emptyDiagnostics(): SmcLiquiditySweepDiagnostics {
+  return {
+    rawSweepCandidates: 0,
+    canonicalLevelsConsidered: 0,
+    duplicateSweepsSuppressed: 0,
+    consumedLevelAttemptsIgnored: 0,
+    validUniqueSweeps: 0,
+  }
+}
+
+function collectMembers(
   base: readonly SmcSwingEvent[],
   classified: readonly SmcClassifiedSwingEvent[],
   equalLevels: readonly SmcEqualLevelEvent[],
   config: SmcLiquiditySweepConfig,
   side: 'HIGH' | 'LOW',
-): SweepLevel[] {
-  const levels: SweepLevel[] = []
+): MemberLevel[] {
+  const members: MemberLevel[] = []
+  const seen = new Set<string>()
 
   if (classified.length > 0) {
     for (const s of classified) {
@@ -37,7 +61,9 @@ function collectLevels(
       if (side === 'LOW' && isHigh) continue
       if (config.structureScope === 'INTERNAL' && s.classification !== 'INTERNAL') continue
       if (config.structureScope === 'EXTERNAL' && s.classification !== 'EXTERNAL') continue
-      levels.push({
+      if (seen.has(s.id)) continue
+      seen.add(s.id)
+      members.push({
         id: s.id,
         price: s.price,
         confirmedAtIndex: s.confirmedAtIndex,
@@ -50,7 +76,9 @@ function collectLevels(
     for (const s of base) {
       if (side === 'HIGH' && s.kind !== 'SWING_HIGH') continue
       if (side === 'LOW' && s.kind !== 'SWING_LOW') continue
-      levels.push({
+      if (seen.has(s.id)) continue
+      seen.add(s.id)
+      members.push({
         id: s.id,
         price: s.price,
         confirmedAtIndex: s.confirmedAtIndex,
@@ -61,26 +89,83 @@ function collectLevels(
     }
   }
 
+  // Equal-level groups contribute their members into the same canonical merge,
+  // but do not create a separate parallel level that double-counts the same liquidity.
   for (const eq of equalLevels) {
     if (side === 'HIGH' && eq.kind !== 'EQUAL_HIGHS') continue
     if (side === 'LOW' && eq.kind !== 'EQUAL_LOWS') continue
-    levels.push({
-      id: eq.id,
-      price: eq.level,
-      confirmedAtIndex: eq.candleIndex,
-      candleIndex: eq.candleIndex,
-      scope: config.structureScope,
-      equalLevelId: eq.id,
-    })
+    for (const memberId of eq.memberSwingIds) {
+      if (seen.has(memberId)) {
+        const existing = members.find((m) => m.id === memberId)
+        if (existing && !existing.equalLevelId) existing.equalLevelId = eq.id
+        continue
+      }
+      // Member may be classified under a different id; seed from equal-level price.
+      seen.add(memberId)
+      members.push({
+        id: memberId,
+        price: eq.level,
+        confirmedAtIndex: eq.candleIndex,
+        candleIndex: eq.candleIndex,
+        scope: config.structureScope,
+        equalLevelId: eq.id,
+      })
+    }
   }
 
-  return levels
+  return members
 }
 
 /**
- * Liquidity sweep detector.
+ * Merge nearby equal/swing levels within tolerance into one canonical liquidity group.
+ */
+export function buildCanonicalLiquidityLevels(
+  members: readonly MemberLevel[],
+  side: 'HIGH' | 'LOW',
+  tolerancePercent: number,
+): CanonicalLevel[] {
+  const sorted = [...members].sort((a, b) => a.price - b.price || a.candleIndex - b.candleIndex)
+  const groups: CanonicalLevel[] = []
+  const used = new Set<string>()
+
+  for (const seed of sorted) {
+    if (used.has(seed.id)) continue
+    const tol = Math.abs(seed.price) * (tolerancePercent / 100)
+    const cluster = sorted.filter(
+      (m) => !used.has(m.id) && Math.abs(m.price - seed.price) <= tol + 1e-12,
+    )
+    for (const m of cluster) used.add(m.id)
+
+    const prices = cluster.map((m) => m.price)
+    const level =
+      prices.reduce((a, b) => a + b, 0) / Math.max(1, prices.length)
+    const latest = cluster.reduce((a, b) => (b.candleIndex > a.candleIndex ? b : a))
+    const confirm = Math.max(...cluster.map((m) => m.confirmedAtIndex))
+    const hasExternal = cluster.some((m) => m.scope === 'EXTERNAL')
+    const hasInternal = cluster.some((m) => m.scope === 'INTERNAL')
+    const scope: CanonicalLevel['scope'] =
+      hasExternal && hasInternal ? 'BOTH' : hasExternal ? 'EXTERNAL' : hasInternal ? 'INTERNAL' : 'BOTH'
+
+    groups.push({
+      id: `liq-${side === 'HIGH' ? 'h' : 'l'}-${cluster.map((m) => m.id).sort().join('+').slice(0, 120)}`,
+      side,
+      price: level,
+      confirmedAtIndex: confirm,
+      candleIndex: latest.candleIndex,
+      scope,
+      memberIds: cluster.map((m) => m.id),
+      equalLevelId: cluster.find((m) => m.equalLevelId)?.equalLevelId ?? null,
+    })
+  }
+
+  return groups
+}
+
+/**
+ * Liquidity sweep detector with canonical-level deduplication.
  * Buy-side: trade above level + close back below (not a close-through break).
  * Sell-side: trade below level + close back above.
+ * One canonical level → one successful sweep by default.
  */
 export function detectLiquiditySweeps(
   candles: readonly Candle[],
@@ -91,151 +176,172 @@ export function detectLiquiditySweeps(
   config: SmcLiquiditySweepConfig,
   visibleThroughIndex: number,
 ): LiquiditySweepDetectionInternal {
+  const diagnostics = emptyDiagnostics()
   if (!config.enabled || candles.length === 0) {
-    return { events: [] }
+    return { events: [], diagnostics }
   }
 
   const last = Math.min(visibleThroughIndex, candles.length - 1)
   const events: SmcLiquiditySweepEvent[] = []
-  const swept = new Set<string>()
+  const consumed = new Set<string>()
 
-  const buyLevels = collectLevels(baseSwings, classified, equalLevels, config, 'HIGH')
-  const sellLevels = collectLevels(baseSwings, classified, equalLevels, config, 'LOW')
+  const buyMembers = collectMembers(baseSwings, classified, equalLevels, config, 'HIGH')
+  const sellMembers = collectMembers(baseSwings, classified, equalLevels, config, 'LOW')
+  const buyLevels = buildCanonicalLiquidityLevels(
+    buyMembers,
+    'HIGH',
+    config.equalLevelTolerancePercent,
+  )
+  const sellLevels = buildCanonicalLiquidityLevels(
+    sellMembers,
+    'LOW',
+    config.equalLevelTolerancePercent,
+  )
+  diagnostics.canonicalLevelsConsidered = buyLevels.length + sellLevels.length
 
-  for (let i = 0; i <= last; i++) {
-    const candle = candles[i]!
+  const trySide = (
+    levels: readonly CanonicalLevel[],
+    side: 'HIGH' | 'LOW',
+  ) => {
+    for (let i = 0; i <= last; i++) {
+      const candle = candles[i]!
+      // One candle → one sweep per side against the best matching unconsumed level.
+      let best: {
+        level: CanonicalLevel
+        penetration: number
+        penetrationPercent: number
+        closeBack: number
+        closeBackPercent: number
+        wickExtreme: number
+      } | null = null
+      let sameCandleDuplicates = 0
 
-    for (const level of buyLevels) {
-      if (level.confirmedAtIndex > i) continue
-      if (level.candleIndex >= i) continue
-      if (swept.has(level.id)) continue
+      for (const level of levels) {
+        if (level.confirmedAtIndex > i) continue
+        if (level.candleIndex >= i) continue
 
-      const tradedAbove = candle.high > level.price
-      const closeThrough = candle.close > level.price
-      // Normal close-through break is NOT a sweep.
-      if (!tradedAbove || closeThrough) continue
+        const traded =
+          side === 'HIGH' ? candle.high > level.price : candle.low < level.price
+        const closeThrough =
+          side === 'HIGH' ? candle.close > level.price : candle.close < level.price
+        if (!traded || closeThrough) continue
 
-      const penetration = candle.high - level.price
-      const penetrationPercent =
-        level.price === 0 ? 0 : (penetration / Math.abs(level.price)) * 100
-      if (penetrationPercent + 1e-12 < config.minimumPenetrationPercent) continue
+        diagnostics.rawSweepCandidates += 1
 
-      const closeBack = level.price - candle.close
-      const closeBackPercent =
-        level.price === 0 ? 0 : (closeBack / Math.abs(level.price)) * 100
-      if (closeBackPercent > config.maximumCloseDistancePercent + 1e-12) continue
+        if (consumed.has(level.id) && !config.allowRepeatedSweepsOfSameLevel) {
+          diagnostics.consumedLevelAttemptsIgnored += 1
+          continue
+        }
 
-      if (config.requireSameCandleRejection && !(candle.close < level.price)) continue
+        const wickExtreme = side === 'HIGH' ? candle.high : candle.low
+        const penetration =
+          side === 'HIGH' ? wickExtreme - level.price : level.price - wickExtreme
+        const penetrationPercent =
+          level.price === 0 ? 0 : (penetration / Math.abs(level.price)) * 100
+        if (penetrationPercent + 1e-12 < config.minimumPenetrationPercent) continue
+
+        const closeBack =
+          side === 'HIGH' ? level.price - candle.close : candle.close - level.price
+        const closeBackPercent =
+          level.price === 0 ? 0 : (closeBack / Math.abs(level.price)) * 100
+        if (closeBackPercent > config.maximumCloseDistancePercent + 1e-12) continue
+
+        if (config.requireSameCandleRejection) {
+          if (side === 'HIGH' && !(candle.close < level.price)) continue
+          if (side === 'LOW' && !(candle.close > level.price)) continue
+        }
+
+        if (config.requireDisplacementAfterSweep) {
+          const end = Math.min(last, i + config.displacementConfirmationBars)
+          const needKind =
+            side === 'HIGH' ? 'BEARISH_DISPLACEMENT' : 'BULLISH_DISPLACEMENT'
+          const disp = displacements.find(
+            (d) => d.kind === needKind && d.candleIndex > i && d.candleIndex <= end,
+          )
+          if (!disp) continue
+        }
+
+        if (best) {
+          sameCandleDuplicates += 1
+          // Keep the deepest penetration for this candle/side.
+          if (penetration <= best.penetration) continue
+        }
+        best = {
+          level,
+          penetration,
+          penetrationPercent,
+          closeBack,
+          closeBackPercent,
+          wickExtreme,
+        }
+      }
+
+      if (!best) continue
+      diagnostics.duplicateSweepsSuppressed += sameCandleDuplicates
+
+      const { level } = best
+      if (consumed.has(level.id) && !config.allowRepeatedSweepsOfSameLevel) {
+        diagnostics.consumedLevelAttemptsIgnored += 1
+        continue
+      }
+      consumed.add(level.id)
 
       let displacementId: string | null = null
       if (config.requireDisplacementAfterSweep) {
         const end = Math.min(last, i + config.displacementConfirmationBars)
-        const disp = displacements.find(
-          (d) =>
-            d.kind === 'BEARISH_DISPLACEMENT' &&
-            d.candleIndex > i &&
-            d.candleIndex <= end,
-        )
-        if (!disp) continue
-        displacementId = disp.id
+        const needKind =
+          side === 'HIGH' ? 'BEARISH_DISPLACEMENT' : 'BULLISH_DISPLACEMENT'
+        displacementId =
+          displacements.find(
+            (d) => d.kind === needKind && d.candleIndex > i && d.candleIndex <= end,
+          )?.id ?? null
       }
 
-      swept.add(level.id)
+      const kind =
+        side === 'HIGH' ? 'BUY_SIDE_LIQUIDITY_SWEEP' : 'SELL_SIDE_LIQUIDITY_SWEEP'
       events.push({
-        id: `sweep-bsl-${i}-${level.id}`,
-        kind: 'BUY_SIDE_LIQUIDITY_SWEEP',
+        id: `sweep-${side === 'HIGH' ? 'bsl' : 'ssl'}-${i}-${level.id}`,
+        kind,
         candleIndex: i,
         timestamp: candle.time,
-        sweptSwingIds: [level.id],
+        sweptSwingIds: level.memberIds,
+        canonicalLevelId: level.id,
         sweptLevel: level.price,
-        wickExtreme: candle.high,
+        wickExtreme: best.wickExtreme,
         close: candle.close,
-        penetration,
-        penetrationPercent,
-        closeBackDistance: closeBack,
-        closeBackDistancePercent: closeBackPercent,
+        penetration: best.penetration,
+        penetrationPercent: best.penetrationPercent,
+        closeBackDistance: best.closeBack,
+        closeBackDistancePercent: best.closeBackPercent,
         structuralScope: level.scope,
         displacementId,
         equalLevelId: level.equalLevelId,
         reason: [
-          `BSL Sweep at index ${i}: high ${candle.high} > level ${level.price},`,
-          `close ${candle.close} reclaimed below. Penetration ${penetrationPercent.toFixed(4)}%.`,
+          `${side === 'HIGH' ? 'BSL' : 'SSL'} Sweep at index ${i}:`,
+          `canonical ${level.id} level ${level.price},`,
+          `wick ${best.wickExtreme}, close ${candle.close} reclaimed.`,
+          `Members: ${level.memberIds.join(', ')}.`,
         ].join(' '),
-        refs: [{ id: level.id, kind: 'SWING_HIGH' }],
+        refs: level.memberIds.map((id) => ({
+          id,
+          kind: (side === 'HIGH' ? 'SWING_HIGH' : 'SWING_LOW') as 'SWING_HIGH' | 'SWING_LOW',
+        })),
         ruleChecks: {
-          tradedAbove: true,
-          closedBelow: candle.close < level.price,
-          notCloseThrough: !closeThrough,
-          penetrationOk: penetrationPercent >= config.minimumPenetrationPercent,
-        },
-      })
-    }
-
-    for (const level of sellLevels) {
-      if (level.confirmedAtIndex > i) continue
-      if (level.candleIndex >= i) continue
-      if (swept.has(level.id)) continue
-
-      const tradedBelow = candle.low < level.price
-      const closeThrough = candle.close < level.price
-      if (!tradedBelow || closeThrough) continue
-
-      const penetration = level.price - candle.low
-      const penetrationPercent =
-        level.price === 0 ? 0 : (penetration / Math.abs(level.price)) * 100
-      if (penetrationPercent + 1e-12 < config.minimumPenetrationPercent) continue
-
-      const closeBack = candle.close - level.price
-      const closeBackPercent =
-        level.price === 0 ? 0 : (closeBack / Math.abs(level.price)) * 100
-      if (closeBackPercent > config.maximumCloseDistancePercent + 1e-12) continue
-
-      if (config.requireSameCandleRejection && !(candle.close > level.price)) continue
-
-      let displacementId: string | null = null
-      if (config.requireDisplacementAfterSweep) {
-        const end = Math.min(last, i + config.displacementConfirmationBars)
-        const disp = displacements.find(
-          (d) =>
-            d.kind === 'BULLISH_DISPLACEMENT' &&
-            d.candleIndex > i &&
-            d.candleIndex <= end,
-        )
-        if (!disp) continue
-        displacementId = disp.id
-      }
-
-      swept.add(level.id)
-      events.push({
-        id: `sweep-ssl-${i}-${level.id}`,
-        kind: 'SELL_SIDE_LIQUIDITY_SWEEP',
-        candleIndex: i,
-        timestamp: candle.time,
-        sweptSwingIds: [level.id],
-        sweptLevel: level.price,
-        wickExtreme: candle.low,
-        close: candle.close,
-        penetration,
-        penetrationPercent,
-        closeBackDistance: closeBack,
-        closeBackDistancePercent: closeBackPercent,
-        structuralScope: level.scope,
-        displacementId,
-        equalLevelId: level.equalLevelId,
-        reason: [
-          `SSL Sweep at index ${i}: low ${candle.low} < level ${level.price},`,
-          `close ${candle.close} reclaimed above. Penetration ${penetrationPercent.toFixed(4)}%.`,
-        ].join(' '),
-        refs: [{ id: level.id, kind: 'SWING_LOW' }],
-        ruleChecks: {
-          tradedBelow: true,
-          closedAbove: candle.close > level.price,
-          notCloseThrough: !closeThrough,
-          penetrationOk: penetrationPercent >= config.minimumPenetrationPercent,
+          tradedBeyond: true,
+          closedReclaimed:
+            side === 'HIGH' ? candle.close < level.price : candle.close > level.price,
+          notCloseThrough:
+            side === 'HIGH' ? !(candle.close > level.price) : !(candle.close < level.price),
+          penetrationOk: best.penetrationPercent >= config.minimumPenetrationPercent,
+          canonicalDeduped: true,
         },
       })
     }
   }
 
-  return { events }
+  trySide(buyLevels, 'HIGH')
+  trySide(sellLevels, 'LOW')
+  diagnostics.validUniqueSweeps = events.length
+
+  return { events, diagnostics }
 }

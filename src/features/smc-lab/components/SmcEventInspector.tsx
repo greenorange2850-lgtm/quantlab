@@ -331,6 +331,11 @@ function renderEventBody(
     return (
       <>
         <Row label="Candle index">{d.candleIndex}</Row>
+        <Row label="Candle close">
+          <span className="font-mono">
+            {Number.isFinite(d.closePrice) ? d.closePrice : 'Unavailable'}
+          </span>
+        </Row>
         <Row label="Body / Range">
           <span className="font-mono">
             {d.bodySize} / {d.fullRange}

@@ -384,6 +384,7 @@ describe('liquidity sweep', () => {
         requireDisplacementAfterSweep: false,
         displacementConfirmationBars: 3,
         equalLevelTolerancePercent: 0.05,
+        allowRepeatedSweepsOfSameLevel: false,
       },
       11,
     )
@@ -422,6 +423,7 @@ describe('liquidity sweep', () => {
         requireDisplacementAfterSweep: false,
         displacementConfirmationBars: 3,
         equalLevelTolerancePercent: 0.05,
+        allowRepeatedSweepsOfSameLevel: false,
       },
       11,
     )

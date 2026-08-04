@@ -166,13 +166,23 @@ export function detectStructureBreaks(
       visibleThroughIndex,
     )
     return {
-      bosEvents: bosResult.bosEvents.map((e) => ({
-        ...e,
-        refs: [{ id: e.brokenSwingId, kind: e.kind === 'BULLISH_BOS' ? 'SWING_HIGH' : 'SWING_LOW' }],
-        previousStructureState: 'UNDETERMINED_STRUCTURE',
-        newStructureState:
-          e.kind === 'BULLISH_BOS' ? 'BULLISH_STRUCTURE' : 'BEARISH_STRUCTURE',
-      })),
+      bosEvents: bosResult.bosEvents.map((e) => {
+        const swing = swings.find((s) => s.id === e.brokenSwingId)
+        const cls = swing ? classificationOf(swing, classified) : 'UNCLASSIFIED'
+        return {
+          ...e,
+          brokenSwingClassification: cls,
+          structureScope: bosConfig.structureScope,
+          refs: e.refs ?? [
+            { id: e.brokenSwingId, kind: e.kind === 'BULLISH_BOS' ? 'SWING_HIGH' : 'SWING_LOW' },
+          ],
+          previousStructureState: 'UNDETERMINED_STRUCTURE' as const,
+          newStructureState:
+            e.kind === 'BULLISH_BOS'
+              ? ('BULLISH_STRUCTURE' as const)
+              : ('BEARISH_STRUCTURE' as const),
+        }
+      }),
       chochEvents: [],
       structureState: 'UNDETERMINED_STRUCTURE',
       wickOnlyIgnored: bosResult.wickOnlyIgnored,
