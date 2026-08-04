@@ -129,8 +129,43 @@ export function useSaveStrategy() {
       timeframe?: string
     }): Promise<StrategyMetadata> => {
       const meta = saveStrategy(input)
+      // Rematerialize list + detail from archives so Draft → Saved is immediate.
       syncStrategyQueries(queryClient)
       return meta
+    },
+    onSuccess: (meta) => {
+      // Patch detail optimistically in case a stale observer skipped sync.
+      const existing = queryClient.getQueryData<StrategyViewModel>(
+        strategyKeys.detail(meta.id),
+      )
+      if (existing) {
+        queryClient.setQueryData(strategyKeys.detail(meta.id), {
+          ...existing,
+          name: meta.name,
+          description: meta.description,
+          lifecycle: 'saved' as const,
+          updatedAt: meta.updatedAt,
+          savedAt: meta.savedAt,
+          metadata: meta,
+        })
+      }
+
+      const list = queryClient.getQueryData<StrategyListItem[]>(strategyKeys.list())
+      if (list) {
+        queryClient.setQueryData(
+          strategyKeys.list(),
+          list.map((item) =>
+            item.id === meta.id
+              ? {
+                  ...item,
+                  name: meta.name,
+                  lifecycle: 'saved' as const,
+                  updatedAt: meta.updatedAt,
+                }
+              : item,
+          ),
+        )
+      }
     },
   })
 }

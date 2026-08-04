@@ -30,6 +30,7 @@ import { ReplayTab } from './tabs/ReplayTab'
 import { EquityTab } from './tabs/EquityTab'
 import { AiAnalysisTab } from './tabs/AiAnalysisTab'
 import { VersionsTab } from './tabs/VersionsTab'
+import { useAppStore } from '@/stores/app.store'
 
 function isStrategyTab(value: string | null): value is StrategyTabId {
   return STRATEGY_TABS.some((tab) => tab.id === value)
@@ -66,6 +67,11 @@ export function StrategyWorkspacePage() {
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const strategy = strategyQuery.data
+
+  useEffect(() => {
+    if (!strategyId) return
+    useAppStore.getState().setActiveStrategyId(strategyId)
+  }, [strategyId])
 
   useEffect(() => {
     if (!strategy) return
@@ -204,7 +210,7 @@ export function StrategyWorkspacePage() {
       {
         onSuccess: () => {
           setSaveOpen(false)
-          void strategyQuery.refetch()
+          // Cache already holds lifecycle: saved — navigate after UI commits.
           navigate('/strategies')
         },
         onError: (error) => {

@@ -30,6 +30,7 @@ export function RestoredBacktestBanner() {
     useBacktestStore.setState({ hasAttemptedSessionHydrate: false })
     markSessionHydrateIdle()
     void queryClient.invalidateQueries({ queryKey: backtestDetailKeys.latest() })
+    // Keep research-session latest invalidation for internal archive sync only.
     void queryClient.invalidateQueries({ queryKey: researchSessionKeys.latest() })
   }
 
@@ -37,7 +38,7 @@ export function RestoredBacktestBanner() {
     return (
       <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-white/[0.03] px-4 py-3 text-xs text-muted-foreground">
         <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" />
-        {isHydratingSession ? 'Restoring previous session…' : 'Loading historical backtest…'}
+        {isHydratingSession ? 'Restoring previous strategy…' : 'Loading historical backtest…'}
       </div>
     )
   }
@@ -153,7 +154,7 @@ export function RestoredBacktestBanner() {
     return (
       <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-white/[0.03] px-4 py-3">
         <Badge variant="accent" className="shrink-0 text-[10px]">
-          Session restored
+          Strategy restored
         </Badge>
         <p className="min-w-0 truncate text-xs text-muted-foreground">
           <span className="font-mono text-foreground">{report.config.symbol}</span>

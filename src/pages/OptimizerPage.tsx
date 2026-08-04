@@ -1088,7 +1088,7 @@ export function OptimizerPage() {
                   className="min-h-11 w-full sm:min-h-9 sm:w-auto"
                   onClick={() => {
                     navigate(
-                      `/strategy-compare?session=${report.sessionId}&candidate=${selected.id}`,
+                      `/strategy-compare?strategy=${report.sessionId}&candidate=${selected.id}`,
                     )
                   }}
                 >

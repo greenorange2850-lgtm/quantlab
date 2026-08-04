@@ -11,6 +11,7 @@ import {
   type BacktestReplayBundle,
   type BacktestReplayMetadata,
 } from '@/data/replay'
+import { markReplayAvailable } from './replay-availability'
 
 export type ReplayAvailability =
   | { available: true; source: 'indexeddb' | 'detail-archive'; bundle: BacktestReplayBundle }
@@ -95,6 +96,12 @@ export async function persistBacktestReplay(input: {
   datasetId?: string | null
 }): Promise<void> {
   if (input.candles.length === 0) return
+
+  // Eager sync mark so Open Replay enables as soon as payload exists,
+  // even while IndexedDB write is still in flight.
+  if (canOpenReplayFromDetail({ candles: input.candles, trades: input.trades })) {
+    markReplayAvailable(input.backtestId)
+  }
 
   const bundle = buildBundleFromDetail({
     backtestId: input.backtestId,

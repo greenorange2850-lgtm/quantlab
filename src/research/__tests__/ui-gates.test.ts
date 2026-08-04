@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   resolveOptimizerSessionId,
+  resolveStrategyIdParam,
   shouldAwaitDashboardSessionHydrate,
   shouldAwaitResearchArchive,
 } from '@/research/ui-gates'
@@ -81,8 +82,21 @@ describe('dashboard session hydrate UI gate', () => {
   })
 })
 
-describe('optimizer session query param', () => {
-  it('prefers session and falls back to analysis', () => {
+describe('optimizer / strategy query params', () => {
+  it('prefers strategy, then session, then analysis', () => {
+    expect(
+      resolveOptimizerSessionId({
+        get: (key) =>
+          key === 'strategy'
+            ? 'strat-1'
+            : key === 'session'
+              ? 'rs-new'
+              : key === 'analysis'
+                ? 'rs-old'
+                : null,
+      }),
+    ).toBe('strat-1')
+
     expect(
       resolveOptimizerSessionId({
         get: (key) => (key === 'session' ? 'rs-new' : key === 'analysis' ? 'rs-old' : null),
@@ -96,5 +110,21 @@ describe('optimizer session query param', () => {
     ).toBe('rs-legacy')
 
     expect(resolveOptimizerSessionId({ get: () => null })).toBeNull()
+  })
+
+  it('resolves strategy id with session alias', () => {
+    expect(
+      resolveStrategyIdParam({
+        get: (key) => (key === 'strategy' ? 's-1' : key === 'session' ? 'rs-1' : null),
+      }),
+    ).toBe('s-1')
+
+    expect(
+      resolveStrategyIdParam({
+        get: (key) => (key === 'session' ? 'rs-legacy' : null),
+      }),
+    ).toBe('rs-legacy')
+
+    expect(resolveStrategyIdParam({ get: () => null })).toBeNull()
   })
 })
