@@ -14,7 +14,7 @@ export { useSmcLabTab } from './useSmcLabTab'
 
 export { hasUnappliedDetectionConfig } from './dirty-config'
 
-export { SmcLabWorkspaceTabs } from './SmcLabWorkspaceTabs'
+export { SmcLabWorkspaceTabs, nextSmcLabTabFromKey } from './SmcLabWorkspaceTabs'
 export type { SmcLabWorkspaceTabsProps } from './SmcLabWorkspaceTabs'
 
 export { SmcAppliedConfigSummary } from './SmcAppliedConfigSummary'

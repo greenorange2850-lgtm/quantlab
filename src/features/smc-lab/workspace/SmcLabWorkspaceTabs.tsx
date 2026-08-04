@@ -1,3 +1,4 @@
+import { useCallback, type KeyboardEvent } from 'react'
 import { cn } from '@/lib/utils'
 import { SMC_LAB_TABS, type SmcLabTabId } from './tabs'
 
@@ -5,6 +6,25 @@ export interface SmcLabWorkspaceTabsProps {
   activeTab: SmcLabTabId
   onChange: (tab: SmcLabTabId) => void
   className?: string
+}
+
+/** Resolve next tab id for arrow / Home / End keyboard navigation. */
+export function nextSmcLabTabFromKey(
+  activeTab: SmcLabTabId,
+  key: string,
+): SmcLabTabId | null {
+  const ids = SMC_LAB_TABS.map((t) => t.id)
+  const index = ids.indexOf(activeTab)
+  if (index < 0) return null
+  if (key === 'ArrowRight' || key === 'ArrowDown') {
+    return ids[(index + 1) % ids.length]!
+  }
+  if (key === 'ArrowLeft' || key === 'ArrowUp') {
+    return ids[(index - 1 + ids.length) % ids.length]!
+  }
+  if (key === 'Home') return ids[0]!
+  if (key === 'End') return ids[ids.length - 1]!
+  return null
 }
 
 /**
@@ -16,6 +36,20 @@ export function SmcLabWorkspaceTabs({
   onChange,
   className,
 }: SmcLabWorkspaceTabsProps) {
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      const next = nextSmcLabTabFromKey(activeTab, event.key)
+      if (!next) return
+      event.preventDefault()
+      onChange(next)
+      // Move focus to the newly selected tab button.
+      requestAnimationFrame(() => {
+        document.getElementById(`smc-lab-tab-${next}`)?.focus()
+      })
+    },
+    [activeTab, onChange],
+  )
+
   return (
     <div
       className={cn(
@@ -28,6 +62,7 @@ export function SmcLabWorkspaceTabs({
           role="tablist"
           aria-label="SMC Lab workspace"
           className="-mx-1 flex min-w-0 gap-1 overflow-x-auto px-1 py-1.5"
+          onKeyDown={onKeyDown}
         >
           {SMC_LAB_TABS.map((tab) => {
             const selected = activeTab === tab.id
@@ -39,6 +74,7 @@ export function SmcLabWorkspaceTabs({
                 id={`smc-lab-tab-${tab.id}`}
                 aria-selected={selected}
                 aria-controls={`smc-lab-panel-${tab.id}`}
+                tabIndex={selected ? 0 : -1}
                 title={tab.description}
                 className={cn(
                   'min-h-11 shrink-0 rounded-lg border px-3 text-sm font-medium transition-colors',
