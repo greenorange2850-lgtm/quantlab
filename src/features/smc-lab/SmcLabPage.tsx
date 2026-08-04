@@ -1113,11 +1113,7 @@ export function SmcLabPage() {
         chochEvents={chartStructure.chochEvents}
         displacementEvents={chartStructure.displacementEvents}
         fvgEvents={progressiveVisible.fvgEvents}
-        equalLevelEvents={
-          smartVisibilityPreset === 'debug' || !lifecycleProjection.visibleZones.length
-            ? progressiveVisible.equalLevelEvents
-            : []
-        }
+        equalLevelEvents={progressiveVisible.equalLevelEvents}
         liquiditySweepEvents={progressiveVisible.liquiditySweepEvents}
         orderBlockEvents={progressiveVisible.orderBlockEvents}
         zoneProjections={lifecycleProjection.visibleZones}
