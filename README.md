@@ -2,31 +2,30 @@
 
 **Version:** `1.0.0`
 
-QuantLab is a quantitative trading **research** platform for strategy development, event-driven backtesting, parameter optimization, and research session management. Results are historical research aids — not investment advice.
+QuantLab is a quantitative trading **research** platform for strategy development, event-driven backtesting, parameter optimization, and Strategy Library management. Results are historical research aids — not investment advice.
 
 ## Main features
 
+- **New Research / Random Search** — explore parameter combinations (temporary computation)
+- **Strategy workspace** — Overview, Optimization Summary, Winning Parameters, Trade Replay, Equity Curve, AI Analysis, Version History
+- **Strategy Library** — save, browse, open, and delete strategies
 - **Strategy Lab / Backtest Lab** — run Moving Average Cross backtests on live Binance markets
 - **Market Explorer** — import and inspect historical candle data
-- **Optimizer (Random Search)** — explore parameter combinations and score candidates
-- **Research Analysis** — review archived research reports
 - **Strategy Compare** — compare a baseline backtest with an optimized candidate
-- **Research Sessions** — browse, open, compare, and delete archived research sessions
 - **Dashboard** — KPIs, equity curve, trade history, and restore after refresh
 - **Mobile-ready shell** — drawer navigation below desktop breakpoints
 
 ## Current workflow
 
 ```text
-Strategy Lab → Backtest → Optimize → Analysis → Compare → Sessions
+New Research → Random Search → Optimization Summary → Trade Replay Validation → Save Strategy → Strategy Library
 ```
 
-1. **Strategy Lab** — pick a Binance pair / timeframe and run a backtest  
-2. **Dashboard** — review metrics (auto-restores the latest saved backtest after refresh)  
-3. **Optimizer** — run Random Search to explore parameters  
-4. **Research Analysis** — open the generated research report  
-5. **Strategy Compare** — compare baseline vs optimized candidate  
-6. **Research Sessions** — manage archived sessions (survives refresh on the same origin)
+1. **New Research** — configure market / period / ranges and start Random Search  
+2. **Optimization Summary** — review the resulting Strategy draft (search itself is temporary)  
+3. **Trade Replay** — validate winning parameters bar-by-bar  
+4. **Save Strategy** — promote the draft into the Strategy Library  
+5. **Strategy Library** — reopen Overview, equity, AI analysis, and version history anytime 
 
 ## Stable production URL
 
@@ -67,11 +66,11 @@ npm run dev
 
 ### Typical local path
 
-1. Open http://localhost:5173/strategy-lab  
-2. Select a live Binance symbol and timeframe  
-3. Click **Run Backtest** — dashboard populates with pipeline metrics  
-4. Open **Optimizer** → run Random Search  
-5. Use **Research Analysis**, **Strategy Compare**, and **Research Sessions**
+1. Open http://localhost:5173/optimizer (**New Research**)  
+2. Run **Random Search**  
+3. Review **Optimization Summary** on the Strategy workspace  
+4. Validate with **Trade Replay**, then **Save Strategy**  
+5. Browse the **Strategy Library** at `/strategies`
 
 ### Validation
 
@@ -99,9 +98,9 @@ The Express API (`server/`) is hosted separately (for example Railway). See [doc
 
 - **Not investment advice** — all results are historical research only  
 - **Optimization ≠ validation** — Random Search scores in-sample candidates; it does not prove out-of-sample robustness  
-- **Slim research archives** — durable research sessions store summaries (and equity endpoints); full candle / equity / trade series are not kept in `quantlab.research-sessions.v1` (candidate details use the backtest detail archive)  
-- **Not implemented in v1.0.0** — Trade Replay, Reports, Settings configuration UI, and advanced validation workflows (nav items marked **Soon**)  
-- **Persistence origin** — always test restore on `https://quantlab-frontend.vercel.app`; switching ephemeral deployment URLs looks like “lost” sessions even though data remains under the previous origin  
+- **Slim research archives** — durable strategy data reuses research-session storage (`quantlab.research-sessions.v1`) for summaries; full candle / equity / trade series live in the backtest detail / replay stores  
+- **Not implemented in v1.0.0** — Reports, Settings configuration UI, and advanced validation workflows (nav items marked **Soon**)  
+- **Persistence origin** — always test restore on `https://quantlab-frontend.vercel.app`; switching ephemeral deployment URLs looks like “lost” data even though it remains under the previous origin  
 
 ## Project structure
 

@@ -5,6 +5,19 @@ All notable changes to QuantLab are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+#### Strategy-first UX
+- Primary object is now a **Strategy**; Research Sessions remain an internal persistence detail
+- Nav: **New Research** (`/optimizer`) and **Strategy Library** (`/strategies`) replace Research Sessions / Research Analysis entries
+- Workflow: New Research → Random Search → Optimization Summary → Trade Replay → Save Strategy → Library
+- Strategy workspace tabs: Overview, Optimization Summary, Winning Parameters, Trade Replay, Equity Curve, AI Analysis, Version History
+- Completed Random Search navigates to the Strategy draft (`/strategies/:id?tab=optimization`)
+- Legacy routes `/research-sessions` and `/research-analysis` redirect to Strategy Library / workspace
+- Strategy metadata overlay (`quantlab.strategy-metadata.v1`) for name / saved state; research archive key unchanged
+
 ## [1.0.0] - 2026-07-29
 
 First production-ready release of the QuantLab quantitative research workflow.

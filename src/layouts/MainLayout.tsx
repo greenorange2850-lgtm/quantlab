@@ -19,19 +19,26 @@ const pageTitles: Record<string, string> = {
   '/dataset-library': 'Dataset Library',
   '/market-explorer': 'Market Explorer',
   '/trade-replay': 'Trade Replay',
-  '/ai-analysis': 'Research Analysis',
-  '/research-analysis': 'Research Analysis',
+  '/ai-analysis': 'Strategy',
+  '/research-analysis': 'Strategy',
   '/strategy-compare': 'Strategy Compare',
-  '/research-sessions': 'Research Sessions',
-  '/knowledge-base': 'Research Sessions',
-  '/optimizer': 'Optimizer',
+  '/strategies': 'Strategy Library',
+  '/research-sessions': 'Strategy Library',
+  '/knowledge-base': 'Strategy Library',
+  '/optimizer': 'New Research',
+  '/new-research': 'New Research',
   '/reports': 'Reports',
   '/settings': 'Settings',
 }
 
+function resolvePageTitle(pathname: string): string {
+  if (pathname.startsWith('/strategies/')) return 'Strategy'
+  return pageTitles[pathname] ?? 'Dashboard'
+}
+
 export function MainLayout() {
   const location = useLocation()
-  const title = pageTitles[location.pathname] ?? 'Dashboard'
+  const title = resolvePageTitle(location.pathname)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => {
