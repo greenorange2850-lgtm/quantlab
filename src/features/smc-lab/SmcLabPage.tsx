@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FlaskConical, Download, Upload, Plus } from 'lucide-react'
+import { FlaskConical } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Disclosure } from '@/components/ui/disclosure'
-import { Input } from '@/components/ui/input'
-import { MarketSourceFields } from '@/components/market/MarketSourceFields'
-import {
-  ResearchPeriodSelect,
-  defaultResearchPeriodSelection,
-} from '@/components/market/ResearchPeriodSelect'
-import { useResearchCandles } from '@/api/queries/research-candles'
 import {
   cloneSmcDetectorConfig,
   countProfileEvents,
@@ -48,17 +38,20 @@ import {
   type SmcZoneProjection,
 } from '@/core/smc'
 import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
-import { resolveResearchPeriod, type ResearchPeriodSelection } from '@/data/research-period'
-import { SmcCandlestickChart, type SmcChartLayerToggles } from './components/SmcCandlestickChart'
-import { SmcControlsPanel } from './components/SmcControlsPanel'
-import { SmcCursorControls, type SmcPlaySpeed } from './components/SmcCursorControls'
-import { SmcEventInspector } from './components/SmcEventInspector'
-import { SmcEventList, type SmcEventFilter } from './components/SmcEventList'
+import {
+  RESEARCH_PERIOD_PRESET_OPTIONS,
+  resolveResearchPeriod,
+  type ResearchPeriodSelection,
+} from '@/data/research-period'
+import { useResearchCandles } from '@/api/queries/research-candles'
+import { defaultResearchPeriodSelection } from '@/components/market/ResearchPeriodSelect'
+import { type SmcChartLayerToggles } from './components/SmcCandlestickChart'
+import { type SmcPlaySpeed } from './components/SmcCursorControls'
+import { type SmcEventFilter } from './components/SmcEventList'
 import {
   layersForDensityPreset,
   loadSmcLabPreferences,
   saveSmcLabPreferences,
-  saveSmcNamedConfig,
   updateSmcDetectorPrefs,
 } from './persistence/prefs-archive'
 import {
@@ -82,19 +75,28 @@ import {
 import {
   buildReviewSummary,
   flattenDetectionEvents,
-  formatReviewedAccuracy,
 } from './review-summary'
 import {
   runSmcDetectionJob,
   type SmcModuleProgress,
 } from './run-detection-job'
-import { SmcGoldenChartCompare, SmcValidationDashboard } from './validation'
 import { buildLabVisibilityPipelineDiagnostics } from './visibility-pipeline'
 import { projectSwingChartMarkers } from './dow-label'
 import {
   mergeDowProtectedSwings,
   projectDowChartVisibility,
 } from './dow-visibility'
+import {
+  SmcLabWorkspaceTabs,
+  SmcLabWorkspaceProvider,
+  SmcAnalyzeWorkspace,
+  SmcConfigureWorkspace,
+  SmcValidateWorkspace,
+  SmcDiagnosticsWorkspace,
+  useSmcLabTab,
+  hasUnappliedDetectionConfig,
+  type SmcLabWorkspaceModel,
+} from './workspace'
 
 const CHART_WINDOW = 72
 const FOCUS_PAD = 16
@@ -158,8 +160,19 @@ function fingerprintPrice(event: SmcEvent, candles: readonly { close: number }[]
   if ('zoneHigh' in event && typeof event.zoneHigh === 'number') return event.zoneHigh
   const close = candles[event.candleIndex]?.close
   if (close != null && Number.isFinite(close)) return close
-  // Never invent 0 — use NaN so fingerprints stay honest when data is absent.
   return Number.NaN
+}
+
+function derivePeriodLabel(selection: ResearchPeriodSelection): string {
+  if (selection.preset !== 'custom') {
+    return (
+      RESEARCH_PERIOD_PRESET_OPTIONS.find((o) => o.id === selection.preset)?.label ??
+      selection.preset
+    )
+  }
+  const fmt = (ms: number | undefined) =>
+    ms != null ? new Date(ms).toLocaleDateString() : '?'
+  return `${fmt(selection.customStartMs)} – ${fmt(selection.customEndMs)}`
 }
 
 /**
@@ -167,6 +180,7 @@ function fingerprintPrice(event: SmcEvent, candles: readonly { close: number }[]
  */
 export function SmcLabPage() {
   const initialPrefs = useMemo(() => loadSmcLabPreferences(), [])
+  const { activeTab, setTab } = useSmcLabTab()
 
   const [sourceKind, setSourceKind] = useState<MarketSourceKind>(DEFAULT_MARKET_SOURCE.kind)
   const [datasetId, setDatasetId] = useState<string | null>(null)
@@ -179,7 +193,6 @@ export function SmcLabPage() {
   const [config, setConfig] = useState<SmcDetectorConfig>(initialPrefs.detectorConfig)
   const [layers, setLayers] = useState<SmcChartLayerToggles>(() => ({
     ...initialPrefs.layerToggles,
-    // Ensure Dow labels default ON even if an older prefs blob omitted the key.
     dowTheoryLabels: initialPrefs.layerToggles.dowTheoryLabels ?? true,
   }))
   const [densityPreset, setDensityPreset] = useState<SmcDensityPreset>(
@@ -239,6 +252,7 @@ export function SmcLabPage() {
   const [manualPrice, setManualPrice] = useState('')
   const [manualNote, setManualNote] = useState('')
   const [savedTick, setSavedTick] = useState(0)
+  const [appliedConfigHash, setAppliedConfigHash] = useState<string | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const playTimer = useRef<number | null>(null)
@@ -267,12 +281,18 @@ export function SmcLabPage() {
   const datasetKey = buildDatasetKey({ sourceKind, symbol, timeframe: interval, datasetId })
   const configHash = hashSmcConfig(config)
 
+  const configDirty = hasUnappliedDetectionConfig({
+    currentConfigHash: configHash,
+    appliedConfigHash,
+  })
+
+  const periodLabel = useMemo(() => derivePeriodLabel(periodSelection), [periodSelection])
+
   const progressive = useMemo(() => {
     if (candles.length === 0) return emptyDetection()
     return progressiveFilter(detection, visibleIndex)
   }, [detection, visibleIndex, candles.length])
 
-  /** Chart/list view — ranking-filtered; full `progressive` kept for Debug / inspector lookup. */
   const progressiveVisible = useMemo(
     () => filterDetectionByRanking(progressive),
     [progressive],
@@ -290,11 +310,6 @@ export function SmcLabPage() {
     [progressive, visibleIndex, smartVisibilityPreset, zoneLifecycle, setupContext],
   )
 
-  /**
-   * Progressive Dow Theory view — derived from knowable classified swings only.
-   * Prefer live projection at the cursor; fall back to result.dowTheory at the
-   * final candle so the chart always consumes the pipeline map.
-   */
   const dowTheoryView = useMemo(() => {
     const live = analyzeDowTheory(progressive.classifiedSwings, visibleIndex)
     const fromResult = detection.dowTheory
@@ -324,11 +339,6 @@ export function SmcLabPage() {
     )
   }, [selectedZoneId, lifecycleProjection])
 
-  /**
-   * Dow chart visibility — density + intelligence gates that protect external Dow
-   * labels under Minimal/Balanced. Toggle only affects suffix formatting later.
-   * Does not re-run detection or change the Dow algorithm / id join.
-   */
   const dowChartVisibility = useMemo(
     () =>
       projectDowChartVisibility({
@@ -357,7 +367,6 @@ export function SmcLabPage() {
     ],
   )
 
-  /** Structure events filtered by smart visibility relevance (chart only). */
   const chartStructure = useMemo(() => {
     const base = (() => {
       if (smartVisibilityPreset === 'debug') {
@@ -372,7 +381,6 @@ export function SmcLabPage() {
       const visibleIds = new Set(
         lifecycleProjection.structureEvents.filter((s) => s.visible).map((s) => s.eventId),
       )
-      // Setup focus / active-only may hide recent context — keep layer toggles as secondary.
       const keep = <T extends { id: string }>(events: T[]) =>
         events.filter((e) => visibleIds.has(e.id))
       return {
@@ -384,8 +392,6 @@ export function SmcLabPage() {
       }
     })()
 
-    // Re-introduce Dow-protected swings stripped by ranking/lifecycle so the
-    // Dow labels toggle is not silently dependent on Debug mode.
     return {
       ...base,
       classifiedSwings: mergeDowProtectedSwings(
@@ -400,7 +406,6 @@ export function SmcLabPage() {
     dowChartVisibility.visibleSwings,
   ])
 
-  /** Rendered swing marker dump for Dow join proof / diagnostics (pre-density). */
   const chartDowMarkers = useMemo(() => {
     const showDow = layers.dowTheoryLabels ?? true
     return projectSwingChartMarkers(
@@ -630,6 +635,8 @@ export function SmcLabPage() {
     setConfig(safe)
     updateSmcDetectorPrefs(safe)
 
+    const appliedHash = hashSmcConfig(safe)
+
     const job = await runSmcDetectionJob({
       candles,
       visibleIndex: candles.length - 1,
@@ -650,6 +657,7 @@ export function SmcLabPage() {
     setDetecting(false)
     setDetectionProgress(null)
     setModuleProgress(job.moduleProgress)
+    setAppliedConfigHash(appliedHash)
   }, [candles, config, visibilityMode])
 
   const handleVisibilityMode = useCallback((mode: SmcVisibilityModePref) => {
@@ -660,7 +668,6 @@ export function SmcLabPage() {
     })
   }, [])
 
-  /** Density / Debug shortcuts for Dow label empty-state notice (no re-detect). */
   const showStructureDowView = useCallback(() => {
     setDensityPreset('structure')
     setLayers(layersForDensityPreset('structure'))
@@ -695,48 +702,51 @@ export function SmcLabPage() {
     setSmartVisibilityPreset(priorSmartPreset === 'setup-focus' ? 'balanced' : priorSmartPreset)
   }, [priorSmartPreset])
 
-  const clearMarkers = () => {
+  const clearMarkers = useCallback(() => {
     setDetection(emptyDetection())
     setSelectedEventId(null)
     setSelectedZoneId(null)
     setSetupContext(null)
-  }
+  }, [])
 
-  const handleApplyProfile = (profile: SmcDetectionProfile) => {
+  const handleApplyProfile = useCallback((profile: SmcDetectionProfile) => {
     setConfig(cloneSmcDetectorConfig(profile.config))
     setActiveProfileId(String(profile.id))
-  }
+  }, [])
 
-  const handleVerdict = async (verdict: 'correct' | 'wrong' | 'unsure') => {
-    if (!selectedEvent) return
-    const fingerprint = buildEventFingerprint({
-      eventId: selectedEvent.id,
-      kind: selectedEvent.kind,
-      candleIndex: selectedEvent.candleIndex,
-      timestamp: selectedEvent.timestamp,
-      price: fingerprintPrice(selectedEvent, candles),
-      brokenSwingId:
-        'brokenSwingId' in selectedEvent ? selectedEvent.brokenSwingId : undefined,
-      profileId: activeProfileId,
-    })
-    const record: SmcReviewRecord = {
-      id: createReviewId(fingerprint, configHash),
-      fingerprint,
-      detectorVersion: SMC_DETECTOR_VERSION,
-      configSnapshot: cloneSmcDetectorConfig(config),
-      configHash,
-      profileId: activeProfileId,
-      verdict,
-      reasonTags: verdict === 'wrong' ? tags : [],
-      note,
-      reviewedAt: Date.now(),
-      datasetKey,
-    }
-    await getSmcLabStore().putReview(record)
-    setReviews(await getSmcLabStore().listReviews(datasetKey))
-  }
+  const handleVerdict = useCallback(
+    async (verdict: 'correct' | 'wrong' | 'unsure') => {
+      if (!selectedEvent) return
+      const fingerprint = buildEventFingerprint({
+        eventId: selectedEvent.id,
+        kind: selectedEvent.kind,
+        candleIndex: selectedEvent.candleIndex,
+        timestamp: selectedEvent.timestamp,
+        price: fingerprintPrice(selectedEvent, candles),
+        brokenSwingId:
+          'brokenSwingId' in selectedEvent ? selectedEvent.brokenSwingId : undefined,
+        profileId: activeProfileId,
+      })
+      const record: SmcReviewRecord = {
+        id: createReviewId(fingerprint, configHash),
+        fingerprint,
+        detectorVersion: SMC_DETECTOR_VERSION,
+        configSnapshot: cloneSmcDetectorConfig(config),
+        configHash,
+        profileId: activeProfileId,
+        verdict,
+        reasonTags: verdict === 'wrong' ? tags : [],
+        note,
+        reviewedAt: Date.now(),
+        datasetKey,
+      }
+      await getSmcLabStore().putReview(record)
+      setReviews(await getSmcLabStore().listReviews(datasetKey))
+    },
+    [selectedEvent, candles, activeProfileId, configHash, config, tags, note, datasetKey],
+  )
 
-  const handleResetReview = async () => {
+  const handleResetReview = useCallback(async () => {
     if (!selectedEvent) return
     const existing = reviewsByEventId.get(selectedEvent.id)
     if (existing) {
@@ -745,9 +755,9 @@ export function SmcLabPage() {
     }
     setNote('')
     setTags([])
-  }
+  }, [selectedEvent, reviewsByEventId, datasetKey])
 
-  const addManualAnnotation = async () => {
+  const addManualAnnotation = useCallback(async () => {
     const price = Number(manualPrice)
     if (!Number.isFinite(price) || candles.length === 0) return
     const candle = candles[Math.min(visibleIndex, candles.length - 1)]!
@@ -767,9 +777,9 @@ export function SmcLabPage() {
     await getSmcLabStore().putAnnotation(annotation)
     setAnnotations(await getSmcLabStore().listAnnotations(datasetKey))
     setManualNote('')
-  }
+  }, [manualPrice, candles, visibleIndex, manualKind, datasetKey, sourceKind, symbol, interval, manualNote])
 
-  const exportResearch = () => {
+  const exportResearch = useCallback(() => {
     const payload: SmcLabExportPayload = {
       schemaVersion: 3,
       exportedAt: Date.now(),
@@ -796,9 +806,9 @@ export function SmcLabPage() {
     anchor.download = `smc-lab-${symbol}-${interval}.json`
     anchor.click()
     URL.revokeObjectURL(url)
-  }
+  }, [config, activeProfileId, reviews, annotations, goldenDatasets, datasetKey, sourceKind, symbol, interval, candles])
 
-  const importResearch = async (file: File) => {
+  const importResearch = useCallback(async (file: File) => {
     const text = await file.text()
     const payload = validateSmcLabExport(JSON.parse(text))
     const store = getSmcLabStore()
@@ -810,9 +820,9 @@ export function SmcLabPage() {
     setReviews(await store.listReviews(datasetKey))
     setAnnotations(await store.listAnnotations(datasetKey))
     setGoldenDatasets(await store.listGoldenDatasets(datasetKey))
-  }
+  }, [datasetKey])
 
-  const saveGoldenFromCorrectReviews = async () => {
+  const saveGoldenFromCorrectReviews = useCallback(async () => {
     const probes = toDetectedProbes(detection)
     const byId = new Map(probes.map((p) => [p.id, p]))
     const correct = reviews.filter(
@@ -868,9 +878,9 @@ export function SmcLabPage() {
     const next = await getSmcLabStore().listGoldenDatasets(datasetKey)
     setGoldenDatasets(next)
     setActiveGoldenId(id)
-  }
+  }, [detection, reviews, configHash, datasetKey, symbol, interval, sourceKind, activeProfileId, candles])
 
-  const runValidation = () => {
+  const runValidation = useCallback(() => {
     const dataset =
       goldenDatasets.find((d) => d.id === activeGoldenId) ?? goldenDatasets[0] ?? null
     if (!dataset) {
@@ -894,9 +904,9 @@ export function SmcLabPage() {
     })
     setValidationReport(report)
     setActiveGoldenId(dataset.id)
-  }
+  }, [goldenDatasets, activeGoldenId, detection, candles, config, reviews])
 
-  const deleteGoldenDataset = async (id: string) => {
+  const deleteGoldenDataset = useCallback(async (id: string) => {
     await getSmcLabStore().deleteGoldenDataset(id)
     const next = await getSmcLabStore().listGoldenDatasets(datasetKey)
     setGoldenDatasets(next)
@@ -904,12 +914,12 @@ export function SmcLabPage() {
       setActiveGoldenId(null)
       setValidationReport(null)
     }
-  }
+  }, [datasetKey, activeGoldenId])
 
-  const loadSavedConfig = (entry: SmcSavedLabConfig) => {
+  const loadSavedConfig = useCallback((entry: SmcSavedLabConfig) => {
     setConfig(cloneSmcDetectorConfig(entry.config))
     if (entry.profileId) setActiveProfileId(entry.profileId)
-  }
+  }, [])
 
   // Profile comparison — aggregate counts only (no overlay by default)
   useEffect(() => {
@@ -977,7 +987,7 @@ export function SmcLabPage() {
   )
   const moduleBuckets = Object.values(summary.byModule).filter((b) => b.detected > 0)
 
-  const sharedControls = {
+  const sharedControls: SmcLabWorkspaceModel['sharedControls'] = useMemo(() => ({
     config,
     layers,
     densityPreset,
@@ -1003,10 +1013,233 @@ export function SmcLabPage() {
     onDeleteSavedConfig: () => setSavedTick((t) => t + 1),
     compareProfileId,
     onCompareProfileId: setCompareProfileId,
-  }
+  }), [
+    config,
+    layers,
+    densityPreset,
+    activeProfileId,
+    detecting,
+    detectionProgress,
+    moduleProgress,
+    handleApplyProfile,
+    applyDetection,
+    clearMarkers,
+    loadSavedConfig,
+    compareProfileId,
+  ])
+
+  /** Wrapper for workspace selectEvent — also navigates candle + loads review. */
+  const selectEvent = useCallback(
+    (id: string) => {
+      setSelectedEventId(id)
+      setSelectedZoneId(null)
+      const event = findEvent(progressive, id)
+      if (event) {
+        setVisibleIndex((v) => Math.max(v, event.candleIndex))
+        const review = reviewsByEventId.get(id)
+        setNote(review?.note ?? '')
+        setTags(review?.reasonTags ?? [])
+      }
+    },
+    [progressive, reviewsByEventId],
+  )
+
+  const onSelectRelated = useCallback(
+    (id: string) => {
+      setSelectedEventId(id)
+      setSelectedZoneId(null)
+      const event = findEvent(progressive, id) ?? findEvent(detection, id)
+      if (event) {
+        setVisibleIndex((v) => Math.max(v, event.candleIndex))
+        const review = reviewsByEventId.get(id)
+        setNote(review?.note ?? '')
+        setTags(review?.reasonTags ?? [])
+      }
+    },
+    [progressive, detection, reviewsByEventId],
+  )
+
+  const relatedForSelected = useMemo(
+    () =>
+      selectedEventId
+        ? relatedEventsByRank(detection, selectedEventId)
+        : { higher: [], nearbyLower: [] },
+    [detection, selectedEventId],
+  )
+
+  const getEventImportanceWrapper = useCallback(
+    (eventId: string) => getEventImportance(detection, eventId),
+    [detection],
+  )
+
+  const workspaceModel = useMemo((): SmcLabWorkspaceModel => ({
+    // Market
+    sourceKind,
+    setSourceKind,
+    datasetId,
+    setDatasetId,
+    symbol,
+    setSymbol,
+    interval,
+    setInterval,
+    periodSelection,
+    setPeriodSelection,
+    periodLabel,
+    candles,
+    candlesLoading: candlesQuery.isLoading || candlesQuery.isFetching,
+    candlesError: candlesQuery.isError
+      ? candlesQuery.error instanceof Error
+        ? candlesQuery.error.message
+        : 'Failed to load candles'
+      : null,
+    providerLabel: candlesQuery.providerLabel ?? '',
+    periodError: resolvedPeriod.error,
+
+    // Config / view
+    config,
+    setConfig,
+    layers,
+    setLayers,
+    densityPreset,
+    setDensityPreset,
+    visibilityMode,
+    handleVisibilityMode,
+    smartVisibilityPreset,
+    handleSmartVisibilityPreset,
+    exitSetupFocus,
+    zoneLifecycle,
+    setZoneLifecycle,
+    setupContext,
+    activeProfileId,
+    setActiveProfileId,
+    applyProfile: handleApplyProfile,
+    resetDefaults: () => {
+      setConfig(cloneSmcDetectorConfig(DEFAULT_SMC_DETECTOR_CONFIG))
+      setActiveProfileId('quantlab-default')
+    },
+    compareProfileId,
+    setCompareProfileId,
+    compareCounts,
+    candleDiffText,
+    savedConfigName,
+    setSavedConfigName,
+    savedTick,
+    bumpSavedTick: () => setSavedTick((t) => t + 1),
+    loadSavedConfig,
+
+    // Detection
+    detection,
+    progressive,
+    progressiveVisible,
+    detecting,
+    detectionProgress,
+    moduleProgress,
+    applyDetection: () => void applyDetection(),
+    clearMarkers,
+    configDirty,
+    appliedConfigHash,
+
+    // Chart / replay
+    windowCandles,
+    windowStart,
+    chartStructure,
+    highlightSwingId,
+    visibleIndex,
+    setVisibleIndex,
+    playing,
+    setPlaying,
+    speed,
+    setSpeed,
+    annotations,
+    setAnnotations,
+    selectedEventId,
+    setSelectedEventId,
+    selectedZoneId,
+    setSelectedZoneId,
+    selectedEvent,
+    selectedZone,
+    eventFilter,
+    setEventFilter,
+    selectEvent,
+
+    // Dow
+    dowTheoryView,
+    dowChartVisibility,
+    chartDowMarkers,
+    showStructureDowView,
+    showDebugDowView,
+    lifecycleProjection,
+
+    // Reviews / validation
+    reviews,
+    reviewsByEventId,
+    selectedReview,
+    reviewStale: staleReview,
+    note,
+    setNote,
+    tags,
+    setTags,
+    handleVerdict: (verdict) => void handleVerdict(verdict),
+    handleResetReview: () => void handleResetReview(),
+    summary,
+    moduleBuckets,
+    goldenDatasets,
+    activeGoldenId,
+    setActiveGoldenId,
+    validationReport,
+    saveGoldenFromCorrectReviews: () => void saveGoldenFromCorrectReviews(),
+    runValidation,
+    deleteGoldenDataset: (id) => void deleteGoldenDataset(id),
+    manualKind,
+    setManualKind,
+    manualPrice,
+    setManualPrice,
+    manualNote,
+    setManualNote,
+    addManualAnnotation: () => void addManualAnnotation(),
+    datasetKey,
+
+    // Diagnostics
+    visibilityPipeline,
+    invariants,
+    detectionComplete,
+    exportResearch,
+    importResearch,
+
+    // Shared controls
+    sharedControls,
+
+    getEventImportance: getEventImportanceWrapper,
+    relatedForSelected,
+    onSelectRelated,
+    visibilityModeTyped: visibilityMode as SmcVisibilityMode,
+  }), [
+    sourceKind, datasetId, symbol, interval, periodSelection, periodLabel, candles,
+    candlesQuery.isLoading, candlesQuery.isFetching, candlesQuery.isError, candlesQuery.error,
+    candlesQuery.providerLabel, resolvedPeriod.error,
+    config, layers, densityPreset, visibilityMode, handleVisibilityMode,
+    smartVisibilityPreset, handleSmartVisibilityPreset, exitSetupFocus,
+    zoneLifecycle, setupContext, activeProfileId, handleApplyProfile,
+    compareProfileId, compareCounts, candleDiffText, savedConfigName, savedTick, loadSavedConfig,
+    detection, progressive, progressiveVisible, detecting, detectionProgress, moduleProgress,
+    applyDetection, clearMarkers, configDirty, appliedConfigHash,
+    windowCandles, windowStart, chartStructure, highlightSwingId,
+    visibleIndex, playing, speed, annotations, selectedEventId, selectedZoneId,
+    selectedEvent, selectedZone, eventFilter, selectEvent,
+    dowTheoryView, dowChartVisibility, chartDowMarkers, showStructureDowView, showDebugDowView,
+    lifecycleProjection,
+    reviews, reviewsByEventId, selectedReview, staleReview, note, tags,
+    handleVerdict, handleResetReview, summary, moduleBuckets,
+    goldenDatasets, activeGoldenId, validationReport,
+    saveGoldenFromCorrectReviews, runValidation, deleteGoldenDataset,
+    manualKind, manualPrice, manualNote, addManualAnnotation, datasetKey,
+    visibilityPipeline, invariants, detectionComplete, exportResearch, importResearch,
+    sharedControls, getEventImportanceWrapper, relatedForSelected, onSelectRelated,
+  ])
 
   return (
     <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4">
+      {/* Page header */}
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15">
@@ -1030,985 +1263,24 @@ export function SmcLabPage() {
         </div>
       </div>
 
-      {/* 1. Source / Symbol / TF */}
-      <Card hover={false}>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Market data</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <MarketSourceFields
-            idPrefix="smc"
-            value={{ sourceKind, datasetId, symbol, interval }}
-            onChange={(next) => {
-              if (next.sourceKind !== undefined) setSourceKind(next.sourceKind)
-              if (next.datasetId !== undefined) setDatasetId(next.datasetId)
-              if (next.symbol !== undefined) setSymbol(next.symbol)
-              if (next.interval !== undefined) setInterval(next.interval)
-            }}
-            onDatasetReady={(dataset) => {
-              setPeriodSelection({
-                preset: 'custom',
-                customStartMs: dataset.startDate,
-                customEndMs: dataset.endDate,
-              })
-            }}
-          />
-          {sourceKind === 'binance' ? (
-            <ResearchPeriodSelect
-              idPrefix="smc-period"
-              selection={periodSelection}
-              onChange={setPeriodSelection}
-            />
-          ) : null}
-          <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-            <Badge variant="outline">{sourceKind}</Badge>
-            <Badge variant="outline" className="font-mono">
-              {symbol}
-            </Badge>
-            <Badge variant="outline">{interval}</Badge>
-            <Badge variant="outline">{candles.length.toLocaleString()} candles</Badge>
-            {candlesQuery.isLoading || candlesQuery.isFetching ? (
-              <span>Loading via {candlesQuery.providerLabel}…</span>
-            ) : null}
-            {candlesQuery.isError ? (
-              <span className="text-danger">
-                {candlesQuery.error instanceof Error
-                  ? candlesQuery.error.message
-                  : 'Failed to load candles'}
-              </span>
-            ) : null}
-            {resolvedPeriod.error ? (
-              <span className="text-danger">{resolvedPeriod.error}</span>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tab bar */}
+      <SmcLabWorkspaceTabs activeTab={activeTab} onChange={setTab} />
 
-      {/* 2. Profile */}
-      <SmcControlsPanel {...sharedControls} sections={['profile', 'density']} />
-
-      <Card hover={false}>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Intelligence visibility</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-[11px] text-muted-foreground">
-            Ranking filters display only — detector events are never deleted.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ['focus', 'Focus', 'Highest ranked only'],
-                ['balanced', 'Balanced', 'Default QuantLab view'],
-                ['debug', 'Debug', 'Everything'],
-              ] as const
-            ).map(([id, label, hint]) => (
-              <button
-                key={id}
-                type="button"
-                className={`min-h-11 rounded-lg border px-3 text-left text-sm ${
-                  visibilityMode === id
-                    ? 'border-amber-500/50 bg-amber-500/15'
-                    : 'border-border bg-white/[0.03]'
-                }`}
-                onClick={() => handleVisibilityMode(id)}
-              >
-                <span className="font-medium">{label}</span>
-                <span className="mt-0.5 block text-[10px] text-muted-foreground">{hint}</span>
-              </button>
-            ))}
-          </div>
-          {detection.diagnostics.ranking ? (
-            <p className="font-mono text-[11px] text-muted-foreground">
-              Visible {detection.diagnostics.ranking.visibleEvents} / detected{' '}
-              {detection.diagnostics.ranking.detectedEvents} · hidden by ranking{' '}
-              {detection.diagnostics.ranking.hiddenByRanking}
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card hover={false}>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Smart chart visibility</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-[11px] text-muted-foreground">
-            Zone lifecycle projection only — detector events stay intact. Orthogonal to ranking
-            Focus / Balanced / Debug.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ['active-only', 'Active Only', 'Untouched zones + current structure'],
-                ['setup-focus', 'Setup Focus', 'Selected setup event chain'],
-                ['balanced', 'Balanced', 'Active + recent (default)'],
-                ['history', 'History', 'Finished zones faded & clipped'],
-                ['debug', 'Debug', 'All lifecycle projections'],
-              ] as const
-            ).map(([id, label, hint]) => (
-              <button
-                key={id}
-                type="button"
-                className={`min-h-11 rounded-lg border px-3 text-left text-sm ${
-                  smartVisibilityPreset === id
-                    ? 'border-sky-500/50 bg-sky-500/15'
-                    : 'border-border bg-white/[0.03]'
-                }`}
-                onClick={() => handleSmartVisibilityPreset(id)}
-              >
-                <span className="font-medium">{label}</span>
-                <span className="mt-0.5 block text-[10px] text-muted-foreground">{hint}</span>
-              </button>
-            ))}
-          </div>
-          {setupContext ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px]">
-              <span>
-                Setup focus · {setupContext.setupId} · {setupContext.direction} ·{' '}
-                {setupContext.status}
-              </span>
-              <Button type="button" size="sm" variant="outline" onClick={exitSetupFocus}>
-                Exit setup focus
-              </Button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="min-h-11"
-              onClick={() => handleSmartVisibilityPreset('setup-focus')}
-            >
-              Enter mock setup focus
-            </Button>
-          )}
-          <Disclosure title="Zone lifecycle settings">
-            <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-              {(
-                [
-                  ['showActive', 'Show active'],
-                  ['showTouched', 'Show touched'],
-                  ['showMitigatedFilled', 'Show mitigated/filled'],
-                  ['showInvalidated', 'Show invalidated'],
-                  ['extendActiveZonesRight', 'Extend active zones right'],
-                  ['fadeOldActiveZones', 'Fade old active zones'],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="flex min-h-11 items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={zoneLifecycle[key]}
-                    onChange={(e) =>
-                      setZoneLifecycle((prev) => ({ ...prev, [key]: e.target.checked }))
-                    }
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </Disclosure>
-          <p className="font-mono text-[11px] text-muted-foreground">
-            Zones {lifecycleProjection.visibleZones.length}/{lifecycleProjection.zones.length} ·
-            projection {lifecycleProjection.diagnostics.status}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* 3. Apply Detection */}
-      <SmcControlsPanel {...sharedControls} sections={['modules', 'actions']} />
-
-      {/* 4. Chart */}
-      <SmcCandlestickChart
-        candles={windowCandles}
-        swings={chartStructure.swings}
-        classifiedSwings={chartStructure.classifiedSwings}
-        bosEvents={chartStructure.bosEvents}
-        chochEvents={chartStructure.chochEvents}
-        displacementEvents={chartStructure.displacementEvents}
-        fvgEvents={progressiveVisible.fvgEvents}
-        equalLevelEvents={progressiveVisible.equalLevelEvents}
-        liquiditySweepEvents={progressiveVisible.liquiditySweepEvents}
-        orderBlockEvents={progressiveVisible.orderBlockEvents}
-        zoneProjections={lifecycleProjection.visibleZones}
-        setupContext={setupContext}
-        annotations={annotations}
-        selectedEventId={selectedEventId}
-        selectedZoneId={selectedZoneId}
-        onSelectZone={(id) => {
-          setSelectedZoneId(id)
-          setSelectedEventId(null)
-        }}
-        highlightSwingId={highlightSwingId}
-        layers={layers}
-        windowStartIndex={windowStart}
-        importanceById={detection.intelligence?.byEventId}
-        dowSwingClassification={
-          dowTheoryView.swingClassification ?? detection.dowTheory?.swingClassification ?? {}
-        }
-        dowBySwingId={dowTheoryView.bySwingId ?? detection.dowTheory?.bySwingId ?? {}}
-      />
-
-      {dowChartVisibility.notice ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
-          <p>{dowChartVisibility.notice.message}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="secondary" onClick={showStructureDowView}>
-              Show Structure view
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={showDebugDowView}>
-              Show Debug view
-            </Button>
-          </div>
+      {/* Workspace panels — all mounted, inactive ones are CSS-hidden to preserve DOM state */}
+      <SmcLabWorkspaceProvider value={workspaceModel}>
+        <div className={activeTab === 'analyze' ? undefined : 'hidden'}>
+          <SmcAnalyzeWorkspace />
         </div>
-      ) : null}
-
-      <Card hover={false}>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Dow Theory</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3 text-[11px]">
-          <label className="flex min-h-11 items-center gap-2">
-            <input
-              type="checkbox"
-              checked={layers.dowTheoryLabels ?? true}
-              onChange={(e) =>
-                setLayers((prev) => ({ ...prev, dowTheoryLabels: e.target.checked }))
-              }
-            />
-            Show Dow Theory labels
-          </label>
-          <Badge variant="outline">{dowTheoryView.trend}</Badge>
-          <span className="font-mono text-muted-foreground">
-            Strength {dowTheoryView.strength} · {dowTheoryView.structurePhase}
-          </span>
-          <span className="font-mono text-muted-foreground">
-            HH {dowTheoryView.diagnostics.hhCount} · HL {dowTheoryView.diagnostics.hlCount} · LH{' '}
-            {dowTheoryView.diagnostics.lhCount} · LL {dowTheoryView.diagnostics.llCount}
-          </span>
-          <span className="w-full font-mono text-[10px] text-muted-foreground">
-            Chart markers:{' '}
-            {chartDowMarkers.filter((m) => m.dowLabel != null).length === 0
-              ? '—'
-              : chartDowMarkers
-                  .filter((m) => m.dowLabel != null)
-                  .slice(0, 8)
-                  .map((m) => m.text)
-                  .join(' · ')}
-          </span>
-          <span className="w-full font-mono text-[10px] text-muted-foreground">
-            Dow visibility · classified {dowChartVisibility.diagnostics.classifiedDowCount} ·
-            density {dowChartVisibility.diagnostics.densityEligibleDowCount} · ranking{' '}
-            {dowChartVisibility.diagnostics.rankingVisibleDowCount} · chart{' '}
-            {dowChartVisibility.diagnostics.chartRenderedDowCount} · hidden density{' '}
-            {dowChartVisibility.diagnostics.hiddenByDensity} · hidden ranking{' '}
-            {dowChartVisibility.diagnostics.hiddenByRanking}
-          </span>
-        </CardContent>
-      </Card>
-
-      <Card hover={false}>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Zone legend</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
-          <p>
-            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-emerald-500/70" />
-            Bullish FVG
-          </p>
-          <p>
-            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-red-500/70" />
-            Bearish FVG
-          </p>
-          <p>
-            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-blue-500/70" />
-            Bullish OB
-          </p>
-          <p>
-            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-purple-500/70" />
-            Bearish OB
-          </p>
-          <p>
-            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-amber-500/70" />
-            BSL / SSL
-          </p>
-          <p>Solid = Active/Fresh · Dotted = Touched/Partial · Faded = Finished</p>
-          <p>Labels: FVG · OB · BSL · SSL (+ ·T/·P/·M/·X/·S)</p>
-        </CardContent>
-      </Card>
-
-      <SmcCursorControls
-        visibleIndex={visibleIndex}
-        candleCount={candles.length}
-        playing={playing}
-        speed={speed}
-        onFirst={() => setVisibleIndex(0)}
-        onPrev={() => setVisibleIndex((v) => Math.max(0, v - 1))}
-        onNext={() => setVisibleIndex((v) => Math.min(candles.length - 1, v + 1))}
-        onLast={() => setVisibleIndex(Math.max(0, candles.length - 1))}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onSpeedChange={setSpeed}
-      />
-
-      {/* 5. Inspector */}
-      {selectedZone ? (
-        <Card hover={false}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">{selectedZone.fullLabel}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1 text-xs">
-            <p>
-              <span className="text-muted-foreground">Kind: </span>
-              {selectedZone.zoneKind} · {selectedZone.direction}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Source event: </span>
-              <button
-                type="button"
-                className="font-mono text-sky-300 underline"
-                onClick={() => {
-                  setSelectedEventId(selectedZone.sourceEventId)
-                  setSelectedZoneId(null)
-                }}
-              >
-                {selectedZone.sourceEventId}
-              </button>
-            </p>
-            <p>
-              <span className="text-muted-foreground">State: </span>
-              {selectedZone.state}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Still active: </span>
-              {selectedZone.activeAtVisibleIndex ? 'yes' : 'no'}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Chart extent: </span>
-              {selectedZone.startIndex} → {selectedZone.endIndex}
-              {selectedZone.extendsToVisibleEdge ? ' (extends to visible)' : ' (clipped)'}
-            </p>
-            {selectedZone.firstTouchIndex != null ? (
-              <p>
-                <span className="text-muted-foreground">First touch: </span>
-                candle {selectedZone.firstTouchIndex}
-                {candles[selectedZone.firstTouchIndex]
-                  ? ` · ${new Date(candles[selectedZone.firstTouchIndex]!.time).toLocaleString()}`
-                  : ''}
-              </p>
-            ) : null}
-            {selectedZone.mitigationIndex != null ? (
-              <p>
-                <span className="text-muted-foreground">Mitigation / fill: </span>
-                candle {selectedZone.mitigationIndex}
-                {candles[selectedZone.mitigationIndex]
-                  ? ` · ${new Date(candles[selectedZone.mitigationIndex]!.time).toLocaleString()}`
-                  : ''}
-              </p>
-            ) : null}
-            {selectedZone.invalidationIndex != null ? (
-              <p>
-                <span className="text-muted-foreground">Invalidation: </span>
-                candle {selectedZone.invalidationIndex}
-              </p>
-            ) : null}
-            <p>
-              <span className="text-muted-foreground">Why visible: </span>
-              {selectedZone.visibilityReason}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Why extent: </span>
-              {selectedZone.lifecycleReason}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Setup refs: </span>
-              {selectedZone.setupRefs.length ? selectedZone.setupRefs.join(', ') : '—'}
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setSelectedZoneId(null)}
-            >
-              Clear zone selection
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <SmcEventInspector
-        event={selectedEvent}
-        candles={candles}
-        swings={progressive.swings}
-        review={selectedReview}
-        reviewStale={staleReview}
-        note={note}
-        tags={tags}
-        onNoteChange={setNote}
-        onTagsChange={setTags}
-        onVerdict={(v) => void handleVerdict(v)}
-        onResetReview={() => void handleResetReview()}
-        importance={selectedEventId ? getEventImportance(detection, selectedEventId) : null}
-        related={
-          selectedEventId
-            ? relatedEventsByRank(detection, selectedEventId)
-            : { higher: [], nearbyLower: [] }
-        }
-        onSelectRelated={(id) => {
-          setSelectedEventId(id)
-          setSelectedZoneId(null)
-          const event = findEvent(progressive, id) ?? findEvent(detection, id)
-          if (event) {
-            setVisibleIndex((v) => Math.max(v, event.candleIndex))
-            const review = reviewsByEventId.get(id)
-            setNote(review?.note ?? '')
-            setTags(review?.reasonTags ?? [])
-          }
-        }}
-        dowTheory={dowTheoryView}
-      />
-
-      {/* 6. Event List */}
-      <SmcEventList
-        detection={progressive}
-        candles={candles}
-        reviewsByEventId={reviewsByEventId}
-        filter={eventFilter}
-        selectedEventId={selectedEventId}
-        onFilterChange={setEventFilter}
-        onSelect={(id) => {
-          setSelectedEventId(id)
-          setSelectedZoneId(null)
-          const event = findEvent(progressive, id)
-          if (event) {
-            setVisibleIndex((v) => Math.max(v, event.candleIndex))
-            const review = reviewsByEventId.get(id)
-            setNote(review?.note ?? '')
-            setTags(review?.reasonTags ?? [])
-          }
-        }}
-        rankingVisibleOnly={visibilityMode !== 'debug'}
-        importanceById={detection.intelligence?.byEventId}
-      />
-
-      {/* Profile comparison aggregates */}
-      {compareCounts ? (
-        <Card hover={false}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Profile comparison (aggregate counts)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-xs">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <CompareStat label={`${compareCounts.nameA} swings`} value={compareCounts.a.confirmedSwings} />
-              <CompareStat label={`${compareCounts.nameB} swings`} value={compareCounts.b.confirmedSwings} />
-              <CompareStat label={`${compareCounts.nameA} BOS`} value={compareCounts.a.bullishBos + compareCounts.a.bearishBos} />
-              <CompareStat label={`${compareCounts.nameB} BOS`} value={compareCounts.b.bullishBos + compareCounts.b.bearishBos} />
-              <CompareStat label={`${compareCounts.nameA} CHoCH`} value={compareCounts.a.bullishChoch + compareCounts.a.bearishChoch} />
-              <CompareStat label={`${compareCounts.nameB} CHoCH`} value={compareCounts.b.bullishChoch + compareCounts.b.bearishChoch} />
-              <CompareStat label={`${compareCounts.nameA} FVG`} value={compareCounts.a.bullishFvg + compareCounts.a.bearishFvg} />
-              <CompareStat label={`${compareCounts.nameB} FVG`} value={compareCounts.b.bullishFvg + compareCounts.b.bearishFvg} />
-              <CompareStat label={`${compareCounts.nameA} Sweeps`} value={compareCounts.a.liquiditySweeps} />
-              <CompareStat label={`${compareCounts.nameB} Sweeps`} value={compareCounts.b.liquiditySweeps} />
-              <CompareStat label={`${compareCounts.nameA} OB`} value={compareCounts.a.orderBlocks} />
-              <CompareStat label={`${compareCounts.nameB} OB`} value={compareCounts.b.orderBlocks} />
-            </div>
-            {candleDiffText ? (
-              <div className="rounded-lg border border-border/60 bg-white/[0.02] p-3">
-                <p className="mb-1 font-medium">Selected candle event difference</p>
-                <pre className="whitespace-pre-wrap text-[11px] text-muted-foreground">
-                  {candleDiffText}
-                </pre>
-              </div>
-            ) : null}
-            <p className="text-muted-foreground">
-              Overlay is off by default — comparison shows aggregate counts only.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* 7. Review Summary */}
-      <Disclosure title="Review summary">
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-            <div>
-              <p className="text-muted-foreground">Detected (unique reviewable)</p>
-              <p className="font-mono">{summary.overall.detected}</p>
-              <p className="text-[10px] text-muted-foreground">
-                Lifecycle updates excluded: {summary.lifecycleUpdateCount}
-              </p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Reviewed</p>
-              <p className="font-mono">{summary.overall.reviewed}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Correct / Wrong</p>
-              <p className="font-mono">
-                {summary.overall.correct} / {summary.overall.wrong}
-              </p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Reviewed agreement</p>
-              <p className="font-mono">{formatReviewedAccuracy(summary.overall)}</p>
-            </div>
-          </div>
-          {moduleBuckets.length > 0 ? (
-            <div className="space-y-1">
-              <p className="text-xs font-medium">By module</p>
-              <ul className="grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
-                {moduleBuckets.map((bucket) => (
-                  <li
-                    key={String(bucket.kind)}
-                    className="flex items-center justify-between rounded-md border border-border/50 px-2 py-1"
-                  >
-                    <span>{bucket.kind}</span>
-                    <span className="font-mono text-muted-foreground">
-                      {bucket.correct}/{bucket.correct + bucket.wrong} ·{' '}
-                      {formatReviewedAccuracy(bucket)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {(() => {
-            const b = detection.diagnostics.structureBreakCounts
-            const rows: Array<[string, number]> = [
-              ['Internal Bullish BOS', b.internalBullishBos],
-              ['Internal Bearish BOS', b.internalBearishBos],
-              ['External Bullish BOS', b.externalBullishBos],
-              ['External Bearish BOS', b.externalBearishBos],
-              ['Internal Bullish CHoCH', b.internalBullishChoch],
-              ['Internal Bearish CHoCH', b.internalBearishChoch],
-              ['External Bullish CHoCH', b.externalBullishChoch],
-              ['External Bearish CHoCH', b.externalBearishChoch],
-            ]
-            return (
-              <div className="space-y-1">
-                <p className="text-xs font-medium">Structure breaks (scope × direction)</p>
-                <ul className="grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
-                  {rows.map(([label, count]) => (
-                    <li
-                      key={label}
-                      className="flex items-center justify-between rounded-md border border-border/50 px-2 py-1"
-                    >
-                      <span>{label}</span>
-                      <span className="font-mono text-muted-foreground">{count}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )
-          })()}
-          {summary.historicalReviews.length > 0 ? (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-amber-200">
-                Historical reviews (prior config / profile)
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {summary.historicalReviews.length} review
-                {summary.historicalReviews.length === 1 ? '' : 's'} from earlier detector
-                fingerprints remain stored but are excluded from active reviewed agreement.
-              </p>
-            </div>
-          ) : null}
+        <div className={activeTab === 'configure' ? undefined : 'hidden'}>
+          <SmcConfigureWorkspace />
         </div>
-      </Disclosure>
-
-      {/* 7b. Validation Suite */}
-      <SmcValidationDashboard
-        report={validationReport}
-        datasets={goldenDatasets}
-        activeDatasetId={activeGoldenId}
-        onSelectDataset={setActiveGoldenId}
-        onSaveGoldenFromReviews={() => void saveGoldenFromCorrectReviews()}
-        onRunValidation={runValidation}
-        onDeleteDataset={(id) => void deleteGoldenDataset(id)}
-      />
-      {validationReport ? (
-        <SmcGoldenChartCompare
-          detected={toDetectedProbes(detection)}
-          expected={
-            goldenDatasets.find((d) => d.id === (activeGoldenId ?? validationReport.datasetId))
-              ?.labels ?? []
-          }
-          matched={validationReport.matched}
-          missed={validationReport.missed}
-          extra={validationReport.extra}
-        />
-      ) : null}
-
-      {/* 8. Advanced Settings */}
-      <Disclosure title="Advanced settings">
-        <SmcControlsPanel {...sharedControls} sections={['advanced', 'layers']} />
-      </Disclosure>
-
-      {/* 9. Saved Configs */}
-      <Disclosure title="Saved configs & presets">
-        <div className="space-y-3">
-          <SmcControlsPanel {...sharedControls} sections={['presets', 'saved']} />
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              value={savedConfigName}
-              onChange={(e) => setSavedConfigName(e.target.value)}
-              placeholder="New config name"
-              className="bg-white/[0.03]"
-            />
-            <Button
-              type="button"
-              className="min-h-11"
-              onClick={() => {
-                saveSmcNamedConfig({
-                  name: savedConfigName || 'Untitled',
-                  config,
-                  profileId: activeProfileId,
-                })
-                setSavedConfigName('')
-                setSavedTick((t) => t + 1)
-              }}
-            >
-              Save current
-            </Button>
-          </div>
+        <div className={activeTab === 'validate' ? undefined : 'hidden'}>
+          <SmcValidateWorkspace />
         </div>
-      </Disclosure>
-
-      {invariants ? (
-        <Card hover={false} className={invariants.ok ? '' : 'border-danger/40'}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Invariant report</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-[11px]">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <p>Invalid bullish BOS: {invariants.invalidBullishBosCount}</p>
-              <p>Invalid bearish BOS: {invariants.invalidBearishBosCount}</p>
-              <p>BOS before confirmation: {invariants.bosBeforeConfirmationCount}</p>
-              <p>Duplicate break of same swing: {invariants.repeatedSwingBreakCount}</p>
-              <p>BOS+CHoCH same swing: {invariants.duplicateBreakOfSameSwingCount}</p>
-              <p>CHoCH without opposing structure: {invariants.chochWithoutPriorStructureCount}</p>
-              <p>Invalid bullish CHoCH: {invariants.invalidBullishChochCount}</p>
-              <p>Invalid bearish CHoCH: {invariants.invalidBearishChochCount}</p>
-              <p>Invalid FVG geometry: {invariants.fvgInvalidGeometryCount}</p>
-              <p>Sweep without penetration: {invariants.sweepWithoutPenetrationCount}</p>
-              <p>Sweep without close reclaim: {invariants.sweepWithoutCloseReclaimCount}</p>
-              <p>Repeated consumed-level sweep: {invariants.repeatedConsumedLevelSweepCount}</p>
-              <p>Order Block after source break: {invariants.orderBlockAfterSourceBreakCount}</p>
-              <p>Missing dependency reference: {invariants.dependencyReferenceMissingCount}</p>
-              <p>Event timestamp mismatch: {invariants.eventTimestampMismatchCount}</p>
-              <p>Artificial zero display value: {invariants.artificialZeroDisplayValueCount}</p>
-              <p className="font-medium">
-                Status:{' '}
-                {detectionComplete && invariants.ok
-                  ? 'COMPLETE (0 failures)'
-                  : 'FAILED'}
-              </p>
-            </div>
-            {!invariants.ok && detection.diagnostics.invariantDetails?.length ? (
-              <ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-4 text-danger">
-                {detection.diagnostics.invariantDetails.slice(0, 20).map((detail) => (
-                  <li key={detail}>{detail}</li>
-                ))}
-              </ul>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Disclosure title="Manual annotations">
-        <div className="space-y-2">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <select
-              className="h-11 rounded-lg border border-border bg-white/[0.03] px-3 text-sm"
-              value={manualKind}
-              onChange={(e) =>
-                setManualKind(e.target.value as SmcManualAnnotation['kind'])
-              }
-            >
-              <option value="MANUAL_SWING_HIGH">Manual Swing High</option>
-              <option value="MANUAL_SWING_LOW">Manual Swing Low</option>
-              <option value="MANUAL_BULLISH_BOS">Manual Bullish BOS</option>
-              <option value="MANUAL_BEARISH_BOS">Manual Bearish BOS</option>
-              <option value="MANUAL_BULLISH_CHOCH">Manual Bullish CHoCH</option>
-              <option value="MANUAL_BEARISH_CHOCH">Manual Bearish CHoCH</option>
-              <option value="NOTE">Note</option>
-            </select>
-            <Input
-              value={manualPrice}
-              onChange={(e) => setManualPrice(e.target.value)}
-              placeholder="Price"
-              className="bg-white/[0.03]"
-            />
-            <Input
-              value={manualNote}
-              onChange={(e) => setManualNote(e.target.value)}
-              placeholder="Note"
-              className="bg-white/[0.03]"
-            />
-            <Button type="button" className="min-h-11" onClick={() => void addManualAnnotation()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add
-            </Button>
-          </div>
-          <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
-            {annotations.map((ann) => (
-              <li
-                key={ann.id}
-                className="flex items-center justify-between gap-2 rounded-md border border-border/50 px-2 py-1"
-              >
-                <span>
-                  {ann.kind} · {ann.price} · {new Date(ann.timestamp).toLocaleString()}
-                </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    void getSmcLabStore()
-                      .deleteAnnotation(ann.id)
-                      .then(async () =>
-                        setAnnotations(await getSmcLabStore().listAnnotations(datasetKey)),
-                      )
-                  }
-                >
-                  Delete
-                </Button>
-              </li>
-            ))}
-          </ul>
+        <div className={activeTab === 'diagnostics' ? undefined : 'hidden'}>
+          <SmcDiagnosticsWorkspace />
         </div>
-      </Disclosure>
-
-      {/* 10–11. Diagnostics + Import/Export */}
-      <Disclosure title="Diagnostics">
-        <div className="space-y-3 text-[11px]">
-          {(() => {
-            const s = detection.diagnostics.summary
-            const b = detection.diagnostics.structureBreakCounts
-            const sweep = detection.diagnostics.liquiditySweepDiagnostics
-            const breakdown = detection.diagnostics.eventCountBreakdown
-            return (
-              <>
-                <div className="rounded-lg border border-border/60 bg-white/[0.02] p-3 font-mono leading-relaxed">
-                  <p>{s.candleCount} candles</p>
-                  <p className="mt-2">Unique reviewable events: {s.uniqueReviewableEvents}</p>
-                  <p>Lifecycle updates: {s.lifecycleUpdates}</p>
-                  <p>
-                    Visible events:{' '}
-                    {detection.diagnostics.ranking?.visibleEvents ??
-                      (windowCandles.length > 0
-                        ? flattenDetectionEvents(progressiveVisible).filter(
-                            (e) =>
-                              e.candleIndex >= windowStart &&
-                              e.candleIndex < windowStart + windowCandles.length,
-                          ).length
-                        : 0)}
-                  </p>
-                  <p>Total events: {s.totalEvents}</p>
-                  {detection.diagnostics.ranking ? (
-                    <>
-                      <p className="mt-2">
-                        Detected Events: {detection.diagnostics.ranking.detectedEvents}
-                      </p>
-                      <p>Visible Events: {detection.diagnostics.ranking.visibleEvents}</p>
-                      <p>Hidden by Ranking: {detection.diagnostics.ranking.hiddenByRanking}</p>
-                      <p>Average Importance: {detection.diagnostics.ranking.averageImportance}</p>
-                      <p>Highest Importance: {detection.diagnostics.ranking.highestImportance}</p>
-                      <p>Lowest Importance: {detection.diagnostics.ranking.lowestImportance}</p>
-                      <p>Visibility mode: {detection.diagnostics.ranking.mode}</p>
-                    </>
-                  ) : null}
-                  <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
-                    <p className="font-medium">Dow Theory</p>
-                    <p>
-                      result.dowTheory:{' '}
-                      {detection.dowTheory ? 'populated' : 'missing'} · progressive labels{' '}
-                      {Object.keys(dowTheoryView.swingClassification).length}
-                    </p>
-                    <p>
-                      Trend {dowTheoryView.trend} · strength {dowTheoryView.strength} · phase{' '}
-                      {dowTheoryView.structurePhase}
-                    </p>
-                    <p>
-                      HH {dowTheoryView.diagnostics.hhCount} · HL {dowTheoryView.diagnostics.hlCount}{' '}
-                      · LH {dowTheoryView.diagnostics.lhCount} · LL{' '}
-                      {dowTheoryView.diagnostics.llCount}
-                    </p>
-                  </div>
-                  <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
-                    <p className="font-medium">Zone lifecycle projection</p>
-                    <p>Status: {lifecycleProjection.diagnostics.status}</p>
-                    <p>
-                      FVG active {lifecycleProjection.diagnostics.fvgActiveUntouched} · touched{' '}
-                      {lifecycleProjection.diagnostics.fvgTouched} · partial{' '}
-                      {lifecycleProjection.diagnostics.fvgPartiallyMitigated} · filled{' '}
-                      {lifecycleProjection.diagnostics.fvgFilled} · invalidated{' '}
-                      {lifecycleProjection.diagnostics.fvgInvalidated} · hidden{' '}
-                      {lifecycleProjection.diagnostics.fvgHiddenByVisibility}
-                    </p>
-                    <p>
-                      OB fresh {lifecycleProjection.diagnostics.obFresh} · touched{' '}
-                      {lifecycleProjection.diagnostics.obTouched} · partial{' '}
-                      {lifecycleProjection.diagnostics.obPartial} · mitigated{' '}
-                      {lifecycleProjection.diagnostics.obMitigated} · invalidated{' '}
-                      {lifecycleProjection.diagnostics.obInvalidated} · hidden{' '}
-                      {lifecycleProjection.diagnostics.obHiddenByVisibility}
-                    </p>
-                    <p>
-                      Liquidity unswept {lifecycleProjection.diagnostics.liquidityActiveUnswept} ·
-                      swept {lifecycleProjection.diagnostics.liquiditySwept} · broken{' '}
-                      {lifecycleProjection.diagnostics.liquidityBroken} · superseded{' '}
-                      {lifecycleProjection.diagnostics.liquiditySuperseded}
-                    </p>
-                    <p>
-                      Extending {lifecycleProjection.diagnostics.zonesExtendingToVisibleIndex} ·
-                      clipped {lifecycleProjection.diagnostics.zonesClippedAtTerminal} · setup-forced{' '}
-                      {lifecycleProjection.diagnostics.setupForcedVisible} · hidden by lifecycle{' '}
-                      {lifecycleProjection.diagnostics.hiddenByLifecycle}
-                    </p>
-                    <p>
-                      Invariants: filledFvgPastFill=
-                      {lifecycleProjection.diagnostics.invariants.filledFvgExtendingPastFill} ·
-                      invFvgPast=
-                      {lifecycleProjection.diagnostics.invariants.invalidatedFvgExtendingPastInvalidation}{' '}
-                      · mitigatedObActive=
-                      {lifecycleProjection.diagnostics.invariants.mitigatedObRenderedActive} ·
-                      invObRight=
-                      {lifecycleProjection.diagnostics.invariants.invalidatedObExtendingRight} ·
-                      sweptPast=
-                      {lifecycleProjection.diagnostics.invariants.sweptLiquidityExtendingPastSweep} ·
-                      brokenActive=
-                      {lifecycleProjection.diagnostics.invariants.brokenLiquidityRenderedActive} ·
-                      setupHidden=
-                      {lifecycleProjection.diagnostics.invariants.setupReferencedHidden}
-                    </p>
-                    {lifecycleProjection.diagnostics.invariantDetails.slice(0, 8).map((d) => (
-                      <p key={d} className="text-danger">
-                        {d}
-                      </p>
-                    ))}
-                  </div>
-                  <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
-                    <p className="font-medium">Visibility pipeline</p>
-                    <p>
-                      Overall detector {visibilityPipeline.overall.detectorCount} · ranked{' '}
-                      {visibilityPipeline.overall.rankedCount} · visible{' '}
-                      {visibilityPipeline.overall.visibleCount} · chartRendered{' '}
-                      {visibilityPipeline.overall.chartRenderedCount} · listRendered{' '}
-                      {visibilityPipeline.overall.listRenderedCount}
-                    </p>
-                    {(
-                      [
-                        'BOS',
-                        'CHoCH',
-                        'LiquiditySweep',
-                        'Swing',
-                        'Displacement',
-                        'FVG',
-                        'OrderBlock',
-                      ] as const
-                    ).map((module) => {
-                      const row = visibilityPipeline.byModule[module]
-                      if (row.detectorCount === 0 && row.visibleCount === 0) return null
-                      return (
-                        <p key={module}>
-                          {module}: detector {row.detectorCount} · ranked {row.rankedCount} ·
-                          visible {row.visibleCount} · chart {row.chartRenderedCount} · list{' '}
-                          {row.listRenderedCount}
-                        </p>
-                      )
-                    })}
-                    {visibilityPipeline.notes.map((note) => (
-                      <p key={note} className="text-amber-200">
-                        {note}
-                      </p>
-                    ))}
-                  </div>
-                  <p className="mt-2">External swings: {s.externalSwings}</p>
-                  <p>Internal swings: {s.internalSwings}</p>
-                  <p className="mt-2">External BOS: {s.externalBos}</p>
-                  <p>Internal BOS: {s.internalBos}</p>
-                  <p>External CHoCH: {s.externalChoch}</p>
-                  <p>Internal CHoCH: {s.internalChoch}</p>
-                  <p className="mt-2">Liquidity levels: {s.liquidityLevels}</p>
-                  <p>Raw sweep candidates: {s.rawSweepCandidates}</p>
-                  <p>Unique valid sweeps: {s.uniqueValidSweeps}</p>
-                  <p>Duplicates suppressed: {s.duplicateSweepsSuppressed}</p>
-                  <p>Consumed attempts ignored: {s.consumedAttemptsIgnored}</p>
-                  <p className="mt-2">
-                    Invariants: {s.invariantFailures} failure
-                    {s.invariantFailures === 1 ? '' : 's'}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  <p>Detector {detection.diagnostics.detectorVersion}</p>
-                  <p>Status {detection.diagnostics.detectionStatus}</p>
-                  <p>Structure {detection.structureState}</p>
-                  <p>Profile {activeProfileId}</p>
-                  <p>Internal Bullish BOS {b.internalBullishBos}</p>
-                  <p>Internal Bearish BOS {b.internalBearishBos}</p>
-                  <p>External Bullish BOS {b.externalBullishBos}</p>
-                  <p>External Bearish BOS {b.externalBearishBos}</p>
-                  <p>Internal Bullish CHoCH {b.internalBullishChoch}</p>
-                  <p>Internal Bearish CHoCH {b.internalBearishChoch}</p>
-                  <p>External Bullish CHoCH {b.externalBullishChoch}</p>
-                  <p>External Bearish CHoCH {b.externalBearishChoch}</p>
-                  <p>FVG created {breakdown.fvgCreated}</p>
-                  <p>FVG touched {breakdown.fvgTouched}</p>
-                  <p>FVG half filled {breakdown.fvgHalfFilled}</p>
-                  <p>FVG fully filled {breakdown.fvgFullyFilled}</p>
-                  <p>FVG invalidated {breakdown.fvgInvalidated}</p>
-                  <p>Unique FVG zones {breakdown.uniqueFvgZones}</p>
-                  <p>OB created {breakdown.orderBlockCreated}</p>
-                  <p>OB touched {breakdown.orderBlockTouched}</p>
-                  <p>OB mitigated {breakdown.orderBlockMitigated}</p>
-                  <p>OB invalidated {breakdown.orderBlockInvalidated}</p>
-                  <p>Unique OB zones {breakdown.uniqueOrderBlockZones}</p>
-                  <p>Canonical levels {sweep.canonicalLevelsConsidered}</p>
-                  <p>Duration {detection.diagnostics.computationDurationMs.toFixed(1)} ms</p>
-                </div>
-                <p className="text-muted-foreground">{breakdown.explanation}</p>
-                {detection.diagnostics.moduleTimings.map((t) => (
-                  <p key={t.module}>
-                    {t.module}: {t.status} ({t.durationMs.toFixed(1)} ms)
-                  </p>
-                ))}
-              </>
-            )
-          })()}
-        </div>
-      </Disclosure>
-
-      <Disclosure title="Import / export">
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="button" variant="outline" className="min-h-11" onClick={exportResearch}>
-            <Download className="mr-2 h-4 w-4" />
-            Export JSON (schema v3)
-          </Button>
-          <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-border px-3 text-sm">
-            <Upload className="mr-2 h-4 w-4" />
-            Import JSON
-            <input
-              type="file"
-              accept="application/json"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) void importResearch(file)
-              }}
-            />
-          </label>
-        </div>
-      </Disclosure>
-    </div>
-  )
-}
-
-function CompareStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <p className="text-muted-foreground">{label}</p>
-      <p className="font-mono">{value}</p>
+      </SmcLabWorkspaceProvider>
     </div>
   )
 }
