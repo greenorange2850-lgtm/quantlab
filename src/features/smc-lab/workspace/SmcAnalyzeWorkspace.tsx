@@ -1,11 +1,20 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Disclosure } from '@/components/ui/disclosure'
 import { SmcCandlestickChart } from '../components/SmcCandlestickChart'
 import { SmcCursorControls } from '../components/SmcCursorControls'
 import { SmcEventInspector } from '../components/SmcEventInspector'
 import { SmcEventList } from '../components/SmcEventList'
 import { layersForDensityPreset } from '../persistence/prefs-archive'
+import { useMemo, useState } from 'react'
+import {
+  MarketDecisionCard,
+  MarketStructureCard,
+  SetupProgressCard,
+} from '../analyze'
+import { QmlInspector, QmlSetupsPanel, type QmlWrongTag } from '../qml'
+import { SetupInspector } from '../setup'
 import { SmcAppliedConfigSummary } from './SmcAppliedConfigSummary'
 import { SmcQuickViewControls } from './SmcQuickViewControls'
 import { useSmcLabWorkspace } from './SmcLabWorkspaceContext'
@@ -48,11 +57,23 @@ export function SmcAnalyzeWorkspace() {
     setSelectedEventId,
     selectedZoneId,
     setSelectedZoneId,
+    selectedQmlId,
+    selectQmlPattern,
     selectedEvent,
     selectedZone,
+    config,
     eventFilter,
     setEventFilter,
     selectEvent,
+    setupEngineResult,
+    selectedSetup,
+    selectSetup,
+    clearSelectedSetup,
+    setupReviewNote,
+    setSetupReviewNote,
+    setupReviewVerdict,
+    handleSetupVerdict,
+    handleResetSetupReview,
     lifecycleProjection,
     setupContext,
     dowTheoryView,
@@ -79,6 +100,17 @@ export function SmcAnalyzeWorkspace() {
     setLayers(layersForDensityPreset(preset))
   }
 
+  const [qmlNote, setQmlNote] = useState('')
+  const [qmlTags, setQmlTags] = useState<QmlWrongTag[]>([])
+  const [qmlVerdict, setQmlVerdict] = useState<'correct' | 'wrong' | 'unsure' | null>(null)
+
+  const selectedQml = useMemo(() => {
+    const patterns = progressive.qml?.patterns ?? detection.qml?.patterns ?? []
+    return patterns.find((p) => p.id === selectedQmlId) ?? null
+  }, [progressive.qml?.patterns, detection.qml?.patterns, selectedQmlId])
+
+  const activeSetup = selectedSetup ?? setupEngineResult?.summary.highestRanked ?? null
+
   return (
     <div
       id="smc-lab-panel-analyze"
@@ -86,7 +118,7 @@ export function SmcAnalyzeWorkspace() {
       aria-labelledby="smc-lab-tab-analyze"
       className="space-y-4"
     >
-      {/* Compact market context badges */}
+      {/* Compact market context + run */}
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
         <Badge variant="outline">{sourceKind}</Badge>
         <Badge variant="outline" className="font-mono">
@@ -95,122 +127,128 @@ export function SmcAnalyzeWorkspace() {
         <Badge variant="outline">{interval}</Badge>
         <Badge variant="outline">{candles.length.toLocaleString()} candles</Badge>
         {periodLabel ? <Badge variant="outline">{periodLabel}</Badge> : null}
-      </div>
-
-      {/* Applied config summary */}
-      <SmcAppliedConfigSummary
-        profileId={activeProfileId}
-        densityPreset={densityPreset}
-        visibilityMode={visibilityMode}
-        smartVisibilityPreset={smartVisibilityPreset}
-      />
-
-      {/* Quick view controls */}
-      <SmcQuickViewControls
-        densityPreset={densityPreset}
-        visibilityMode={visibilityMode}
-        smartVisibilityPreset={smartVisibilityPreset}
-        onDensityPresetChange={handleDensityChange}
-        onVisibilityModeChange={handleVisibilityMode}
-        onSmartVisibilityPresetChange={handleSmartVisibilityPreset}
-      />
-
-      {/* Apply Detection */}
-      <div className="flex items-center gap-3">
         <Button
           type="button"
-          className="min-h-11"
+          size="sm"
+          className="ml-auto min-h-10"
           disabled={detecting || candles.length === 0}
           onClick={applyDetection}
         >
           {detecting
             ? detectionProgress != null
-              ? `Detecting… ${Math.round(detectionProgress * 100)}%`
-              : 'Detecting…'
-            : 'Apply Detection'}
+              ? `Updating… ${Math.round(detectionProgress * 100)}%`
+              : 'Updating…'
+            : 'Update Market'}
         </Button>
       </div>
 
-      {/* Desktop two-column: chart + inspector/list */}
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:gap-4">
-        {/* Left column: chart + Dow + zone legend */}
+      {/* 1. Market Decision */}
+      <MarketDecisionCard
+        result={setupEngineResult}
+        dow={dowTheoryView}
+        selectedSetup={selectedSetup}
+        onSelectSetup={selectSetup}
+      />
+
+      {/* 2 + 3. Market Structure / Setup Progress */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <MarketStructureCard
+          dow={dowTheoryView}
+          dowChartVisibility={dowChartVisibility}
+          onShowStructureView={showStructureDowView}
+          onShowDebugView={showDebugDowView}
+        />
+        <SetupProgressCard
+          setup={activeSetup}
+          qml={progressive.qml ?? detection.qml}
+          qmlEnabled={config.qml.enabled}
+          onSelectQml={selectQmlPattern}
+        />
+      </div>
+
+      {/* 4. Chart */}
+      <SmcCandlestickChart
+        candles={windowCandles}
+        swings={chartStructure.swings}
+        classifiedSwings={chartStructure.classifiedSwings}
+        bosEvents={chartStructure.bosEvents}
+        chochEvents={chartStructure.chochEvents}
+        displacementEvents={chartStructure.displacementEvents}
+        fvgEvents={progressiveVisible.fvgEvents}
+        equalLevelEvents={progressiveVisible.equalLevelEvents}
+        liquiditySweepEvents={progressiveVisible.liquiditySweepEvents}
+        orderBlockEvents={progressiveVisible.orderBlockEvents}
+        zoneProjections={lifecycleProjection.visibleZones}
+        setupContext={setupContext}
+        annotations={annotations}
+        selectedEventId={selectedEventId}
+        selectedZoneId={selectedZoneId}
+        onSelectZone={(id) => {
+          setSelectedZoneId(id)
+          setSelectedEventId(null)
+        }}
+        highlightSwingId={highlightSwingId}
+        layers={layers}
+        windowStartIndex={windowStart}
+        importanceById={detection.intelligence?.byEventId}
+        dowSwingClassification={
+          dowTheoryView.swingClassification ?? detection.dowTheory?.swingClassification ?? {}
+        }
+        dowBySwingId={dowTheoryView.bySwingId ?? detection.dowTheory?.bySwingId ?? {}}
+      />
+
+      {/* 5. Setup Inspector */}
+      <SetupInspector
+        setup={activeSetup}
+        note={setupReviewNote}
+        onNoteChange={setSetupReviewNote}
+        verdict={setupReviewVerdict}
+        onVerdict={handleSetupVerdict}
+        onResetReview={handleResetSetupReview}
+        onClear={clearSelectedSetup}
+      />
+
+      {/* 6. Replay */}
+      <Card hover={false}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Replay</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SmcCursorControls
+            visibleIndex={visibleIndex}
+            candleCount={candles.length}
+            playing={playing}
+            speed={speed}
+            onFirst={() => setVisibleIndex(0)}
+            onPrev={() => setVisibleIndex((v) => Math.max(0, v - 1))}
+            onNext={() => setVisibleIndex((v) => Math.min(candles.length - 1, v + 1))}
+            onLast={() => setVisibleIndex(Math.max(0, candles.length - 1))}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onSpeedChange={setSpeed}
+          />
+        </CardContent>
+      </Card>
+
+      {/* 7. Advanced Details */}
+      <Disclosure title="Advanced details" defaultOpen={false}>
         <div className="space-y-4">
-          <SmcCandlestickChart
-            candles={windowCandles}
-            swings={chartStructure.swings}
-            classifiedSwings={chartStructure.classifiedSwings}
-            bosEvents={chartStructure.bosEvents}
-            chochEvents={chartStructure.chochEvents}
-            displacementEvents={chartStructure.displacementEvents}
-            fvgEvents={progressiveVisible.fvgEvents}
-            equalLevelEvents={progressiveVisible.equalLevelEvents}
-            liquiditySweepEvents={progressiveVisible.liquiditySweepEvents}
-            orderBlockEvents={progressiveVisible.orderBlockEvents}
-            zoneProjections={lifecycleProjection.visibleZones}
-            setupContext={setupContext}
-            annotations={annotations}
-            selectedEventId={selectedEventId}
-            selectedZoneId={selectedZoneId}
-            onSelectZone={(id) => {
-              setSelectedZoneId(id)
-              setSelectedEventId(null)
-            }}
-            highlightSwingId={highlightSwingId}
-            layers={layers}
-            windowStartIndex={windowStart}
-            importanceById={detection.intelligence?.byEventId}
-            dowSwingClassification={
-              dowTheoryView.swingClassification ?? detection.dowTheory?.swingClassification ?? {}
-            }
-            dowBySwingId={dowTheoryView.bySwingId ?? detection.dowTheory?.bySwingId ?? {}}
+          <SmcAppliedConfigSummary
+            profileId={activeProfileId}
+            densityPreset={densityPreset}
+            visibilityMode={visibilityMode}
+            smartVisibilityPreset={smartVisibilityPreset}
           />
 
-          {/* Dow Theory notice */}
-          {dowChartVisibility.notice ? (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
-              <p>{dowChartVisibility.notice.message}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={showStructureDowView}
-                >
-                  Show Structure view
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={showDebugDowView}>
-                  Show Debug view
-                </Button>
-              </div>
-            </div>
-          ) : null}
+          <SmcQuickViewControls
+            densityPreset={densityPreset}
+            visibilityMode={visibilityMode}
+            smartVisibilityPreset={smartVisibilityPreset}
+            onDensityPresetChange={handleDensityChange}
+            onVisibilityModeChange={handleVisibilityMode}
+            onSmartVisibilityPresetChange={handleSmartVisibilityPreset}
+          />
 
-          {/* Dow Theory summary */}
-          <Card hover={false}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Dow Theory</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-3 text-[11px]">
-              <Badge variant="outline">{dowTheoryView.trend}</Badge>
-              <span className="font-mono text-muted-foreground">
-                Strength {dowTheoryView.strength} · {dowTheoryView.structurePhase}
-              </span>
-              <span className="font-mono text-muted-foreground">
-                HH {dowTheoryView.diagnostics.hhCount} · HL {dowTheoryView.diagnostics.hlCount} ·
-                LH {dowTheoryView.diagnostics.lhCount} · LL {dowTheoryView.diagnostics.llCount}
-              </span>
-              <span className="w-full font-mono text-[10px] text-muted-foreground">
-                Dow visibility · classified {dowChartVisibility.diagnostics.classifiedDowCount} ·
-                density {dowChartVisibility.diagnostics.densityEligibleDowCount} · ranking{' '}
-                {dowChartVisibility.diagnostics.rankingVisibleDowCount} · chart{' '}
-                {dowChartVisibility.diagnostics.chartRenderedDowCount} · hidden density{' '}
-                {dowChartVisibility.diagnostics.hiddenByDensity} · hidden ranking{' '}
-                {dowChartVisibility.diagnostics.hiddenByRanking}
-              </span>
-            </CardContent>
-          </Card>
-
-          {/* Zone legend */}
           <Card hover={false}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Zone legend</CardTitle>
@@ -236,37 +274,54 @@ export function SmcAnalyzeWorkspace() {
                 <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-amber-500/70" />
                 BSL / SSL
               </p>
-              <p>Solid = Active/Fresh · Dotted = Touched/Partial · Faded = Finished</p>
-              <p>Labels: FVG · OB · BSL · SSL (+ ·T/·P/·M/·X/·S)</p>
+              <p>
+                <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-teal-500/70" />
+                Bullish reversal zone
+              </p>
+              <p>
+                <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-orange-500/70" />
+                Bearish reversal zone
+              </p>
+              <p>Solid = Active · Dotted = Touched · Faded = Finished</p>
             </CardContent>
           </Card>
 
-          {/* Mobile: cursor + inspector + event list */}
-          <div className="space-y-4 lg:hidden">
-            <SmcCursorControls
-              visibleIndex={visibleIndex}
-              candleCount={candles.length}
-              playing={playing}
-              speed={speed}
-              onFirst={() => setVisibleIndex(0)}
-              onPrev={() => setVisibleIndex((v) => Math.max(0, v - 1))}
-              onNext={() => setVisibleIndex((v) => Math.min(candles.length - 1, v + 1))}
-              onLast={() => setVisibleIndex(Math.max(0, candles.length - 1))}
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-              onSpeedChange={setSpeed}
+          {selectedZone ? (
+            <SelectedZoneCard
+              selectedZone={selectedZone}
+              candles={candles}
+              onSelectSourceEvent={(id) => {
+                setSelectedEventId(id)
+                setSelectedZoneId(null)
+              }}
+              onClearZone={() => setSelectedZoneId(null)}
             />
-            {selectedZone ? (
-              <SelectedZoneCard
-                selectedZone={selectedZone}
-                candles={candles}
-                onSelectSourceEvent={(id) => {
-                  setSelectedEventId(id)
-                  setSelectedZoneId(null)
-                }}
-                onClearZone={() => setSelectedZoneId(null)}
-              />
-            ) : null}
+          ) : null}
+
+          <QmlSetupsPanel
+            qml={progressive.qml ?? detection.qml}
+            visibilityMode={visibilityModeTyped}
+            selectedQmlId={selectedQmlId}
+            onSelect={selectQmlPattern}
+            enabled={config.qml.enabled}
+          />
+
+          <QmlInspector
+            pattern={selectedQml}
+            note={qmlNote}
+            tags={qmlTags}
+            onNoteChange={setQmlNote}
+            onTagsChange={setQmlTags}
+            onVerdict={(v) => setQmlVerdict(v)}
+            onResetReview={() => {
+              setQmlVerdict(null)
+              setQmlNote('')
+              setQmlTags([])
+            }}
+            reviewVerdict={qmlVerdict}
+          />
+
+          <div className="grid gap-4 lg:grid-cols-2">
             <SmcEventInspector
               event={selectedEvent}
               candles={candles}
@@ -297,63 +352,7 @@ export function SmcAnalyzeWorkspace() {
             />
           </div>
         </div>
-
-        {/* Right column: cursor + inspector + event list (desktop) */}
-        <div className="hidden space-y-4 lg:block">
-          <SmcCursorControls
-            visibleIndex={visibleIndex}
-            candleCount={candles.length}
-            playing={playing}
-            speed={speed}
-            onFirst={() => setVisibleIndex(0)}
-            onPrev={() => setVisibleIndex((v) => Math.max(0, v - 1))}
-            onNext={() => setVisibleIndex((v) => Math.min(candles.length - 1, v + 1))}
-            onLast={() => setVisibleIndex(Math.max(0, candles.length - 1))}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onSpeedChange={setSpeed}
-          />
-          {selectedZone ? (
-            <SelectedZoneCard
-              selectedZone={selectedZone}
-              candles={candles}
-              onSelectSourceEvent={(id) => {
-                setSelectedEventId(id)
-                setSelectedZoneId(null)
-              }}
-              onClearZone={() => setSelectedZoneId(null)}
-            />
-          ) : null}
-          <SmcEventInspector
-            event={selectedEvent}
-            candles={candles}
-            swings={progressive.swings}
-            review={selectedReview}
-            reviewStale={reviewStale}
-            note={note}
-            tags={tags}
-            onNoteChange={setNote}
-            onTagsChange={setTags}
-            onVerdict={(v) => handleVerdict(v)}
-            onResetReview={handleResetReview}
-            importance={selectedEventId ? getEventImportance(selectedEventId) : null}
-            related={relatedForSelected}
-            onSelectRelated={onSelectRelated}
-            dowTheory={dowTheoryView}
-          />
-          <SmcEventList
-            detection={progressive}
-            candles={candles}
-            reviewsByEventId={reviewsByEventId}
-            filter={eventFilter}
-            selectedEventId={selectedEventId}
-            onFilterChange={setEventFilter}
-            onSelect={selectEvent}
-            rankingVisibleOnly={visibilityModeTyped !== 'debug'}
-            importanceById={detection.intelligence?.byEventId}
-          />
-        </div>
-      </div>
+      </Disclosure>
     </div>
   )
 }
@@ -442,23 +441,6 @@ function SelectedZoneCard({
         <p>
           <span className="text-muted-foreground">Reason: </span>
           {life?.reason ?? selectedZone.lifecycleReason}
-        </p>
-        <p>
-          <span className="text-muted-foreground">Still active: </span>
-          {selectedZone.activeAtVisibleIndex ? 'yes' : 'no'}
-        </p>
-        <p>
-          <span className="text-muted-foreground">Chart extent: </span>
-          {selectedZone.startIndex} → {selectedZone.endIndex}
-          {selectedZone.extendsToVisibleEdge ? ' (extends to visible)' : ' (clipped)'}
-        </p>
-        <p>
-          <span className="text-muted-foreground">Why visible: </span>
-          {selectedZone.visibilityReason}
-        </p>
-        <p>
-          <span className="text-muted-foreground">Setup refs: </span>
-          {selectedZone.setupRefs.length ? selectedZone.setupRefs.join(', ') : '—'}
         </p>
         <Button type="button" size="sm" variant="ghost" onClick={onClearZone}>
           Clear zone selection

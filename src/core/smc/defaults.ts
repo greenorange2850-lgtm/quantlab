@@ -1,3 +1,4 @@
+import { DEFAULT_QML_CONFIG, cloneQmlConfig } from './qml/qml-config'
 import type { SmcDetectorConfig } from './types'
 
 /** QuantLab Default baseline — Phase 2 modules enabled with conservative defaults. */
@@ -84,6 +85,8 @@ export const DEFAULT_SMC_DETECTOR_CONFIG: SmcDetectorConfig = {
     trackMitigation: true,
     mitigationMode: 'TOUCH',
   },
+  /** QML Experimental — disabled by default. */
+  qml: cloneQmlConfig(DEFAULT_QML_CONFIG),
 }
 
 /**
@@ -99,6 +102,7 @@ export const PHASE1_COMPAT_SMC_CONFIG: SmcDetectorConfig = {
   equalLevels: { ...DEFAULT_SMC_DETECTOR_CONFIG.equalLevels, enabled: false },
   liquiditySweep: { ...DEFAULT_SMC_DETECTOR_CONFIG.liquiditySweep, enabled: false },
   orderBlock: { ...DEFAULT_SMC_DETECTOR_CONFIG.orderBlock, enabled: false },
+  qml: { ...DEFAULT_SMC_DETECTOR_CONFIG.qml, enabled: false },
 }
 
 export function cloneSmcDetectorConfig(
@@ -114,5 +118,6 @@ export function cloneSmcDetectorConfig(
     equalLevels: { ...config.equalLevels },
     liquiditySweep: { ...config.liquiditySweep },
     orderBlock: { ...config.orderBlock },
+    qml: cloneQmlConfig(config.qml ?? DEFAULT_QML_CONFIG),
   }
 }

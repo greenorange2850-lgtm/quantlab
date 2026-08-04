@@ -16,6 +16,7 @@ import type {
   SmcZoneProjection,
   SmcEvent,
   SmcRankedEventMeta,
+  QmlPattern,
 } from '@/core/smc'
 import type { SmcChartLayerToggles } from '../components/SmcCandlestickChart'
 import type { SmcPlaySpeed } from '../components/SmcCursorControls'
@@ -34,6 +35,13 @@ import type {
   SmcLifecycleProjectionResult,
   SmcVisibilityPipelineDiagnostics,
 } from '@/core/smc'
+import type {
+  SetupEngineResult,
+  SetupReviewRecord,
+  SetupReviewVerdict,
+  SetupValidationMetrics,
+  TradingSetup,
+} from '@/core/setup'
 import type { DowChartVisibilityResult } from '../dow-visibility'
 import type { SwingChartMarkerProjection } from '../dow-label'
 import type { buildReviewSummary, SmcReviewSummaryBucket } from '../review-summary'
@@ -130,11 +138,27 @@ export interface SmcLabWorkspaceModel {
   setSelectedEventId: (v: string | null) => void
   selectedZoneId: string | null
   setSelectedZoneId: (v: string | null) => void
+  selectedQmlId: string | null
+  selectQmlPattern: (pattern: QmlPattern) => void
   selectedEvent: SmcEvent | null
   selectedZone: SmcZoneProjection | null
   eventFilter: SmcEventFilter
   setEventFilter: (v: SmcEventFilter) => void
   selectEvent: (id: string) => void
+
+  // Setup Engine
+  setupEngineResult: SetupEngineResult | null
+  selectedSetupId: string | null
+  selectedSetup: TradingSetup | null
+  selectSetup: (setup: TradingSetup) => void
+  clearSelectedSetup: () => void
+  setupReviews: SetupReviewRecord[]
+  setupValidationMetrics: SetupValidationMetrics | null
+  setupReviewNote: string
+  setSetupReviewNote: (v: string) => void
+  setupReviewVerdict: SetupReviewVerdict | null
+  handleSetupVerdict: (verdict: SetupReviewVerdict) => void
+  handleResetSetupReview: () => void
 
   // Dow
   dowTheoryView: SmcDowTheoryLayer

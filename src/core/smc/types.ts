@@ -3,6 +3,8 @@ import type {
   SmcDowTheoryDiagnostics,
   SmcDowTheoryLayer,
 } from './dow-theory/types'
+import type { QmlConfig } from './qml/qml-config'
+import type { QmlDiagnostics, SmcQmlLayer } from './qml/qml-types'
 import type { SmcIntelligenceLayer, SmcRankingDiagnostics } from './ranking/types'
 
 /** Phase-2 detection kinds. */
@@ -34,6 +36,8 @@ export type SmcDetectionKind =
   | 'ORDER_BLOCK_TOUCHED'
   | 'ORDER_BLOCK_MITIGATED'
   | 'ORDER_BLOCK_INVALIDATED'
+  | 'BULLISH_QML'
+  | 'BEARISH_QML'
 
 export const SMC_DETECTOR_VERSION = '2.0.0-phase2'
 
@@ -177,6 +181,8 @@ export interface SmcDetectorConfig {
   equalLevels: SmcEqualLevelsConfig
   liquiditySweep: SmcLiquiditySweepConfig
   orderBlock: SmcOrderBlockConfig
+  /** Quasimodo Level (QML) — experimental, disabled by default. */
+  qml: QmlConfig
 }
 
 /** Typed event reference for dependency chains. */
@@ -523,6 +529,8 @@ export interface SmcDetectionDiagnostics {
   ranking?: SmcRankingDiagnostics
   /** Dow Theory derived diagnostics (post swing classification). */
   dowTheory?: SmcDowTheoryDiagnostics
+  /** Quasimodo Level (QML) diagnostics when the experimental module runs. */
+  qml?: QmlDiagnostics
 }
 
 export interface SmcDetectionResult {
@@ -547,6 +555,11 @@ export interface SmcDetectionResult {
    * never mutates detector swing objects. Absent until pipeline runs Dow Theory.
    */
   dowTheory?: SmcDowTheoryLayer
+  /**
+   * Quasimodo Level (QML) derived layer. Consumes Dow / CHoCH / zones only —
+   * never mutates core detector arrays. Absent or DISABLED when module is off.
+   */
+  qml?: SmcQmlLayer
 }
 
 export type SmcEvent =
