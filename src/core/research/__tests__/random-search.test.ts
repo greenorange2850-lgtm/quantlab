@@ -135,7 +135,9 @@ describe('runRandomSearch live progress', () => {
     expect(events[0]?.status).toBe('INITIALIZING')
     expect(events[0]?.candidatesTested).toBe(0)
     expect(events[0]?.totalCandidates).toBe(2)
-    expect(runBacktestPipeline).toHaveBeenCalledTimes(2)
+    // Baseline + 2 stage candidates
+    expect(runBacktestPipeline).toHaveBeenCalledTimes(3)
+    expect(events.some((e) => e.status === 'BASELINE')).toBe(true)
   })
 
   it('emits ordinary progress updates as candidates complete', async () => {
@@ -169,7 +171,8 @@ describe('runRandomSearch live progress', () => {
     let call = 0
     vi.mocked(runBacktestPipeline).mockImplementation(async () => {
       call += 1
-      const trades = call === 1 ? 11 : call === 2 ? 27 : 9
+      // call 1 = baseline; subsequent calls are search candidates
+      const trades = call === 1 ? 5 : call === 2 ? 11 : call === 3 ? 27 : 9
       return {
         report: stubReport(call, trades),
         candles: [],
@@ -206,7 +209,7 @@ describe('runRandomSearch live progress', () => {
     })
 
     const improvements = events.filter((event) => event.status === 'IMPROVING')
-    expect(improvements.length).toBeGreaterThanOrEqual(2)
+    expect(improvements.length).toBeGreaterThanOrEqual(1)
 
     const secondBest = events.find(
       (event) => event.improvementsCount === 2 && event.bestTradeCount === 27,

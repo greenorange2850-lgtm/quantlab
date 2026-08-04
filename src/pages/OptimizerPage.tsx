@@ -14,22 +14,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { SymbolSelect } from '@/components/market/SymbolSelect'
-import { TimeframeSelect } from '@/components/market/TimeframeSelect'
 import {
   ResearchPeriodSelect,
   defaultResearchPeriodSelection,
 } from '@/components/market/ResearchPeriodSelect'
-import { binanceMarketKeys, useBinanceKlines } from '@/api/queries/binance-market'
+import { MarketSourceFields } from '@/components/market/MarketSourceFields'
+import { binanceMarketKeys } from '@/api/queries/binance-market'
+import { useResearchCandles } from '@/api/queries/research-candles'
 import { useResearchSession } from '@/api/queries/research-sessions'
+import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
 import { ResearchPeriodDiagnosticsPanel } from '@/components/dev/ResearchPeriodDiagnosticsPanel'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import {
   formatDurationMs,
   formatLiveStatusLabel,
+  getSearchPreset,
+  SEARCH_PRESETS,
   type ParameterRange,
   type ScoringObjective,
+  type SearchPresetId,
 } from '@/core/research'
+import { DEFAULT_MA_CROSS_PARAMS, type MovingAverageCrossParams } from '@/core/strategy'
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
 import {
   BINANCE_KLINES_PAGE_LIMIT,
@@ -46,6 +51,7 @@ import {
   formatCountOrDash,
   formatScoreOrDash,
   NextRecommendationPanel,
+  OptimizationResultPanel,
   OptimizerTransparencyPanel,
   ResearchHealthPanel,
   ResearchProgressPanel,
@@ -140,6 +146,13 @@ export function OptimizerPage() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [analysisSessionId, report?.sessionId])
 
+  const [sourceKind, setSourceKind] = useState<MarketSourceKind>(() => {
+    const raw = searchParams.get('source')
+    return raw === 'local' ? 'local' : DEFAULT_MARKET_SOURCE.kind
+  })
+  const [datasetId, setDatasetId] = useState<string | null>(
+    () => searchParams.get('dataset'),
+  )
   const [symbol, setSymbol] = useState(defaultBacktestPipelineParams.symbol)
   const [interval, setInterval] = useState<BacktestTimeframe>(
     defaultBacktestPipelineParams.interval as BacktestTimeframe,
@@ -155,6 +168,11 @@ export function OptimizerPage() {
   const [ranges, setRanges] = useState<ParameterRange[]>(
     defaultRandomSearchDraft.parameterRanges.map((range) => ({ ...range })),
   )
+  const [searchPreset, setSearchPreset] = useState<SearchPresetId>('balanced')
+  const [baselineParams, setBaselineParams] = useState<MovingAverageCrossParams>({
+    ...DEFAULT_MA_CROSS_PARAMS,
+  })
+  const [autoStopOnConverge, setAutoStopOnConverge] = useState(false)
   const [maxDrawdownPercent, setMaxDrawdownPercent] = useState('')
   const [minimumTrades, setMinimumTrades] = useState('')
   const [minimumProfitFactor, setMinimumProfitFactor] = useState('')
@@ -170,7 +188,11 @@ export function OptimizerPage() {
     }
   }, [periodSelection])
 
-  const candlesQuery = useBinanceKlines(symbol, interval, {
+  const candlesQuery = useResearchCandles({
+    sourceKind,
+    datasetId,
+    symbol,
+    interval,
     startTime: resolvedPeriod.period?.startMs ?? null,
     endTime: resolvedPeriod.period?.endMs ?? null,
   })
@@ -273,6 +295,9 @@ export function OptimizerPage() {
         startDate: resolvedPeriod.period.startMs,
         endDate: resolvedPeriod.period.endMs,
         initialCapital: Number(initialCapital) || defaultBacktestPipelineParams.initialCapital,
+        baselineParameters: baselineParams,
+        searchPreset,
+        autoStopOnConverge,
         constraints: {
           maxDrawdown: maxDd !== undefined ? maxDd / 100 : undefined,
           minimumTrades: parseOptionalNumber(minimumTrades),
@@ -281,12 +306,13 @@ export function OptimizerPage() {
       },
     })
 
-    // Navigate after a completed session or a user-saved partial session is persisted.
-    if (
-      result?.persisted &&
-      (result.session.status === 'completed' || result.session.partial === true)
-    ) {
-      navigate(`/research-analysis?session=${result.session.id}`)
+    // Navigate after a completed or saved-partial session is persisted.
+    if (result?.persisted) {
+      if (result.session.status === 'completed') {
+        navigate(`/research-analysis?session=${result.session.id}`)
+      } else if (result.session.partial) {
+        navigate(`/optimizer?session=${result.session.id}`)
+      }
     }
   }
 
@@ -299,7 +325,8 @@ export function OptimizerPage() {
         progress.status === 'COMPLETED' ||
         progress.status === 'PAUSED' ||
         progress.status === 'PAUSING' ||
-        progress.status === 'CANCELLING'))
+        progress.status === 'CANCELLING' ||
+        progress.status === 'CONVERGED'))
 
   const progressPercent =
     progress && progress.totalCandidates > 0
@@ -314,9 +341,9 @@ export function OptimizerPage() {
             <Sparkles className="h-5 w-5 text-accent" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold tracking-tight">Random Search</h2>
+            <h2 className="text-lg font-semibold tracking-tight">Adaptive Optimizer</h2>
             <p className="text-pretty text-xs text-muted-foreground">
-              Sample many parameter combinations. Use Strategy Lab for a single backtest.
+              Baseline → Exploration → Refinement → Stability. Transparent, deterministic research.
             </p>
           </div>
         </div>
@@ -334,18 +361,26 @@ export function OptimizerPage() {
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Market pair
-              </label>
-              <SymbolSelect value={symbol} onChange={setSymbol} disabled={isActive} />
-            </div>
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Timeframe
-              </label>
-              <TimeframeSelect value={interval} onChange={setInterval} disabled={isActive} />
-            </div>
+            <MarketSourceFields
+              idPrefix="optimizer"
+              disabled={isActive}
+              value={{ sourceKind, datasetId, symbol, interval }}
+              onChange={(next) => {
+                if (next.sourceKind !== undefined) setSourceKind(next.sourceKind)
+                if (next.datasetId !== undefined) setDatasetId(next.datasetId)
+                if (next.symbol !== undefined) setSymbol(next.symbol)
+                if (next.interval !== undefined) {
+                  setInterval(next.interval as BacktestTimeframe)
+                }
+              }}
+              onDatasetReady={(dataset) => {
+                setPeriodSelection({
+                  preset: 'custom',
+                  customStartMs: dataset.startDate,
+                  customEndMs: dataset.endDate,
+                })
+              }}
+            />
             <div className="min-w-0 space-y-2 md:col-span-2">
               <ResearchPeriodSelect
                 selection={periodSelection}
@@ -393,9 +428,67 @@ export function OptimizerPage() {
                 ))}
               </select>
             </div>
+            <div className="min-w-0 space-y-2">
+              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Search preset
+              </label>
+              <select
+                value={searchPreset}
+                disabled={isActive}
+                onChange={(event) => {
+                  const id = event.target.value as SearchPresetId
+                  setSearchPreset(id)
+                  if (id !== 'custom') {
+                    const preset = getSearchPreset(id)
+                    setRanges(preset.parameterRanges.map((range) => ({ ...range })))
+                  }
+                }}
+                className="flex h-11 w-full rounded-lg border border-border bg-white/[0.03] px-3 text-sm"
+              >
+                {SEARCH_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id} className="bg-card-solid">
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                {getSearchPreset(searchPreset).description}
+              </p>
+            </div>
+            <div className="min-w-0 space-y-2 md:col-span-2">
+              <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={autoStopOnConverge}
+                  disabled={isActive}
+                  onChange={(event) => setAutoStopOnConverge(event.target.checked)}
+                />
+                Auto-stop when converged (off by default)
+              </label>
+            </div>
           </div>
 
           <div className="space-y-4">
+            <Disclosure title="Baseline parameters (Strategy Lab)">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {(['fastPeriod', 'slowPeriod', 'rsiPeriod'] as const).map((key) => (
+                  <div key={key} className="min-w-0 space-y-1">
+                    <label className="text-[10px] uppercase text-muted-foreground">{key}</label>
+                    <Input
+                      value={String(baselineParams[key])}
+                      disabled={isActive}
+                      onChange={(event) => {
+                        const value = Number(event.target.value)
+                        if (!Number.isFinite(value)) return
+                        setBaselineParams((current) => ({ ...current, [key]: Math.round(value) }))
+                      }}
+                      className="h-9 bg-white/[0.03] px-2 text-xs"
+                    />
+                  </div>
+                ))}
+              </div>
+            </Disclosure>
+
             <Disclosure title="Parameter ranges">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 {ranges.map((range) => (
@@ -483,12 +576,14 @@ export function OptimizerPage() {
             {(candlesQuery.isLoading || candlesQuery.isFetching) && (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading shared dataset for all optimizer candidates…
+                Loading shared dataset via {candlesQuery.providerLabel}…
               </span>
             )}
             {candlesReady && candlesQuery.data && resolvedPeriod.period && (
               <p>
                 Loaded {candlesQuery.data.length.toLocaleString()} candles
+                {' · '}
+                via {candlesQuery.providerLabel}
                 {' · '}
                 coverage{' '}
                 {formatPeriodSpan(
@@ -625,7 +720,8 @@ export function OptimizerPage() {
             <CardContent className="space-y-3">
               <p className="text-xs text-muted-foreground">
                 You can keep searching, discard in-memory progress, or save a partial Research
-                Session from candidates evaluated so far.
+                Session from candidates evaluated so far. Partial adaptive results remain
+                provisional when stability analysis is incomplete.
               </p>
               <div className="flex flex-col gap-2">
                 <Button className="min-h-11 w-full" onClick={dismissCancelDialog}>
@@ -682,8 +778,24 @@ export function OptimizerPage() {
                 tone="muted"
               />
               <MetricTile
+                label="Unique / Dupes"
+                value={`${formatCountOrDash(progress.uniqueCandidates)} / ${formatCountOrDash(progress.duplicatesSkipped)}`}
+                size="secondary"
+                tone="muted"
+              />
+              <MetricTile
+                label="Baseline Score"
+                value={formatScoreOrDash(progress.baselineScore ?? null)}
+                size="secondary"
+              />
+              <MetricTile
                 label="Current Best Research Score"
                 value={formatScoreOrDash(progress.bestScore)}
+                size="secondary"
+              />
+              <MetricTile
+                label="Recommended Score"
+                value={formatScoreOrDash(progress.recommendedScore ?? null)}
                 size="secondary"
               />
               <MetricTile
@@ -706,23 +818,18 @@ export function OptimizerPage() {
               <MetricTile
                 label="Elapsed Time"
                 value={formatDurationMs(progress.elapsedMs)}
-                hint="Active research time (excludes pauses)"
                 size="secondary"
                 tone="muted"
               />
               <MetricTile
-                label="Paused"
-                value={formatDurationMs(progress.pausedMs)}
+                label="Paused Time"
+                value={formatDurationMs(progress.pausedMs ?? 0)}
                 size="secondary"
                 tone="muted"
               />
               <MetricTile
                 label="Estimated Time Remaining"
-                value={
-                  progress.status === 'PAUSED' || progress.status === 'PAUSING'
-                    ? 'Paused'
-                    : formatDurationMs(progress.estimatedRemainingMs)
-                }
+                value={formatDurationMs(progress.estimatedRemainingMs)}
                 size="secondary"
                 tone="muted"
               />
@@ -732,6 +839,37 @@ export function OptimizerPage() {
                 size="secondary"
               />
             </div>
+            {progress.stageBudgets && (
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground sm:grid-cols-4">
+                <span>
+                  Baseline {progress.stageBudgets.baseline.completed ? 'Completed' : 'Pending'}
+                </span>
+                <span>
+                  Exploration {progress.stageBudgets.exploration.done} /{' '}
+                  {progress.stageBudgets.exploration.total}
+                </span>
+                <span>
+                  Refinement {progress.stageBudgets.refinement.done} /{' '}
+                  {progress.stageBudgets.refinement.total}
+                </span>
+                <span>
+                  Stability {progress.stageBudgets.stability.done} /{' '}
+                  {progress.stageBudgets.stability.total}
+                </span>
+              </div>
+            )}
+            {progress.newBestEvent && (
+              <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
+                New Best Found · Score{' '}
+                {progress.newBestEvent.previousScore?.toFixed(2) ?? '—'} →{' '}
+                {progress.newBestEvent.score.toFixed(2)} · PF{' '}
+                {progress.newBestEvent.previousProfitFactor?.toFixed(2) ?? '—'} →{' '}
+                {progress.newBestEvent.profitFactor.toFixed(2)} · DD{' '}
+                {(((progress.newBestEvent.previousMaxDrawdown ?? 0) * 100) || 0).toFixed(2)}% →{' '}
+                {(progress.newBestEvent.maxDrawdown * 100).toFixed(2)}% · Trades{' '}
+                {progress.newBestEvent.previousTradeCount ?? '—'} → {progress.newBestEvent.tradeCount}
+              </div>
+            )}
             <div className="space-y-1.5">
               <div className="flex justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
                 <span>Progress</span>
@@ -753,7 +891,7 @@ export function OptimizerPage() {
         </Card>
       )}
 
-      {researchProgress && !isActive && (
+      {researchProgress && !isRunning && (
         <ResearchProgressPanel snapshot={researchProgress} />
       )}
 
@@ -770,6 +908,53 @@ export function OptimizerPage() {
         </div>
       )}
 
+      {report && (report.optimization || report.baseline) && (
+        <OptimizationResultPanel
+          report={report}
+          optimization={
+            report.optimization ?? {
+              baseline: report.baseline ?? null,
+              rawBestCandidateId: report.rawBestCandidate?.id ?? null,
+              recommendedCandidateId: report.recommendedCandidate?.id ?? report.bestCandidate?.id ?? null,
+              recommendation: {
+                rawBestCandidateId: report.rawBestCandidate?.id ?? null,
+                recommendedCandidateId:
+                  report.recommendedCandidate?.id ?? report.bestCandidate?.id ?? null,
+                ruleId: 'raw_best',
+                explanation: 'Legacy session without adaptive optimization metadata.',
+              },
+              stability: null,
+              plateau: null,
+              verdict: 'Insufficient Evidence',
+              verdictDetail:
+                'Adaptive baseline / stability data is unavailable for this legacy session.',
+              improvements: [],
+              metricChanges: [],
+              parameterChanges: [],
+              searchExplanation: {
+                stagesCompleted: [],
+                candidatesEvaluated: report.candidatesEvaluated,
+                uniqueCandidates: report.candidatesEvaluated,
+                duplicatesSkipped: 0,
+                generatedCandidates: report.candidatesEvaluated,
+                duplicateRate: 0,
+                improvementCount: 0,
+                lastImprovement: null,
+                plateauDetail: null,
+                stabilitySummary: null,
+                spaceExhausted: false,
+              },
+              rejectionReasonCounts: {},
+              datasetCandleCount: 0,
+              datasetStartMs: null,
+              datasetEndMs: null,
+              stabilityIncomplete: true,
+              schemaVersion: 0,
+            }
+          }
+        />
+      )}
+
       {status === 'empty' && (
         <Card className="border-dashed">
           <CardContent className="py-8 text-center">
@@ -781,20 +966,28 @@ export function OptimizerPage() {
         </Card>
       )}
 
-      {status === 'cancelled' && (
+      {status === 'cancelled' && !session?.partial && (
         <Card>
           <CardContent className="py-4 text-xs text-muted-foreground">
-            {liveSession?.partial || liveReport?.partial ? (
-              <>
-                Partial Research Result saved after {progress?.candidatesTested ?? 0} of{' '}
-                {progress?.totalCandidates ?? 0} candidates.
-              </>
-            ) : (
-              <>
-                Random Search cancelled after {progress?.candidatesTested ?? 0} candidates.
-                No Research Session was persisted for this discarded run.
-              </>
-            )}
+            Optimization cancelled after {progress?.candidatesTested ?? 0} /{' '}
+            {progress?.totalCandidates ?? iterations} candidates. Progress was discarded and no
+            Research Session was persisted.
+          </CardContent>
+        </Card>
+      )}
+
+      {(status === 'partial' || (status === 'cancelled' && session?.partial)) && (
+        <Card className="border-warning/30">
+          <CardContent className="space-y-2 py-4 text-xs">
+            <p className="font-medium text-warning">Partial Optimization Result</p>
+            <p className="text-muted-foreground">
+              Search stopped after {progress?.candidatesTested ?? 0} /{' '}
+              {progress?.totalCandidates ?? session?.config.iterations ?? '—'} candidates.
+              The current best is provisional.
+              {session?.optimizationResult?.stabilityIncomplete
+                ? ' Stability analysis was incomplete.'
+                : ''}
+            </p>
           </CardContent>
         </Card>
       )}

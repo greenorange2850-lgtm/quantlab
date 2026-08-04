@@ -35,6 +35,7 @@ export type ResearchUiStatus =
   | 'cancelled'
   | 'failed'
   | 'empty'
+  | 'partial'
 
 export type StartRandomSearchResult = {
   session: ResearchSession
@@ -190,7 +191,10 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       report: entry.report,
       progress,
       error: entry.session.error,
-      selectedCandidateId: entry.report.bestCandidate?.id ?? null,
+      selectedCandidateId:
+        entry.report.recommendedCandidate?.id ??
+        entry.report.bestCandidate?.id ??
+        null,
       validationErrors: [],
       cancelDialogOpen: false,
       backgroundWarningVisible: false,
@@ -364,6 +368,9 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
     if (session.status === 'completed' && report.topCandidates.length === 0) {
       status = 'empty'
     }
+    if (session.status === 'cancelled' && session.partial) {
+      status = 'partial'
+    }
 
     set({
       status,
@@ -374,7 +381,10 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       abortController: null,
       runControls: null,
       cancelDialogOpen: false,
-      selectedCandidateId: report.bestCandidate?.id ?? null,
+      selectedCandidateId:
+        report.recommendedCandidate?.id ??
+        report.bestCandidate?.id ??
+        null,
     })
 
     return { session, report, persisted }
@@ -389,4 +399,6 @@ export const defaultRandomSearchDraft = {
   minimumTrades: '' as string,
   minimumProfitFactor: '' as string,
   strategyParams: { ...DEFAULT_MA_CROSS_PARAMS },
+  searchPreset: 'balanced' as const,
+  autoStopOnConverge: false,
 }

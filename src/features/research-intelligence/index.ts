@@ -25,3 +25,5 @@ export {
   ResearchHealthPanel,
   ResearchProgressPanel,
 } from './components/ResearchIntelligencePanels'
+
+export { OptimizationResultPanel } from './OptimizationResultPanel'

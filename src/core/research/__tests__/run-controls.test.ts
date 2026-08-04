@@ -187,26 +187,32 @@ describe('run controls pause / resume / cancel', () => {
     }
 
     await waitUntil('start candidate', () => gate.started >= 1)
+    // First gated call is the Strategy Lab baseline backtest.
+    gate.releaseOne()
+    await waitUntil('start first search candidate', () => gate.started >= 2)
     controls.requestPause()
     gate.releaseOne()
     await waitUntil('enter PAUSED', () => statuses.includes('PAUSED') || controls.isPaused())
 
     expect(controls.isPaused()).toBe(true)
-    expect(gate.started).toBe(1)
+    expect(gate.started).toBe(2)
 
     await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(gate.started).toBe(1)
+    expect(gate.started).toBe(2)
 
     controls.resume()
-    for (let n = 2; n <= 6; n++) {
+    // Baseline already ran; release the remaining search candidates (iterations=6).
+    for (let n = 3; n <= 7; n++) {
       await waitUntil(`start #${n}`, () => gate.started >= n)
       gate.releaseOne()
     }
     const session = await run
     expect(session.status).toBe('completed')
     expect(session.candidates).toHaveLength(6)
+    expect(session.baseline).not.toBeNull()
     expect(statuses).toContain('PAUSING')
     expect(statuses).toContain('PAUSED')
+    expect(statuses).toContain('BASELINE')
   })
 
   it('continues from the exact next candidate and stays deterministic', async () => {
@@ -233,20 +239,22 @@ describe('run controls pause / resume / cancel', () => {
     })
 
     await vi.waitFor(() => expect(gate.started).toBe(1))
-    gate.releaseOne()
+    gate.releaseOne() // baseline
     await vi.waitFor(() => expect(gate.started).toBe(2))
     controls.requestPause()
-    gate.releaseOne()
+    gate.releaseOne() // first search candidate
     await vi.waitFor(() => expect(controls.isPaused()).toBe(true))
     expect(gate.started).toBe(2)
 
     controls.resume()
-    for (let n = gate.started + 1; n <= 5; n++) {
+    // baseline + 5 search candidates => 6 pipeline calls
+    for (let n = gate.started + 1; n <= 6; n++) {
       await vi.waitFor(() => expect(gate.started).toBeGreaterThanOrEqual(n))
       gate.releaseOne()
     }
     const withPause = await pausedRun
     expect(withPause.candidates).toHaveLength(5)
+    expect(withPause.baseline).not.toBeNull()
 
     vi.mocked(runBacktestPipeline).mockReset()
     vi.mocked(runBacktestPipeline).mockImplementation(async (params) => {
@@ -390,13 +398,16 @@ describe('run controls pause / resume / cancel', () => {
     })
 
     await vi.waitFor(() => expect(gate.started).toBe(1))
+    gate.releaseOne() // baseline
+    await vi.waitFor(() => expect(gate.started).toBe(2))
     controls.requestPause()
-    gate.releaseOne()
+    gate.releaseOne() // first search candidate completes, then pause
     await vi.waitFor(() => expect(pausedProgress).not.toBeNull())
 
     await new Promise((resolve) => setTimeout(resolve, 40))
     controls.resume()
-    for (let n = gate.started + 1; n <= 4; n++) {
+    // baseline + 4 search candidates => 5 pipeline calls
+    for (let n = gate.started + 1; n <= 5; n++) {
       await vi.waitFor(() => expect(gate.started).toBeGreaterThanOrEqual(n))
       gate.releaseOne()
     }

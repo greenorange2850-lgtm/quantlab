@@ -7,6 +7,8 @@ interface TimeframeSelectProps {
   className?: string
   disabled?: boolean
   id?: string
+  /** Optional override — used for local datasets with a subset of timeframes. */
+  timeframes?: readonly string[]
 }
 
 export function TimeframeSelect({
@@ -15,7 +17,10 @@ export function TimeframeSelect({
   className,
   disabled = false,
   id,
+  timeframes,
 }: TimeframeSelectProps) {
+  const options = timeframes && timeframes.length > 0 ? timeframes : BACKTEST_TIMEFRAMES
+
   return (
     <div className={cn('min-w-0 w-full', className)}>
       <select
@@ -30,7 +35,7 @@ export function TimeframeSelect({
         )}
         aria-label="Timeframe"
       >
-        {BACKTEST_TIMEFRAMES.map((timeframe) => (
+        {options.map((timeframe) => (
           <option key={timeframe} value={timeframe} className="bg-card-solid text-foreground">
             {timeframe}
           </option>
