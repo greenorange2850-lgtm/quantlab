@@ -16,3 +16,8 @@ export {
   MockMarketDataProvider,
   type MockMarketDataOptions,
 } from './MockMarketDataProvider.js'
+
+export {
+  LocalDatasetProvider,
+  type LocalDatasetProviderOptions,
+} from '../datasets/LocalDatasetProvider.js'

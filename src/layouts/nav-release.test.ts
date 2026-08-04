@@ -7,6 +7,7 @@ describe('v1 released navigation', () => {
 
     expect(byId['strategy-lab']?.path).toBe('/strategy-lab')
     expect(byId['backtest-lab']?.path).toBe('/backtest-lab')
+    expect(byId['dataset-library']?.path).toBe('/dataset-library')
     expect(byId['market-explorer']?.path).toBe('/market-explorer')
     expect(byId.optimizer?.path).toBe('/optimizer')
     expect(byId['research-analysis']?.path).toBe('/research-analysis')
@@ -21,6 +22,7 @@ describe('v1 released navigation', () => {
 
     for (const id of [
       'strategy-lab',
+      'dataset-library',
       'optimizer',
       'research-analysis',
       'strategy-compare',

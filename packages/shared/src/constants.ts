@@ -39,6 +39,7 @@ export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/' },
   { id: 'strategy-lab', label: 'Strategy Lab', icon: 'Layers', path: '/strategy-lab' },
   { id: 'backtest-lab', label: 'Backtest Lab', icon: 'FlaskConical', path: '/backtest-lab' },
+  { id: 'dataset-library', label: 'Dataset Library', icon: 'Database', path: '/dataset-library' },
   { id: 'market-explorer', label: 'Market Explorer', icon: 'Globe', path: '/market-explorer' },
   { id: 'trade-replay', label: 'Trade Replay', icon: 'Play', path: '/trade-replay', planned: true },
   { id: 'research-analysis', label: 'Research Analysis', icon: 'Brain', path: '/research-analysis' },

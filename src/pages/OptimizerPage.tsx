@@ -13,14 +13,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { SymbolSelect } from '@/components/market/SymbolSelect'
-import { TimeframeSelect } from '@/components/market/TimeframeSelect'
 import {
   ResearchPeriodSelect,
   defaultResearchPeriodSelection,
 } from '@/components/market/ResearchPeriodSelect'
-import { binanceMarketKeys, useBinanceKlines } from '@/api/queries/binance-market'
+import { MarketSourceFields } from '@/components/market/MarketSourceFields'
+import { binanceMarketKeys } from '@/api/queries/binance-market'
+import { useResearchCandles } from '@/api/queries/research-candles'
 import { useResearchSession } from '@/api/queries/research-sessions'
+import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
 import { ResearchPeriodDiagnosticsPanel } from '@/components/dev/ResearchPeriodDiagnosticsPanel'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import {
@@ -129,6 +130,13 @@ export function OptimizerPage() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [analysisSessionId, report?.sessionId])
 
+  const [sourceKind, setSourceKind] = useState<MarketSourceKind>(() => {
+    const raw = searchParams.get('source')
+    return raw === 'local' ? 'local' : DEFAULT_MARKET_SOURCE.kind
+  })
+  const [datasetId, setDatasetId] = useState<string | null>(
+    () => searchParams.get('dataset'),
+  )
   const [symbol, setSymbol] = useState(defaultBacktestPipelineParams.symbol)
   const [interval, setInterval] = useState<BacktestTimeframe>(
     defaultBacktestPipelineParams.interval as BacktestTimeframe,
@@ -159,7 +167,11 @@ export function OptimizerPage() {
     }
   }, [periodSelection])
 
-  const candlesQuery = useBinanceKlines(symbol, interval, {
+  const candlesQuery = useResearchCandles({
+    sourceKind,
+    datasetId,
+    symbol,
+    interval,
     startTime: resolvedPeriod.period?.startMs ?? null,
     endTime: resolvedPeriod.period?.endMs ?? null,
   })
@@ -304,18 +316,26 @@ export function OptimizerPage() {
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Market pair
-              </label>
-              <SymbolSelect value={symbol} onChange={setSymbol} disabled={isRunning} />
-            </div>
-            <div className="min-w-0 space-y-2">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Timeframe
-              </label>
-              <TimeframeSelect value={interval} onChange={setInterval} disabled={isRunning} />
-            </div>
+            <MarketSourceFields
+              idPrefix="optimizer"
+              disabled={isRunning}
+              value={{ sourceKind, datasetId, symbol, interval }}
+              onChange={(next) => {
+                if (next.sourceKind !== undefined) setSourceKind(next.sourceKind)
+                if (next.datasetId !== undefined) setDatasetId(next.datasetId)
+                if (next.symbol !== undefined) setSymbol(next.symbol)
+                if (next.interval !== undefined) {
+                  setInterval(next.interval as BacktestTimeframe)
+                }
+              }}
+              onDatasetReady={(dataset) => {
+                setPeriodSelection({
+                  preset: 'custom',
+                  customStartMs: dataset.startDate,
+                  customEndMs: dataset.endDate,
+                })
+              }}
+            />
             <div className="min-w-0 space-y-2 md:col-span-2">
               <ResearchPeriodSelect
                 selection={periodSelection}
@@ -453,12 +473,14 @@ export function OptimizerPage() {
             {(candlesQuery.isLoading || candlesQuery.isFetching) && (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading shared dataset for all optimizer candidates…
+                Loading shared dataset via {candlesQuery.providerLabel}…
               </span>
             )}
             {candlesReady && candlesQuery.data && resolvedPeriod.period && (
               <p>
                 Loaded {candlesQuery.data.length.toLocaleString()} candles
+                {' · '}
+                via {candlesQuery.providerLabel}
                 {' · '}
                 coverage{' '}
                 {formatPeriodSpan(

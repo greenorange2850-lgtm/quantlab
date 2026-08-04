@@ -18,6 +18,7 @@ import {
   ChevronRight,
   ArrowLeftRight,
   History,
+  Database,
 } from 'lucide-react'
 import { NAV_ITEMS } from '@trading-os/shared'
 import { cn } from '@/lib/utils'
@@ -37,6 +38,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Settings,
   ArrowLeftRight,
   History,
+  Database,
 }
 
 interface SidebarProps {

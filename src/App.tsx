@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { MainLayout } from '@/layouts/MainLayout'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { MarketExplorerPage } from '@/pages/MarketExplorerPage'
+import { DatasetLibraryPage } from '@/pages/DatasetLibraryPage'
 import { StrategyLabPage } from '@/pages/StrategyLabPage'
 import { BacktestLabPage } from '@/pages/BacktestLabPage'
 import { OptimizerPage } from '@/pages/OptimizerPage'
@@ -34,6 +35,7 @@ export function App() {
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/dataset-library" element={<DatasetLibraryPage />} />
           <Route path="/market-explorer" element={<MarketExplorerPage />} />
           <Route path="/strategy-lab" element={<StrategyLabPage />} />
           <Route path="/backtest-lab" element={<BacktestLabPage />} />
