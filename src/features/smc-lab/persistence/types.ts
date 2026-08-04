@@ -1,13 +1,14 @@
-import type { SmcDetectionKind, SmcDetectorConfig } from '@/core/smc'
+import type { SmcDetectionKind, SmcDetectorConfig, SmcGoldenDataset } from '@/core/smc'
 import { SMC_DETECTOR_VERSION } from '@/core/smc'
 
 export const SMC_LAB_PREFS_STORAGE_KEY = 'quantlab.smc-lab.prefs.v2'
 export const SMC_LAB_CONFIGS_STORAGE_KEY = 'quantlab.smc-lab.configs.v2'
 export const SMC_LAB_DB = {
   name: 'quantlab-smc-lab',
-  version: 1,
+  version: 2,
   reviews: 'smcReviews',
   annotations: 'smcAnnotations',
+  goldenDatasets: 'smcGoldenDatasets',
 } as const
 
 export type SmcReviewVerdict = 'correct' | 'wrong' | 'unsure' | 'unreviewed'
@@ -136,14 +137,16 @@ export interface SmcLabPreferences {
 }
 
 export interface SmcLabExportPayload {
-  /** Phase 1 exports used 1; Phase 2 writes 2. Import accepts both. */
-  schemaVersion: 1 | 2
+  /** Phase 1 exports used 1; Phase 2 writes 2; Phase 4 validation writes 3. */
+  schemaVersion: 1 | 2 | 3
   exportedAt: number
   detectorVersion: string
   detectorConfig: SmcDetectorConfig
   profileId?: string
   reviews: SmcReviewRecord[]
   annotations: SmcManualAnnotation[]
+  /** Optional golden datasets (schema v3+). */
+  goldenDatasets?: SmcGoldenDataset[]
   dataset: {
     datasetKey: string
     sourceKind: 'binance' | 'local'

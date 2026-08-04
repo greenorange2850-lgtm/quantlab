@@ -17,6 +17,10 @@ export {
 export { runSmcDetectionJob } from './run-detection-job'
 export type { SmcModuleProgress, SmcDetectionJobResult } from './run-detection-job'
 export {
+  SmcValidationDashboard,
+  SmcGoldenChartCompare,
+} from './validation'
+export {
   getSmcLabStore,
   setSmcLabStoreForTests,
   MemorySmcLabStore,
