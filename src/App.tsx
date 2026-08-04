@@ -14,11 +14,6 @@ import { PlaceholderPage } from '@/pages/PlaceholderPage'
 
 const placeholders = [
   {
-    path: '/trade-replay',
-    title: 'Trade Replay',
-    description: 'Step-through trade replay is planned for a future release.',
-  },
-  {
     path: '/reports',
     title: 'Reports',
     description: 'Exportable performance reports are planned for a future release.',
@@ -41,6 +36,7 @@ export function App() {
           <Route path="/strategy-lab" element={<StrategyLabPage />} />
           <Route path="/backtest-lab" element={<BacktestLabPage />} />
           <Route path="/backtest-replay" element={<BacktestReplayPage />} />
+          <Route path="/trade-replay" element={<Navigate to="/backtest-replay" replace />} />
           <Route path="/optimizer" element={<OptimizerPage />} />
           <Route path="/research-analysis" element={<ResearchAnalysisPage />} />
           <Route path="/strategy-compare" element={<StrategyComparePage />} />

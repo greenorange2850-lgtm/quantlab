@@ -17,5 +17,13 @@ export {
 export { computeStatistics, computeMaxDrawdown } from './statistics.js'
 export { Portfolio } from './Portfolio.js'
 export { BacktestEngine } from './BacktestEngine.js'
+export type { BacktestRunOptions } from './BacktestEngine.js'
 export { buildOrderRequestFromSignal } from './order-sizing.js'
 export type { HistoricalLoadParams } from '../market/historical-feed.js'
+export {
+  EXECUTION_ASSUMPTIONS,
+  type BacktestExecutionEvent,
+  type BacktestExecutionEventKind,
+  type ReplayTradeMarker,
+  type PositionState,
+} from './execution-events.js'

@@ -4,6 +4,7 @@ import type { BacktestExecutionEvent } from '../../core/backtest/execution-event
 import type {
   BacktestReplayBundle,
   BacktestReplayCandleRecord,
+  BacktestReplayEquityRecord,
   BacktestReplayEventRecord,
   BacktestReplayMetadata,
   BacktestReplayStore,
@@ -12,11 +13,12 @@ import type {
 
 export const REPLAY_DB = {
   name: 'quantlab-backtest-replay',
-  version: 1,
+  version: 2,
   metadata: 'backtestReplayMetadata',
   candles: 'backtestReplayCandles',
   trades: 'backtestReplayTrades',
   events: 'backtestExecutionEvents',
+  equity: 'backtestReplayEquity',
 } as const
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -43,6 +45,9 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(REPLAY_DB.events)) {
         db.createObjectStore(REPLAY_DB.events, { keyPath: 'backtestId' })
       }
+      if (!db.objectStoreNames.contains(REPLAY_DB.equity)) {
+        db.createObjectStore(REPLAY_DB.equity, { keyPath: 'backtestId' })
+      }
     }
 
     request.onsuccess = () => resolve(request.result)
@@ -67,70 +72,68 @@ function transactionDone(tx: IDBTransaction): Promise<void> {
   })
 }
 
+const ALL_STORES = [
+  REPLAY_DB.metadata,
+  REPLAY_DB.candles,
+  REPLAY_DB.trades,
+  REPLAY_DB.events,
+  REPLAY_DB.equity,
+] as const
+
 /** In-memory fallback used in tests / environments without IndexedDB. */
 export class MemoryBacktestReplayStore implements BacktestReplayStore {
-  private metadata = new Map<string, BacktestReplayMetadata>()
-  private candles = new Map<string, Candle[]>()
-  private trades = new Map<string, Trade[]>()
-  private events = new Map<string, BacktestExecutionEvent[]>()
-  private summaries = new Map<string, BacktestReplayBundle['reportSummary']>()
+  private bundles = new Map<string, BacktestReplayBundle>()
 
   async putBundle(bundle: BacktestReplayBundle): Promise<void> {
-    this.metadata.set(bundle.metadata.backtestId, bundle.metadata)
-    this.candles.set(bundle.metadata.backtestId, bundle.candles)
-    this.trades.set(bundle.metadata.backtestId, bundle.trades)
-    this.events.set(bundle.metadata.backtestId, bundle.events)
-    this.summaries.set(bundle.metadata.backtestId, bundle.reportSummary)
+    this.bundles.set(bundle.metadata.backtestId, {
+      ...bundle,
+      candles: [...bundle.candles],
+      trades: [...bundle.trades],
+      events: [...bundle.events],
+      equityCurve: [...bundle.equityCurve],
+    })
   }
 
   async getMetadata(backtestId: string): Promise<BacktestReplayMetadata | null> {
-    return this.metadata.get(backtestId) ?? null
+    return this.bundles.get(backtestId)?.metadata ?? null
   }
 
   async getCandles(backtestId: string): Promise<Candle[] | null> {
-    return this.candles.get(backtestId) ?? null
+    return this.bundles.get(backtestId)?.candles ?? null
   }
 
   async getTrades(backtestId: string): Promise<Trade[] | null> {
-    return this.trades.get(backtestId) ?? null
+    return this.bundles.get(backtestId)?.trades ?? null
   }
 
   async getEvents(backtestId: string): Promise<BacktestExecutionEvent[] | null> {
-    return this.events.get(backtestId) ?? null
+    return this.bundles.get(backtestId)?.events ?? null
   }
 
   async getBundle(backtestId: string): Promise<BacktestReplayBundle | null> {
-    const metadata = await this.getMetadata(backtestId)
-    const candles = await this.getCandles(backtestId)
-    const trades = await this.getTrades(backtestId)
-    if (!metadata || !candles || !trades) return null
+    const bundle = this.bundles.get(backtestId)
+    if (!bundle || bundle.candles.length === 0) return null
     return {
-      metadata,
-      candles,
-      trades,
-      events: (await this.getEvents(backtestId)) ?? [],
-      reportSummary: this.summaries.get(backtestId) ?? null,
+      ...bundle,
+      candles: [...bundle.candles],
+      trades: [...bundle.trades],
+      events: [...bundle.events],
+      equityCurve: [...bundle.equityCurve],
     }
   }
 
   async listMetadata(): Promise<BacktestReplayMetadata[]> {
-    return [...this.metadata.values()].sort((a, b) => b.savedAt - a.savedAt)
+    return [...this.bundles.values()]
+      .map((bundle) => bundle.metadata)
+      .sort((a, b) => b.savedAt - a.savedAt)
   }
 
   async deleteBundle(backtestId: string): Promise<void> {
-    this.metadata.delete(backtestId)
-    this.candles.delete(backtestId)
-    this.trades.delete(backtestId)
-    this.events.delete(backtestId)
-    this.summaries.delete(backtestId)
+    this.bundles.delete(backtestId)
   }
 
   async clear(): Promise<void> {
-    this.metadata.clear()
-    this.candles.clear()
-    this.trades.clear()
-    this.events.clear()
-    this.summaries.clear()
+    this.bundles.clear()
   }
 }
 
@@ -149,10 +152,7 @@ export class IndexedDBBacktestReplayStore implements BacktestReplayStore {
 
   async putBundle(bundle: BacktestReplayBundle): Promise<void> {
     const db = await this.db()
-    const tx = db.transaction(
-      [REPLAY_DB.metadata, REPLAY_DB.candles, REPLAY_DB.trades, REPLAY_DB.events],
-      'readwrite',
-    )
+    const tx = db.transaction([...ALL_STORES], 'readwrite')
     const done = transactionDone(tx)
     tx.objectStore(REPLAY_DB.metadata).put(bundle.metadata)
     const candleRecord: BacktestReplayCandleRecord = {
@@ -170,6 +170,12 @@ export class IndexedDBBacktestReplayStore implements BacktestReplayStore {
       events: bundle.events,
     }
     tx.objectStore(REPLAY_DB.events).put(eventRecord)
+    const equityRecord: BacktestReplayEquityRecord = {
+      backtestId: bundle.metadata.backtestId,
+      equityCurve: bundle.equityCurve,
+      reportSummary: bundle.reportSummary,
+    }
+    tx.objectStore(REPLAY_DB.equity).put(equityRecord)
     await done
   }
 
@@ -230,12 +236,24 @@ export class IndexedDBBacktestReplayStore implements BacktestReplayStore {
     const candles = await this.getCandles(backtestId)
     const trades = await this.getTrades(backtestId)
     if (!metadata || !candles?.length || !trades) return null
+
+    const db = await this.db()
+    const tx = db.transaction(REPLAY_DB.equity, 'readonly')
+    const done = transactionDone(tx)
+    const equity = await requestToPromise(
+      tx.objectStore(REPLAY_DB.equity).get(backtestId) as IDBRequest<
+        BacktestReplayEquityRecord | undefined
+      >,
+    )
+    await done
+
     return {
       metadata,
       candles,
       trades,
       events: (await this.getEvents(backtestId)) ?? [],
-      reportSummary: {
+      equityCurve: equity?.equityCurve ?? [],
+      reportSummary: equity?.reportSummary ?? {
         netProfit: metadata.finalEquity - metadata.initialCapital,
         totalTrades: metadata.tradeCount,
         winRate: 0,
@@ -259,29 +277,21 @@ export class IndexedDBBacktestReplayStore implements BacktestReplayStore {
 
   async deleteBundle(backtestId: string): Promise<void> {
     const db = await this.db()
-    const tx = db.transaction(
-      [REPLAY_DB.metadata, REPLAY_DB.candles, REPLAY_DB.trades, REPLAY_DB.events],
-      'readwrite',
-    )
+    const tx = db.transaction([...ALL_STORES], 'readwrite')
     const done = transactionDone(tx)
-    tx.objectStore(REPLAY_DB.metadata).delete(backtestId)
-    tx.objectStore(REPLAY_DB.candles).delete(backtestId)
-    tx.objectStore(REPLAY_DB.trades).delete(backtestId)
-    tx.objectStore(REPLAY_DB.events).delete(backtestId)
+    for (const store of ALL_STORES) {
+      tx.objectStore(store).delete(backtestId)
+    }
     await done
   }
 
   async clear(): Promise<void> {
     const db = await this.db()
-    const tx = db.transaction(
-      [REPLAY_DB.metadata, REPLAY_DB.candles, REPLAY_DB.trades, REPLAY_DB.events],
-      'readwrite',
-    )
+    const tx = db.transaction([...ALL_STORES], 'readwrite')
     const done = transactionDone(tx)
-    tx.objectStore(REPLAY_DB.metadata).clear()
-    tx.objectStore(REPLAY_DB.candles).clear()
-    tx.objectStore(REPLAY_DB.trades).clear()
-    tx.objectStore(REPLAY_DB.events).clear()
+    for (const store of ALL_STORES) {
+      tx.objectStore(store).clear()
+    }
     await done
   }
 }

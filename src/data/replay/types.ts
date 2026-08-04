@@ -40,11 +40,19 @@ export interface BacktestReplayEventRecord {
   events: BacktestExecutionEvent[]
 }
 
+export interface BacktestReplayEquityRecord {
+  backtestId: string
+  equityCurve: BacktestReport['equityCurve']
+  reportSummary: BacktestReplayBundle['reportSummary']
+}
+
 export interface BacktestReplayBundle {
   metadata: BacktestReplayMetadata
   candles: Candle[]
   trades: Trade[]
   events: BacktestExecutionEvent[]
+  /** Persisted equity curve from BacktestReport — not recomputed in the UI. */
+  equityCurve: BacktestReport['equityCurve']
   reportSummary: Pick<
     BacktestReport['summary'],
     'netProfit' | 'totalTrades' | 'winRate' | 'profitFactor' | 'maxDrawdown' | 'finalBalance'

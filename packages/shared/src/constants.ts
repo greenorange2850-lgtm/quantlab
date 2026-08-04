@@ -41,7 +41,7 @@ export const NAV_ITEMS = [
   { id: 'backtest-lab', label: 'Backtest Lab', icon: 'FlaskConical', path: '/backtest-lab' },
   { id: 'dataset-library', label: 'Dataset Library', icon: 'Database', path: '/dataset-library' },
   { id: 'market-explorer', label: 'Market Explorer', icon: 'Globe', path: '/market-explorer' },
-  { id: 'trade-replay', label: 'Trade Replay', icon: 'Play', path: '/trade-replay', planned: true },
+  { id: 'trade-replay', label: 'Backtest Replay', icon: 'Play', path: '/backtest-replay' },
   { id: 'research-analysis', label: 'Research Analysis', icon: 'Brain', path: '/research-analysis' },
   { id: 'strategy-compare', label: 'Strategy Compare', icon: 'ArrowLeftRight', path: '/strategy-compare' },
   { id: 'research-sessions', label: 'Research Sessions', icon: 'History', path: '/research-sessions' },

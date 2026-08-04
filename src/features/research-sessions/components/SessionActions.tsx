@@ -3,14 +3,21 @@ import { ArrowLeftRight, Eye, Loader2, MoreHorizontal, Trash2 } from 'lucide-rea
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { OpenReplayButton, isReplayAvailableForBacktest } from '@/features/backtest-replay'
 
 interface SessionActionsProps {
   sessionId: string
+  bestBacktestId?: string | null
   deleting?: boolean
   onDelete: (sessionId: string) => void
 }
 
-export function SessionActions({ sessionId, deleting, onDelete }: SessionActionsProps) {
+export function SessionActions({
+  sessionId,
+  bestBacktestId,
+  deleting,
+  onDelete,
+}: SessionActionsProps) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
@@ -21,6 +28,12 @@ export function SessionActions({ sessionId, deleting, onDelete }: SessionActions
           View Details
         </Button>
       </Link>
+      {bestBacktestId ? (
+        <OpenReplayButton
+          backtestId={bestBacktestId}
+          available={isReplayAvailableForBacktest(bestBacktestId)}
+        />
+      ) : null}
       <Link to={`/strategy-compare?session=${sessionId}`} className="w-full sm:w-auto">
         <Button variant="outline" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
           <ArrowLeftRight className="mr-2 h-4 w-4" />

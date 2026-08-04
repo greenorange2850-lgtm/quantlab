@@ -25,6 +25,8 @@ export interface SessionListItem {
   totalTrades: number | null
   status: string
   savedAt: number
+  /** Best candidate backtest id when full detail may be available for replay. */
+  bestBacktestId: string | null
 }
 
 /** Map archived session → list row using existing report fields only. */
@@ -51,6 +53,7 @@ export function toSessionListItem(entry: PersistedResearchSession): SessionListI
     totalTrades: best?.report.summary.totalTrades ?? null,
     status: report.status,
     savedAt: entry.savedAt,
+    bestBacktestId: best?.backtestId ?? null,
   }
 }
 

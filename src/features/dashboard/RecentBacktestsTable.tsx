@@ -10,13 +10,15 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { motion } from 'framer-motion'
-import { ArrowUpDown, Search, ChevronLeft, ChevronRight, Eye, MoreHorizontal } from 'lucide-react'
+import { ArrowUpDown, Search, ChevronLeft, ChevronRight, Eye, MoreHorizontal, Play } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
 import type { BacktestSummary, BacktestStatus } from '@/types'
+import { isReplayAvailableForBacktest, replayUnavailableMessage } from '@/features/backtest-replay'
 
 interface RecentBacktestsTableProps {
   data: BacktestSummary[]
@@ -97,6 +99,27 @@ function BacktestCard({
         >
           <Eye className="h-3.5 w-3.5" />
         </Button>
+        {isReplayAvailableForBacktest(item.id) ? (
+          <Link
+            to={`/backtest-replay?backtest=${encodeURIComponent(item.id)}`}
+            aria-label={`Open replay for ${item.version}`}
+          >
+            <Button variant="ghost" size="icon" className="h-11 w-11">
+              <Play className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11"
+            disabled
+            title={replayUnavailableMessage('slim_archive')}
+            aria-label={replayUnavailableMessage('slim_archive')}
+          >
+            <Play className="h-3.5 w-3.5" />
+          </Button>
+        )}
         <Button variant="ghost" size="icon" className="h-11 w-11" aria-label="More actions" disabled>
           <MoreHorizontal className="h-3.5 w-3.5" />
         </Button>
@@ -178,6 +201,27 @@ export function RecentBacktestsTable({
             >
               <Eye className="h-3.5 w-3.5" />
             </Button>
+            {isReplayAvailableForBacktest(row.original.id) ? (
+              <Link
+                to={`/backtest-replay?backtest=${encodeURIComponent(row.original.id)}`}
+                aria-label={`Open replay for ${row.original.version}`}
+              >
+                <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <Play className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                disabled
+                title={replayUnavailableMessage('slim_archive')}
+                aria-label={replayUnavailableMessage('slim_archive')}
+              >
+                <Play className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         ),
       },

@@ -54,37 +54,21 @@ const EVENT_LABELS: Record<BacktestExecutionEventKind, string> = {
   trade_closed: 'Trades closed',
 }
 
-function buildRealizedEquityCurve(bundle: BacktestReplayBundle): EquityPoint[] {
-  const tradesByExit = [...bundle.trades].sort((a, b) => a.exitTime - b.exitTime)
-  const points: EquityPoint[] = []
-  let tradeCursor = 0
-  let equity = bundle.metadata.initialCapital
-
-  for (const candle of bundle.candles) {
-    while (tradeCursor < tradesByExit.length && tradesByExit[tradeCursor].exitTime <= candle.time) {
-      equity += tradesByExit[tradeCursor].pnl
-      tradeCursor += 1
-    }
-    points.push({ time: candle.time, equity, cash: equity })
-  }
-
-  if (points.length === 0) {
-    return [
-      {
-        time: Date.now(),
-        equity: bundle.metadata.initialCapital,
-        cash: bundle.metadata.initialCapital,
-      },
-    ]
-  }
-
-  const last = points[points.length - 1]
-  points[points.length - 1] = {
-    ...last,
-    equity: bundle.metadata.finalEquity,
-    cash: bundle.metadata.finalEquity,
-  }
-  return points
+function resolveEquityCurve(bundle: BacktestReplayBundle): EquityPoint[] {
+  if (bundle.equityCurve.length > 0) return bundle.equityCurve
+  // Legacy bundles without a persisted curve — use endpoints only.
+  return [
+    {
+      time: bundle.candles[0]?.time ?? Date.now(),
+      equity: bundle.metadata.initialCapital,
+      cash: bundle.metadata.initialCapital,
+    },
+    {
+      time: bundle.candles.at(-1)?.time ?? Date.now(),
+      equity: bundle.metadata.finalEquity,
+      cash: bundle.metadata.finalEquity,
+    },
+  ]
 }
 
 function LoadingReplayPage() {
@@ -222,7 +206,7 @@ export function BacktestReplayPage() {
     () => (bundle ? buildTradeMarkers(bundle.trades, bundle.events) : []),
     [bundle],
   )
-  const equityCurve = useMemo(() => (bundle ? buildRealizedEquityCurve(bundle) : []), [bundle])
+  const equityCurve = useMemo(() => (bundle ? resolveEquityCurve(bundle) : []), [bundle])
   const selectedTrade = bundle?.trades[selectedTradeIndex] ?? null
   const selectedMarker = selectedTrade
     ? markers.find((marker) => marker.tradeId === selectedTrade.id) ?? null

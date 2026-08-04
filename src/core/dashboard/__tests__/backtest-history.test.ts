@@ -63,6 +63,7 @@ function samplePipeline(): RunBacktestPipelineResult {
       slowPeriod: 50,
       rsiPeriod: 14,
     },
+    executionEvents: [],
   }
 }
 

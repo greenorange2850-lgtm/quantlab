@@ -24,6 +24,7 @@ import {
   resolveResearchPeriod,
   type ResearchPeriodSelection,
 } from '@/data/research-period'
+import { OpenReplayButton, isReplayAvailableForBacktest } from '@/features/backtest-replay'
 
 interface BacktestSetupFormProps {
   title: string
@@ -38,8 +39,11 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
   const isRunning = useBacktestStore((state) => state.isRunning)
   const error = useBacktestStore((state) => state.error)
   const hasBacktest = useBacktestStore((state) => state.dashboard.hasBacktest)
+  const restoredId = useBacktestStore((state) => state.restoredId)
+  const recentBacktests = useBacktestStore((state) => state.dashboard.recentBacktests)
   const appliedParameters = useResearchStore((state) => state.appliedParameters)
   const clearAppliedParameters = useResearchStore((state) => state.clearAppliedParameters)
+  const replayBacktestId = restoredId ?? recentBacktests[0]?.id ?? null
 
   const [sourceKind, setSourceKind] = useState<MarketSourceKind>(DEFAULT_MARKET_SOURCE.kind)
   const [datasetId, setDatasetId] = useState<string | null>(null)
@@ -344,6 +348,12 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
                 </Button>
               </Link>
             )}
+            {replayBacktestId ? (
+              <OpenReplayButton
+                backtestId={replayBacktestId}
+                available={isReplayAvailableForBacktest(replayBacktestId)}
+              />
+            ) : null}
           </div>
         </CardContent>
       </Card>

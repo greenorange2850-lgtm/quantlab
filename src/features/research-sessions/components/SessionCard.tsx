@@ -97,7 +97,12 @@ export function SessionCard({ item, deleting, onDelete }: SessionCardProps) {
           </div>
         </Disclosure>
 
-        <SessionActions sessionId={item.id} deleting={deleting} onDelete={onDelete} />
+        <SessionActions
+          sessionId={item.id}
+          bestBacktestId={item.bestBacktestId}
+          deleting={deleting}
+          onDelete={onDelete}
+        />
       </CardContent>
     </Card>
   )

@@ -4,6 +4,7 @@ import { BinanceProvider } from '../../data/providers/BinanceProvider.js'
 import { buildBacktestReport } from '../analytics/report-builder.js'
 import type { BacktestReport } from '../analytics/types.js'
 import { BacktestEngine } from '../backtest/BacktestEngine.js'
+import type { BacktestExecutionEvent } from '../backtest/execution-events.js'
 import { MarketDataEngine } from '../market/market-data-engine.js'
 import { defaultRiskConfig } from '../risk/config.js'
 import { validateRiskConfig } from '../risk/validators.js'
@@ -48,6 +49,8 @@ export interface RunBacktestPipelineResult {
   context: DashboardViewModelContext
   backtestId: string
   strategyParams: MovingAverageCrossParams
+  /** Optional diagnostics — recording does not change execution results. */
+  executionEvents?: BacktestExecutionEvent[]
 }
 
 export const defaultBacktestPipelineParams: RunBacktestPipelineParams = {
@@ -98,10 +101,16 @@ export async function runBacktestPipeline(
 
   let candles: Candle[]
   let result
+  const executionEvents: BacktestExecutionEvent[] = []
+  const diagnostics = {
+    onExecutionEvent: (event: BacktestExecutionEvent) => {
+      executionEvents.push(event)
+    },
+  }
 
   if (params.candles && params.candles.length > 0) {
     candles = params.candles
-    result = backtestEngine.run(candles, strategy, backtestConfig)
+    result = backtestEngine.run(candles, strategy, backtestConfig, diagnostics)
   } else {
     const marketDataEngine = new MarketDataEngine()
     const historicalFeed = marketDataEngine.createHistoricalFeed(new BinanceProvider())
@@ -117,6 +126,7 @@ export async function runBacktestPipeline(
       },
       strategy,
       backtestConfig,
+      diagnostics,
     )
 
     candles = [...historicalFeed.getHistory(params.symbol)]
@@ -136,6 +146,7 @@ export async function runBacktestPipeline(
     context,
     backtestId: createBacktestId(),
     strategyParams,
+    executionEvents,
   }
 }
 

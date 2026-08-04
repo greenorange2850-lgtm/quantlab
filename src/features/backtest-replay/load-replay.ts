@@ -155,6 +155,7 @@ function buildBundleFromDetail(input: {
     candles: input.candles,
     trades: input.trades,
     events: input.events,
+    equityCurve: input.report.equityCurve,
     reportSummary: {
       netProfit: input.report.summary.netProfit,
       totalTrades: input.report.summary.totalTrades,

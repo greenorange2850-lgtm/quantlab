@@ -22,6 +22,7 @@ import {
   buildPersistedDetail,
   restoreDashboardFromDetail,
 } from '@/backtests/restore-dashboard'
+import { persistBacktestReplay } from '@/features/backtest-replay'
 import {
   BACKTEST_STORE_PERSIST_NAME,
   STORE_PERSIST_VERSION,
@@ -267,6 +268,17 @@ export const useBacktestStore = create<BacktestState>()(
             existingSummary: summary,
           }),
         )
+        void persistBacktestReplay({
+          backtestId: pipelineResult.backtestId,
+          candles: pipelineResult.candles,
+          trades: pipelineResult.report.trades,
+          events: pipelineResult.executionEvents ?? [],
+          report: pipelineResult.report,
+          strategyName: pipelineResult.context.strategyName,
+          strategyVersion: pipelineResult.context.strategyVersion,
+          timeframe: pipelineResult.context.timeframe,
+          strategyParams: pipelineResult.strategyParams,
+        })
       }
 
       const liveSession: LiveSessionSnapshot = {

@@ -12,6 +12,7 @@ import {
 } from '@/lib/metric-semantics'
 import type { ResearchReport } from '@/core/research'
 import { MetricTile } from './MetricTile'
+import { OpenReplayButton, isReplayAvailableForBacktest } from '@/features/backtest-replay'
 
 function formatResearchPeriod(report: ResearchReport): string {
   if (report.config.startDate != null && report.config.endDate != null) {
@@ -71,6 +72,7 @@ export function ResearchOverview({ report }: ResearchOverviewProps) {
   const rating = report.analysis.rating
   const roiPercent =
     backtest && initialCapital > 0 ? (backtest.summary.netProfit / initialCapital) * 100 : null
+  const replayId = report.bestCandidate?.backtestId
 
   return (
     <Card hover={false}>
@@ -85,15 +87,23 @@ export function ResearchOverview({ report }: ResearchOverviewProps) {
               : 'Quality, profit, and risk — from the archived report.'}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {report.partial && (
-            <Badge variant="warning" className="text-[10px]">
-              Validation incomplete
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <div className="flex flex-wrap gap-2">
+            {report.partial && (
+              <Badge variant="warning" className="text-[10px]">
+                Validation incomplete
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-[10px]">
+              Validation Required
             </Badge>
-          )}
-          <Badge variant="outline" className="text-[10px]">
-            Validation Required
-          </Badge>
+          </div>
+          {replayId ? (
+            <OpenReplayButton
+              backtestId={replayId}
+              available={isReplayAvailableForBacktest(replayId)}
+            />
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
