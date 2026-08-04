@@ -20,6 +20,7 @@ import {
   History,
   Database,
   Library,
+  ScanSearch,
 } from 'lucide-react'
 import { NAV_ITEMS } from '@trading-os/shared'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   History,
   Database,
   Library,
+  ScanSearch,
 }
 
 interface SidebarProps {

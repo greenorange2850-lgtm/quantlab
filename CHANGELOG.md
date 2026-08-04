@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### SMC Lab — Phase 1
+- Isolated experimental workspace at `/smc-lab` for visual Smart Money Concepts detection
+- Confirmed Swing High / Swing Low and Bullish / Bearish BOS detectors (`src/core/smc`)
+- Progressive no-look-ahead detection (`detectSmcUntil`) + detector cursor replay
+- Manual Correct/Wrong reviews and chart annotations (IndexedDB)
+- Saved Lab configs, review summary (reviewed accuracy), JSON import/export
+- Does not connect to Strategy, Optimizer, Backtest, Research Sessions, or Dashboard
+
 ### Fixed
 
 #### Strategy workflow audit
