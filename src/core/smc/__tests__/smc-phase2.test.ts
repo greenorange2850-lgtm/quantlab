@@ -405,8 +405,8 @@ describe('liquidity sweep', () => {
         reason: 't',
       },
     ]
-    const candles = makeRange(12, 95, 0.5)
-    candles[10] = candle(10, 99, 101, 98, 100.5) // close through
+    const candles = Array.from({ length: 12 }, (_, i) => candle(i, 95, 96, 94, 95))
+    candles[10] = candle(10, 99, 101, 98, 100.5) // close through — not a sweep
     const result = detectLiquiditySweeps(
       candles,
       swings,
