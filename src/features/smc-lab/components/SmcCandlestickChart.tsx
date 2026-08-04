@@ -11,6 +11,7 @@ import type {
   SmcSwingEvent,
 } from '@/core/smc'
 import type { SmcLabPreferences, SmcManualAnnotation } from '../persistence/types'
+import type { SmcRankedEventMeta } from '@/core/smc'
 
 /** Chart layer toggles — mirrors SmcLabPreferences['layerToggles']. */
 export type SmcChartLayerToggles = SmcLabPreferences['layerToggles']
@@ -33,6 +34,8 @@ interface SmcCandlestickChartProps {
   layers: SmcChartLayerToggles
   windowStartIndex: number
   densityWarning?: string | null
+  /** Importance metadata for overlap collapse (higher score kept). */
+  importanceById?: Record<string, SmcRankedEventMeta>
 }
 
 const WIDTH = 720
@@ -187,6 +190,7 @@ export function SmcCandlestickChart({
   layers,
   windowStartIndex,
   densityWarning = null,
+  importanceById,
 }: SmcCandlestickChartProps) {
   if (candles.length === 0) {
     return (
@@ -349,21 +353,27 @@ export function SmcCandlestickChart({
     })
   }
 
-  // Density: collapse heavy overlaps to "+N events"
+  // Density: keep higher importance labels; collapse lower into "+N events"
   const byCandle = new Map<number, ChartLabel[]>()
   for (const label of labels) {
     const list = byCandle.get(label.localIndex) ?? []
     list.push(label)
     byCandle.set(label.localIndex, list)
   }
+  const scoreOf = (id: string) => importanceById?.[id]?.importanceScore ?? 0
   const renderedLabels: ChartLabel[] = []
   const overflowByCandle = new Map<number, number>()
   for (const [localIndex, group] of byCandle) {
-    if (group.length <= MAX_STACKED_LABELS) {
-      renderedLabels.push(...group)
+    const sorted = [...group].sort((a, b) => {
+      const diff = scoreOf(b.id) - scoreOf(a.id)
+      if (diff !== 0) return diff
+      return a.id.localeCompare(b.id)
+    })
+    if (sorted.length <= MAX_STACKED_LABELS) {
+      renderedLabels.push(...sorted)
     } else {
-      renderedLabels.push(...group.slice(0, MAX_STACKED_LABELS))
-      overflowByCandle.set(localIndex, group.length - MAX_STACKED_LABELS)
+      renderedLabels.push(...sorted.slice(0, MAX_STACKED_LABELS))
+      overflowByCandle.set(localIndex, sorted.length - MAX_STACKED_LABELS)
     }
   }
 

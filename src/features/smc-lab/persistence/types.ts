@@ -100,6 +100,9 @@ export interface SmcSavedLabConfig {
 
 export type SmcDensityPreset = 'minimal' | 'structure' | 'liquidity' | 'full-debug'
 
+/** Intelligence visibility mode — filters display only; never deletes detector events. */
+export type SmcVisibilityModePref = 'focus' | 'balanced' | 'debug'
+
 export interface SmcLabPreferences {
   schemaVersion: 2
   activeConfigId: string | null
@@ -126,6 +129,8 @@ export interface SmcLabPreferences {
     diagnosticsLabels: boolean
   }
   densityPreset: SmcDensityPreset
+  /** Focus / Balanced / Debug ranking visibility. Default Balanced. */
+  visibilityMode: SmcVisibilityModePref
   playSpeed: 0.5 | 1 | 2 | 5
   compareProfileId: string | null
 }

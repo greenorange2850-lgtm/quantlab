@@ -11,6 +11,7 @@ import type {
   SmcFvgEvent,
   SmcLiquiditySweepEvent,
   SmcOrderBlockEvent,
+  SmcRankedEventMeta,
   SmcSwingEvent,
 } from '@/core/smc'
 import { Button } from '@/components/ui/button'
@@ -59,6 +60,9 @@ interface SmcEventInspectorProps {
   onTagsChange: (tags: SmcWrongTag[]) => void
   onVerdict: (verdict: 'correct' | 'wrong' | 'unsure') => void
   onResetReview: () => void
+  importance?: SmcRankedEventMeta | null
+  related?: { higher: SmcRankedEventMeta[]; nearbyLower: SmcRankedEventMeta[] }
+  onSelectRelated?: (eventId: string) => void
 }
 
 function isSwingKind(kind: string): boolean {
@@ -110,6 +114,9 @@ export function SmcEventInspector({
   onTagsChange,
   onVerdict,
   onResetReview,
+  importance = null,
+  related = { higher: [], nearbyLower: [] },
+  onSelectRelated,
 }: SmcEventInspectorProps) {
   if (!event) {
     return (
@@ -130,6 +137,11 @@ export function SmcEventInspector({
         <Badge variant="outline" className="text-[10px]">
           {event.kind}
         </Badge>
+        {importance ? (
+          <Badge variant="accent" className="text-[10px] font-mono">
+            Importance {importance.importanceScore}
+          </Badge>
+        ) : null}
         {review ? (
           <Badge variant="accent" className="text-[10px] capitalize">
             {review.verdict}
@@ -141,6 +153,71 @@ export function SmcEventInspector({
           </Badge>
         ) : null}
       </div>
+
+      {importance ? (
+        <div className="space-y-1 rounded-lg border border-border/60 bg-white/[0.02] p-2 text-xs">
+          <p className="font-medium">Importance Score</p>
+          <p className="font-mono text-lg">{importance.importanceScore}</p>
+          <p className="text-[10px] text-muted-foreground">
+            Relevance ranking (not detector confidence). Why it received the score:
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {importance.importanceReasons.map((reason) => (
+              <li key={reason.label} className="font-mono text-[10px]">
+                {reason.label}
+              </li>
+            ))}
+          </ul>
+          <p className="pt-1 text-[10px] text-muted-foreground">
+            Final Score = {importance.importanceScore}
+          </p>
+        </div>
+      ) : null}
+
+      {(related.higher.length > 0 || related.nearbyLower.length > 0) && onSelectRelated ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-lg border border-border/60 bg-white/[0.02] p-2 text-xs">
+            <p className="font-medium">Higher ranked related</p>
+            <ul className="mt-1 space-y-0.5">
+              {related.higher.length === 0 ? (
+                <li className="text-[10px] text-muted-foreground">None</li>
+              ) : (
+                related.higher.map((m) => (
+                  <li key={m.eventId}>
+                    <button
+                      type="button"
+                      className="font-mono text-[10px] underline-offset-2 hover:underline"
+                      onClick={() => onSelectRelated(m.eventId)}
+                    >
+                      {m.importanceScore} · {m.eventId}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-white/[0.02] p-2 text-xs">
+            <p className="font-medium">Lower ranked nearby</p>
+            <ul className="mt-1 space-y-0.5">
+              {related.nearbyLower.length === 0 ? (
+                <li className="text-[10px] text-muted-foreground">None</li>
+              ) : (
+                related.nearbyLower.map((m) => (
+                  <li key={m.eventId}>
+                    <button
+                      type="button"
+                      className="font-mono text-[10px] underline-offset-2 hover:underline"
+                      onClick={() => onSelectRelated(m.eventId)}
+                    >
+                      {m.importanceScore} · {m.eventId}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-1 text-xs">{renderEventBody(event, candle, swings)}</div>
 
