@@ -58,6 +58,11 @@ function samplePipeline(): RunBacktestPipelineResult {
       timeframe: '1H',
     },
     backtestId: 'bt-test-1',
+    strategyParams: {
+      fastPeriod: 20,
+      slowPeriod: 50,
+      rsiPeriod: 14,
+    },
   }
 }
 

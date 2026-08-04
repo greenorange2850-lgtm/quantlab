@@ -270,6 +270,8 @@ function makeAdaptiveSession(): ResearchSession {
       improvementsCount: 1,
       candidatesSinceLastImprovement: 0,
       elapsedMs: 5000,
+      wallElapsedMs: 5000,
+      pausedMs: 0,
       estimatedRemainingMs: 0,
       status: 'COMPLETED',
     },
