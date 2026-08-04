@@ -339,6 +339,8 @@ export function BacktestReplayPage() {
     )
   }
 
+  const replaySource = loadState.availability.source
+
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -358,8 +360,8 @@ export function BacktestReplayPage() {
             <Badge variant="outline" className="font-mono">
               {bundle.metadata.timeframe}
             </Badge>
-            <Badge variant={loadState.availability.source === 'indexeddb' ? 'accent' : 'outline'}>
-              {loadState.availability.source}
+            <Badge variant={replaySource === 'indexeddb' ? 'accent' : 'outline'}>
+              {replaySource}
             </Badge>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
