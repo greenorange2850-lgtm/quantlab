@@ -16,6 +16,7 @@ export function validationModuleForKind(kind: SmcDetectionKind): SmcValidationMo
   if (kind.includes('FVG')) return 'FVG'
   if (kind.includes('LIQUIDITY_SWEEP')) return 'Liquidity Sweep'
   if (kind.includes('ORDER_BLOCK')) return 'Order Block'
+  if (kind === 'BULLISH_QML' || kind === 'BEARISH_QML') return 'QML'
   return null
 }
 

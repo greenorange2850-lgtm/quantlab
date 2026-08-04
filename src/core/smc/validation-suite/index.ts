@@ -33,7 +33,14 @@ export {
   SMC_VALIDATION_MODULES,
 } from './metrics'
 
-export { toDetectedProbes, filterProbesByModule } from './probes'
+export { toDetectedProbes, filterProbesByModule, qmlPatternToProbe } from './probes'
+
+export {
+  matchQmlGoldenLabels,
+  DEFAULT_QML_MATCH_TOLERANCE,
+  type QmlMatchTolerance,
+  type QmlGoldenLabel,
+} from './qml-matching'
 
 export {
   validateProgressiveConsistency,

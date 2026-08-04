@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { MarketSourceFields } from '@/components/market/MarketSourceFields'
 import { ResearchPeriodSelect } from '@/components/market/ResearchPeriodSelect'
 import { SmcControlsPanel } from '../components/SmcControlsPanel'
+import { QmlConfigPanel } from '../qml'
 import { saveSmcNamedConfig } from '../persistence/prefs-archive'
 import type { SmcVisibilityModePref } from '../persistence/types'
 import { useSmcLabWorkspace } from './SmcLabWorkspaceContext'
@@ -328,6 +329,11 @@ export function SmcConfigureWorkspace() {
       {/* Modules */}
       <Disclosure title="Modules">
         <SmcControlsPanel {...sharedControls} sections={['modules']} />
+      </Disclosure>
+
+      {/* QML Experimental */}
+      <Disclosure title="QML (Experimental)">
+        <QmlConfigPanel config={config} onChangeConfig={sharedControls.onChangeConfig} />
       </Disclosure>
 
       {/* Advanced */}

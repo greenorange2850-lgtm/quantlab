@@ -6,6 +6,8 @@ import { SmcCursorControls } from '../components/SmcCursorControls'
 import { SmcEventInspector } from '../components/SmcEventInspector'
 import { SmcEventList } from '../components/SmcEventList'
 import { layersForDensityPreset } from '../persistence/prefs-archive'
+import { useMemo, useState } from 'react'
+import { QmlInspector, QmlSetupsPanel, type QmlWrongTag } from '../qml'
 import { SmcAppliedConfigSummary } from './SmcAppliedConfigSummary'
 import { SmcQuickViewControls } from './SmcQuickViewControls'
 import { useSmcLabWorkspace } from './SmcLabWorkspaceContext'
@@ -48,8 +50,11 @@ export function SmcAnalyzeWorkspace() {
     setSelectedEventId,
     selectedZoneId,
     setSelectedZoneId,
+    selectedQmlId,
+    selectQmlPattern,
     selectedEvent,
     selectedZone,
+    config,
     eventFilter,
     setEventFilter,
     selectEvent,
@@ -78,6 +83,15 @@ export function SmcAnalyzeWorkspace() {
     setDensityPreset(preset)
     setLayers(layersForDensityPreset(preset))
   }
+
+  const [qmlNote, setQmlNote] = useState('')
+  const [qmlTags, setQmlTags] = useState<QmlWrongTag[]>([])
+  const [qmlVerdict, setQmlVerdict] = useState<'correct' | 'wrong' | 'unsure' | null>(null)
+
+  const selectedQml = useMemo(() => {
+    const patterns = progressive.qml?.patterns ?? detection.qml?.patterns ?? []
+    return patterns.find((p) => p.id === selectedQmlId) ?? null
+  }, [progressive.qml?.patterns, detection.qml?.patterns, selectedQmlId])
 
   return (
     <div
@@ -236,10 +250,41 @@ export function SmcAnalyzeWorkspace() {
                 <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-amber-500/70" />
                 BSL / SSL
               </p>
+              <p>
+                <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-teal-500/70" />
+                Bullish QML
+              </p>
+              <p>
+                <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-orange-500/70" />
+                Bearish QML
+              </p>
               <p>Solid = Active/Fresh · Dotted = Touched/Partial · Faded = Finished</p>
-              <p>Labels: FVG · OB · BSL · SSL (+ ·T/·P/·M/·X/·S)</p>
+              <p>Labels: FVG · OB · BSL · SSL · QML (+ ·T/·P/·M/·X/·S)</p>
             </CardContent>
           </Card>
+
+          <QmlSetupsPanel
+            qml={progressive.qml ?? detection.qml}
+            visibilityMode={visibilityModeTyped}
+            selectedQmlId={selectedQmlId}
+            onSelect={selectQmlPattern}
+            enabled={config.qml.enabled}
+          />
+
+          <QmlInspector
+            pattern={selectedQml}
+            note={qmlNote}
+            tags={qmlTags}
+            onNoteChange={setQmlNote}
+            onTagsChange={setQmlTags}
+            onVerdict={(v) => setQmlVerdict(v)}
+            onResetReview={() => {
+              setQmlVerdict(null)
+              setQmlNote('')
+              setQmlTags([])
+            }}
+            reviewVerdict={qmlVerdict}
+          />
 
           {/* Mobile: cursor + inspector + event list */}
           <div className="space-y-4 lg:hidden">

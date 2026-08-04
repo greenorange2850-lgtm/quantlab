@@ -155,6 +155,9 @@ function layerAllowsZone(zone: SmcZoneProjection, layers: SmcChartLayerToggles):
   if (zone.zoneKind === 'LIQUIDITY_LEVEL' || zone.zoneKind === 'EQUAL_LEVEL') {
     return layers.equalLevels || layers.liquiditySweeps
   }
+  if (zone.zoneKind === 'QML') {
+    return layers.qmlZones !== false
+  }
   return true
 }
 
@@ -524,15 +527,19 @@ export function SmcCandlestickChart({
             const yBot = yForPrice(zone.low)
             const bull = zone.direction === 'BULLISH'
             const fill =
-              zone.zoneKind === 'ORDER_BLOCK'
+              zone.zoneKind === 'QML'
                 ? bull
-                  ? '#3b82f6'
-                  : '#a855f7'
-                : zone.zoneKind === 'LIQUIDITY_LEVEL'
-                  ? '#f59e0b'
-                  : bull
-                    ? '#22c55e'
-                    : '#ef4444'
+                  ? '#14b8a6'
+                  : '#f97316'
+                : zone.zoneKind === 'ORDER_BLOCK'
+                  ? bull
+                    ? '#3b82f6'
+                    : '#a855f7'
+                  : zone.zoneKind === 'LIQUIDITY_LEVEL'
+                    ? '#f59e0b'
+                    : bull
+                      ? '#22c55e'
+                      : '#ef4444'
             const stroke = setupHighlighted ? '#fde68a' : fill
             const midY = (Math.min(yTop, yBot) + Math.max(yTop, yBot)) / 2
             return (

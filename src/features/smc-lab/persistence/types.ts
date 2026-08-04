@@ -138,6 +138,8 @@ export interface SmcLabPreferences {
     diagnosticsLabels: boolean
     /** Show HH/HL/LH/LL beside eSH/eSL/iSH/iSL on the chart. */
     dowTheoryLabels: boolean
+    /** Show Quasimodo Level (QML) zones. */
+    qmlZones: boolean
   }
   densityPreset: SmcDensityPreset
   /** Ranking Focus / Balanced / Debug. */

@@ -9,6 +9,7 @@ export type SmcValidationModule =
   | 'FVG'
   | 'Liquidity Sweep'
   | 'Order Block'
+  | 'QML'
 
 export type SmcModuleAcceptanceStatus =
   | 'Experimental'
@@ -212,6 +213,14 @@ export const SMC_ACCEPTANCE_GATES: Record<SmcValidationModule, SmcAcceptanceGate
     verifiedRecall: 0.8,
     minSamplesForUsable: 8,
     minSamplesForVerified: 25,
+  },
+  QML: {
+    module: 'QML',
+    usablePrecision: 0.8,
+    verifiedPrecision: 0.85,
+    verifiedRecall: 0.8,
+    minSamplesForUsable: 30,
+    minSamplesForVerified: 50,
   },
 }
 

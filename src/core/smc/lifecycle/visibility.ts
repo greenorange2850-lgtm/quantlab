@@ -61,8 +61,16 @@ export function filterZonesBySmartVisibility(
           ? 'Active Only: untouched active zone'
           : 'Hidden by Active Only (not untouched active)'
       } else {
-        // balanced
-        if (zone.activeAtVisibleIndex && zone.state === 'ACTIVE') {
+        // balanced — QML: confirmed active/retested/ready only (no candidates)
+        if (zone.zoneKind === 'QML') {
+          const qmlOk =
+            zone.activeAtVisibleIndex &&
+            (zone.state === 'ACTIVE' || zone.state === 'TOUCHED')
+          visible = qmlOk
+          reason = visible
+            ? 'Balanced: confirmed active/retested/ready QML'
+            : 'Hidden by Balanced (QML candidate or inactive)'
+        } else if (zone.activeAtVisibleIndex && zone.state === 'ACTIVE') {
           visible = settings.showActive
           reason = visible ? 'Balanced: active zone' : 'Hidden by lifecycle setting (active off)'
         } else if (isTouchedLike(zone.state)) {

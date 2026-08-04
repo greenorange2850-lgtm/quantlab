@@ -24,6 +24,7 @@ import {
   validateSmcDetectorConfig,
   validationModuleForKind,
   withSmcVisibilityMode,
+  type QmlPattern,
   type SmcDetectionProfile,
   type SmcDetectionResult,
   type SmcDetectorConfig,
@@ -37,6 +38,7 @@ import {
   type SmcZoneLifecycleSettings,
   type SmcZoneProjection,
 } from '@/core/smc'
+import { createQmlSetupVisualContext } from './qml'
 import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
 import {
   RESEARCH_PERIOD_PRESET_OPTIONS,
@@ -219,6 +221,7 @@ export function SmcLabPage() {
   const [priorSmartPreset, setPriorSmartPreset] =
     useState<SmcSmartVisibilityPresetPref>('balanced')
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
+  const [selectedQmlId, setSelectedQmlId] = useState<string | null>(null)
   const [activeProfileId, setActiveProfileId] = useState(initialPrefs.activeProfileId)
   const [speed, setSpeed] = useState<SmcPlaySpeed>(initialPrefs.playSpeed)
 
@@ -699,13 +702,29 @@ export function SmcLabPage() {
 
   const exitSetupFocus = useCallback(() => {
     setSetupContext(null)
+    setSelectedQmlId(null)
     setSmartVisibilityPreset(priorSmartPreset === 'setup-focus' ? 'balanced' : priorSmartPreset)
   }, [priorSmartPreset])
+
+  const selectQmlPattern = useCallback(
+    (pattern: QmlPattern) => {
+      setSelectedQmlId(pattern.id)
+      setSelectedZoneId(pattern.zoneId)
+      setSelectedEventId(null)
+      setPriorSmartPreset(
+        smartVisibilityPreset === 'setup-focus' ? priorSmartPreset : smartVisibilityPreset,
+      )
+      setSetupContext(createQmlSetupVisualContext(pattern))
+      setSmartVisibilityPreset('setup-focus')
+    },
+    [smartVisibilityPreset, priorSmartPreset],
+  )
 
   const clearMarkers = useCallback(() => {
     setDetection(emptyDetection())
     setSelectedEventId(null)
     setSelectedZoneId(null)
+    setSelectedQmlId(null)
     setSetupContext(null)
   }, [])
 
@@ -1156,6 +1175,8 @@ export function SmcLabPage() {
     setSelectedEventId,
     selectedZoneId,
     setSelectedZoneId,
+    selectedQmlId,
+    selectQmlPattern,
     selectedEvent,
     selectedZone,
     eventFilter,
@@ -1225,6 +1246,7 @@ export function SmcLabPage() {
     applyDetection, clearMarkers, configDirty, appliedConfigHash,
     windowCandles, windowStart, chartStructure, highlightSwingId,
     visibleIndex, playing, speed, annotations, selectedEventId, selectedZoneId,
+    selectedQmlId, selectQmlPattern,
     selectedEvent, selectedZone, eventFilter, selectEvent,
     dowTheoryView, dowChartVisibility, chartDowMarkers, showStructureDowView, showDebugDowView,
     lifecycleProjection,

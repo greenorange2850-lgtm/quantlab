@@ -35,6 +35,7 @@ export const DEFAULT_SMC_LAYER_TOGGLES: SmcLabPreferences['layerToggles'] = {
   connectorLines: false,
   diagnosticsLabels: false,
   dowTheoryLabels: true,
+  qmlZones: true,
 }
 
 export function layersForDensityPreset(
@@ -58,6 +59,7 @@ export function layersForDensityPreset(
         connectorLines: false,
         mitigatedFvg: false,
         invalidatedOrderBlocks: false,
+        qmlZones: false,
       }
     case 'structure':
       return {
@@ -73,6 +75,7 @@ export function layersForDensityPreset(
         equalLevels: false,
         liquiditySweeps: false,
         displacement: false,
+        qmlZones: true,
       }
     case 'liquidity':
       return {
@@ -108,6 +111,7 @@ export function layersForDensityPreset(
         connectorLines: true,
         diagnosticsLabels: true,
         dowTheoryLabels: true,
+        qmlZones: true,
       }
     default:
       return { ...DEFAULT_SMC_LAYER_TOGGLES }

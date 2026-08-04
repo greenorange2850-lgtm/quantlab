@@ -1,4 +1,5 @@
 import type { SmcDetectionResult } from '../types'
+import { projectQmlZones } from '../qml'
 import { auditLifecycleProjectionInvariants } from './invariants'
 import { projectFvgZones } from './project-fvg'
 import { projectLiquidityZones } from './project-liquidity'
@@ -120,8 +121,11 @@ export function projectSmcLifecycle(
     visibleIndex,
     { extendActiveRight: settings.extendActiveZonesRight },
   )
+  const qml = projectQmlZones(detection.qml?.patterns ?? [], visibleIndex, {
+    extendActiveRight: settings.extendActiveZonesRight,
+  })
 
-  const zones = [...fvg, ...ob, ...liq].map((z) =>
+  const zones = [...fvg, ...ob, ...liq, ...qml].map((z) =>
     setupZoneIds?.has(z.zoneId)
       ? { ...z, setupRefs: [...new Set([...z.setupRefs, setup!.setupId])] }
       : z,

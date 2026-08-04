@@ -11,7 +11,12 @@ export type SmcChartZoneState =
   | 'BROKEN'
   | 'SUPERSEDED'
 
-export type SmcZoneKind = 'FVG' | 'ORDER_BLOCK' | 'EQUAL_LEVEL' | 'LIQUIDITY_LEVEL'
+export type SmcZoneKind =
+  | 'FVG'
+  | 'ORDER_BLOCK'
+  | 'EQUAL_LEVEL'
+  | 'LIQUIDITY_LEVEL'
+  | 'QML'
 
 export type SmcStructureRelevance =
   | 'CURRENT_STRUCTURE'
