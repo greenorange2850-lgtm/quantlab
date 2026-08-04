@@ -53,7 +53,8 @@ import { buildReviewSummary, formatReviewedAccuracy } from './review-summary'
 import { runSmcDetectionJob } from './run-detection-job'
 import type { SmcSavedLabConfig } from './persistence/types'
 
-const CHART_WINDOW = 180
+const CHART_WINDOW = 72
+const FOCUS_PAD = 16
 
 function emptyDetection(): SmcDetectionResult {
   return {
@@ -69,6 +70,14 @@ function emptyDetection(): SmcDetectionResult {
       validBosEvents: 0,
       repeatedBreaksIgnored: 0,
       computationDurationMs: 0,
+      invariants: {
+        invalidBullishBosCount: 0,
+        invalidBearishBosCount: 0,
+        bosBeforeConfirmationCount: 0,
+        repeatedSwingBreakCount: 0,
+        eventTimestampMismatchCount: 0,
+        ok: true,
+      },
     },
   }
 }
@@ -148,18 +157,54 @@ export function SmcLabPage() {
     }
   }, [detection, visibleIndex, candles.length])
 
-  // Window chart around cursor / selection — never show future candles.
-  const focusIndex = useMemo(() => {
-    if (!selectedEventId) return visibleIndex
-    const event =
-      progressive.swings.find((s) => s.id === selectedEventId) ??
-      progressive.bosEvents.find((e) => e.id === selectedEventId)
-    return event?.candleIndex ?? visibleIndex
-  }, [selectedEventId, progressive, visibleIndex])
+  // Focused candle window — never the full history; never future bars.
+  const { windowStart, windowCandles, highlightSwingId } = useMemo(() => {
+    const maxVisible = Math.min(candles.length - 1, visibleIndex)
+    if (maxVisible < 0 || candles.length === 0) {
+      return { windowStart: 0, windowCandles: [] as typeof candles, highlightSwingId: null as string | null }
+    }
 
-  const visibleEnd = Math.min(candles.length, Math.max(focusIndex, visibleIndex) + 1)
-  const windowStart = Math.max(0, visibleEnd - CHART_WINDOW)
-  const windowCandles = candles.slice(windowStart, visibleEnd)
+    let center = maxVisible
+    let spanStart = Math.max(0, maxVisible - CHART_WINDOW + 1)
+    let spanEnd = maxVisible + 1
+    let brokenId: string | null = null
+
+    if (selectedEventId) {
+      const event =
+        progressive.swings.find((s) => s.id === selectedEventId) ??
+        progressive.bosEvents.find((e) => e.id === selectedEventId)
+      if (event) {
+        if ('brokenSwingCandleIndex' in event) {
+          brokenId = event.brokenSwingId
+          const left = Math.min(event.brokenSwingCandleIndex, event.candleIndex)
+          const right = Math.max(event.brokenSwingCandleIndex, event.candleIndex)
+          spanStart = Math.max(0, left - FOCUS_PAD)
+          spanEnd = Math.min(maxVisible + 1, right + FOCUS_PAD + 1)
+          // Keep window compact.
+          if (spanEnd - spanStart > CHART_WINDOW) {
+            center = event.candleIndex
+            spanStart = Math.max(0, center - Math.floor(CHART_WINDOW * 0.65))
+            spanEnd = Math.min(maxVisible + 1, spanStart + CHART_WINDOW)
+            spanStart = Math.max(0, spanEnd - CHART_WINDOW)
+          }
+        } else {
+          center = event.candleIndex
+          spanStart = Math.max(0, center - Math.floor(CHART_WINDOW * 0.65))
+          spanEnd = Math.min(maxVisible + 1, spanStart + CHART_WINDOW)
+          spanStart = Math.max(0, spanEnd - CHART_WINDOW)
+        }
+      }
+    } else {
+      spanEnd = maxVisible + 1
+      spanStart = Math.max(0, spanEnd - CHART_WINDOW)
+    }
+
+    return {
+      windowStart: spanStart,
+      windowCandles: candles.slice(spanStart, spanEnd),
+      highlightSwingId: brokenId,
+    }
+  }, [candles, visibleIndex, selectedEventId, progressive])
 
   const reviewsByEventId = useMemo(() => {
     const map = new Map<string, SmcReviewRecord>()
@@ -415,9 +460,14 @@ export function SmcLabPage() {
     })
   }, [compareConfigId, candles, config])
 
+  const invariants = detection.diagnostics.invariants
+  const detectionComplete = Boolean(
+    detection.diagnostics.candleCount > 0 && invariants?.ok !== false,
+  )
+
   return (
-    <div className="mx-auto w-full max-w-7xl min-w-0 space-y-5">
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4">
+      <div className="flex min-w-0 flex-col gap-2">
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/15">
             <FlaskConical className="h-5 w-5 text-amber-300" />
@@ -437,25 +487,6 @@ export function SmcLabPage() {
               trading.
             </p>
           </div>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="button" variant="outline" className="min-h-11" onClick={exportResearch}>
-            <Download className="mr-2 h-4 w-4" />
-            Export JSON
-          </Button>
-          <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-border px-3 text-sm">
-            <Upload className="mr-2 h-4 w-4" />
-            Import JSON
-            <input
-              type="file"
-              accept="application/json"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) void importResearch(file)
-              }}
-            />
-          </label>
         </div>
       </div>
 
@@ -515,10 +546,111 @@ export function SmcLabPage() {
               <span className="text-danger">{resolvedPeriod.error}</span>
             ) : null}
           </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              type="button"
+              className="min-h-11 flex-1"
+              disabled={detecting || candles.length === 0}
+              onClick={() => void applyDetection()}
+            >
+              {detecting
+                ? `Detecting${detectionProgress != null ? ` ${Math.round(detectionProgress * 100)}%` : '…'}`
+                : 'Apply Detection'}
+            </Button>
+            <Button type="button" variant="outline" className="min-h-11" onClick={clearMarkers}>
+              Clear Markers
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-11"
+              onClick={() => setConfig(cloneSmcDetectorConfig(DEFAULT_SMC_DETECTOR_CONFIG))}
+            >
+              Reset Defaults
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <SmcCandlestickChart
+        candles={windowCandles}
+        swings={progressive.swings}
+        bosEvents={progressive.bosEvents}
+        annotations={annotations}
+        selectedEventId={selectedEventId}
+        highlightSwingId={highlightSwingId}
+        layers={layers}
+        windowStartIndex={windowStart}
+      />
+
+      <SmcEventInspector
+        event={selectedEvent}
+        candles={candles}
+        swings={progressive.swings}
+        review={selectedReview}
+        reviewStale={staleReview}
+        note={note}
+        tags={tags}
+        onNoteChange={setNote}
+        onTagsChange={setTags}
+        onVerdict={(v) => void handleVerdict(v)}
+        onResetReview={() => void handleResetReview()}
+      />
+
+      <SmcCursorControls
+        visibleIndex={visibleIndex}
+        candleCount={candles.length}
+        playing={playing}
+        speed={speed}
+        onFirst={() => setVisibleIndex(0)}
+        onPrev={() => setVisibleIndex((v) => Math.max(0, v - 1))}
+        onNext={() => setVisibleIndex((v) => Math.min(candles.length - 1, v + 1))}
+        onLast={() => setVisibleIndex(Math.max(0, candles.length - 1))}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onSpeedChange={setSpeed}
+      />
+
+      <SmcEventList
+        swings={progressive.swings}
+        bosEvents={progressive.bosEvents}
+        reviewsByEventId={reviewsByEventId}
+        filter={eventFilter}
+        selectedEventId={selectedEventId}
+        onFilterChange={setEventFilter}
+        onSelect={(id) => {
+          setSelectedEventId(id)
+          const event =
+            progressive.swings.find((s) => s.id === id) ??
+            progressive.bosEvents.find((e) => e.id === id)
+          if (event) {
+            setVisibleIndex((v) => Math.max(v, event.candleIndex))
+            const review = reviewsByEventId.get(id)
+            setNote(review?.note ?? '')
+            setTags(review?.reasonTags ?? [])
+          }
+        }}
+      />
+
+      {import.meta.env.DEV && invariants ? (
+        <Card hover={false} className={invariants.ok ? '' : 'border-danger/40'}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Invariant report (dev)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
+            <p>Invalid bullish BOS: {invariants.invalidBullishBosCount}</p>
+            <p>Invalid bearish BOS: {invariants.invalidBearishBosCount}</p>
+            <p>BOS before confirmation: {invariants.bosBeforeConfirmationCount}</p>
+            <p>Repeated swing-break: {invariants.repeatedSwingBreakCount}</p>
+            <p>Timestamp mismatch: {invariants.eventTimestampMismatchCount}</p>
+            <p>
+              Complete: {detectionComplete && invariants.ok ? 'yes' : 'no'}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Disclosure title="Detector settings & layers">
         <SmcControlsPanel
           config={config}
           layers={layers}
@@ -533,211 +665,151 @@ export function SmcLabPage() {
           compareConfigId={compareConfigId}
           onCompareConfigId={setCompareConfigId}
         />
+      </Disclosure>
 
-        <div className="min-w-0 space-y-4">
-          <SmcCandlestickChart
-            candles={windowCandles}
-            swings={progressive.swings}
-            bosEvents={progressive.bosEvents}
-            annotations={annotations}
-            selectedEventId={selectedEventId}
-            layers={layers}
-            windowStartIndex={windowStart}
-          />
-          <SmcCursorControls
-            visibleIndex={visibleIndex}
-            candleCount={candles.length}
-            playing={playing}
-            speed={speed}
-            onFirst={() => setVisibleIndex(0)}
-            onPrev={() => setVisibleIndex((v) => Math.max(0, v - 1))}
-            onNext={() => setVisibleIndex((v) => Math.min(candles.length - 1, v + 1))}
-            onLast={() => setVisibleIndex(Math.max(0, candles.length - 1))}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onSpeedChange={setSpeed}
-          />
+      {compareStats ? (
+        <Card hover={false}>
+          <CardContent className="space-y-1 py-3 text-xs">
+            <p className="font-medium">Config comparison</p>
+            <p>
+              Active: {progressive.swings.length} swings / {progressive.bosEvents.length} BOS
+            </p>
+            <p>
+              {compareStats.name}: {compareStats.swings} swings / {compareStats.bos} BOS
+            </p>
+            <p className="text-muted-foreground">
+              Reviewed accuracy (active): {formatReviewedAccuracy(summary.overall)}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
-          {compareStats ? (
-            <Card hover={false}>
-              <CardContent className="space-y-1 py-3 text-xs">
-                <p className="font-medium">Config comparison</p>
-                <p>
-                  Active: {progressive.swings.length} swings / {progressive.bosEvents.length} BOS
-                </p>
-                <p>
-                  {compareStats.name}: {compareStats.swings} swings / {compareStats.bos} BOS
-                </p>
-                <p className="text-muted-foreground">
-                  Reviewed accuracy (active): {formatReviewedAccuracy(summary.overall)}
-                </p>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <SmcEventList
-              swings={progressive.swings}
-              bosEvents={progressive.bosEvents}
-              reviewsByEventId={reviewsByEventId}
-              filter={eventFilter}
-              selectedEventId={selectedEventId}
-              onFilterChange={setEventFilter}
-              onSelect={(id) => {
-                setSelectedEventId(id)
-                const event =
-                  progressive.swings.find((s) => s.id === id) ??
-                  progressive.bosEvents.find((e) => e.id === id)
-                if (event) {
-                  setVisibleIndex((v) => Math.max(v, event.candleIndex))
-                  const review = reviewsByEventId.get(id)
-                  setNote(review?.note ?? '')
-                  setTags(review?.reasonTags ?? [])
-                }
-              }}
-            />
-            <SmcEventInspector
-              event={selectedEvent}
-              candles={candles}
-              swings={progressive.swings}
-              review={selectedReview}
-              reviewStale={staleReview}
-              note={note}
-              tags={tags}
-              onNoteChange={setNote}
-              onTagsChange={setTags}
-              onVerdict={(v) => void handleVerdict(v)}
-              onResetReview={() => void handleResetReview()}
-            />
+      <Disclosure title="Review summary">
+        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <div>
+            <p className="text-muted-foreground">Detected</p>
+            <p className="font-mono">{summary.overall.detected}</p>
           </div>
+          <div>
+            <p className="text-muted-foreground">Reviewed</p>
+            <p className="font-mono">{summary.overall.reviewed}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Correct / Wrong</p>
+            <p className="font-mono">
+              {summary.overall.correct} / {summary.overall.wrong}
+            </p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Reviewed accuracy</p>
+            <p className="font-mono">{formatReviewedAccuracy(summary.overall)}</p>
+          </div>
+        </div>
+      </Disclosure>
 
-          <Card hover={false}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Review Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-              <div>
-                <p className="text-muted-foreground">Detected</p>
-                <p className="font-mono">{summary.overall.detected}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Reviewed</p>
-                <p className="font-mono">{summary.overall.reviewed}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Correct / Wrong</p>
-                <p className="font-mono">
-                  {summary.overall.correct} / {summary.overall.wrong}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Reviewed accuracy</p>
-                <p className="font-mono">{formatReviewedAccuracy(summary.overall)}</p>
-              </div>
-              {(['SWING_HIGH', 'SWING_LOW', 'BULLISH_BOS', 'BEARISH_BOS'] as const).map(
-                (kind) => (
-                  <div key={kind} className="col-span-2 sm:col-span-1">
-                    <p className="text-muted-foreground">{kind}</p>
-                    <p className="font-mono text-[11px]">
-                      {formatReviewedAccuracy(summary.byKind[kind])}
-                      <span className="text-muted-foreground">
-                        {' '}
-                        · unreviewed {summary.byKind[kind].unreviewed}
-                      </span>
-                    </p>
-                  </div>
-                ),
-              )}
-            </CardContent>
-          </Card>
-
-          <Card hover={false}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Manual annotations</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <select
-                  className="h-11 rounded-lg border border-border bg-white/[0.03] px-3 text-sm"
-                  value={manualKind}
-                  onChange={(e) =>
-                    setManualKind(e.target.value as SmcManualAnnotation['kind'])
+      <Disclosure title="Manual annotations">
+        <div className="space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <select
+              className="h-11 rounded-lg border border-border bg-white/[0.03] px-3 text-sm"
+              value={manualKind}
+              onChange={(e) =>
+                setManualKind(e.target.value as SmcManualAnnotation['kind'])
+              }
+            >
+              <option value="MANUAL_SWING_HIGH">Manual Swing High</option>
+              <option value="MANUAL_SWING_LOW">Manual Swing Low</option>
+              <option value="MANUAL_BULLISH_BOS">Manual Bullish BOS</option>
+              <option value="MANUAL_BEARISH_BOS">Manual Bearish BOS</option>
+              <option value="NOTE">Note</option>
+            </select>
+            <Input
+              value={manualPrice}
+              onChange={(e) => setManualPrice(e.target.value)}
+              placeholder="Price"
+              className="bg-white/[0.03]"
+            />
+            <Input
+              value={manualNote}
+              onChange={(e) => setManualNote(e.target.value)}
+              placeholder="Note"
+              className="bg-white/[0.03]"
+            />
+            <Button type="button" className="min-h-11" onClick={() => void addManualAnnotation()}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add
+            </Button>
+          </div>
+          <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
+            {annotations.map((ann) => (
+              <li
+                key={ann.id}
+                className="flex items-center justify-between gap-2 rounded-md border border-border/50 px-2 py-1"
+              >
+                <span>
+                  {ann.kind} · {ann.price} · {new Date(ann.timestamp).toLocaleString()}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    void getSmcLabStore()
+                      .deleteAnnotation(ann.id)
+                      .then(async () =>
+                        setAnnotations(await getSmcLabStore().listAnnotations(datasetKey)),
+                      )
                   }
                 >
-                  <option value="MANUAL_SWING_HIGH">Manual Swing High</option>
-                  <option value="MANUAL_SWING_LOW">Manual Swing Low</option>
-                  <option value="MANUAL_BULLISH_BOS">Manual Bullish BOS</option>
-                  <option value="MANUAL_BEARISH_BOS">Manual Bearish BOS</option>
-                  <option value="NOTE">Note</option>
-                </select>
-                <Input
-                  value={manualPrice}
-                  onChange={(e) => setManualPrice(e.target.value)}
-                  placeholder="Price"
-                  className="bg-white/[0.03]"
-                />
-                <Input
-                  value={manualNote}
-                  onChange={(e) => setManualNote(e.target.value)}
-                  placeholder="Note"
-                  className="bg-white/[0.03]"
-                />
-                <Button type="button" className="min-h-11" onClick={() => void addManualAnnotation()}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add
+                  Delete
                 </Button>
-              </div>
-              <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
-                {annotations.map((ann) => (
-                  <li
-                    key={ann.id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border/50 px-2 py-1"
-                  >
-                    <span>
-                      {ann.kind} · {ann.price} · {new Date(ann.timestamp).toLocaleString()}
-                    </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        void getSmcLabStore()
-                          .deleteAnnotation(ann.id)
-                          .then(async () =>
-                            setAnnotations(await getSmcLabStore().listAnnotations(datasetKey)),
-                          )
-                      }
-                    >
-                      Delete
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Disclosure title="Diagnostics" defaultOpen={false}>
-            <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
-              <p>Detector {detection.diagnostics.detectorVersion}</p>
-              <p>Candles {detection.diagnostics.candleCount}</p>
-              <p>Visible through {visibleIndex}</p>
-              <p>
-                Pivot {config.swing.pivotLeft}/{config.swing.pivotRight}
-              </p>
-              <p>Min break % {config.bos.minimumBreakPercent}</p>
-              <p>Candidates {detection.diagnostics.swingCandidatesConsidered}</p>
-              <p>Confirmed swings {detection.diagnostics.confirmedSwings}</p>
-              <p>Wick-only ignored {detection.diagnostics.wickOnlyBreakCandidatesIgnored}</p>
-              <p>Valid BOS {detection.diagnostics.validBosEvents}</p>
-              <p>Repeated ignored {detection.diagnostics.repeatedBreaksIgnored}</p>
-              <p>Duration {detection.diagnostics.computationDurationMs.toFixed(1)} ms</p>
-              <p>
-                Window {windowStart}–{windowStart + windowCandles.length - 1}
-              </p>
-            </div>
-          </Disclosure>
+              </li>
+            ))}
+          </ul>
         </div>
-      </div>
+      </Disclosure>
+
+      <Disclosure title="Import / export & diagnostics">
+        <div className="space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" className="min-h-11" onClick={exportResearch}>
+              <Download className="mr-2 h-4 w-4" />
+              Export JSON
+            </Button>
+            <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-border px-3 text-sm">
+              <Upload className="mr-2 h-4 w-4" />
+              Import JSON
+              <input
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) void importResearch(file)
+                }}
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
+            <p>Detector {detection.diagnostics.detectorVersion}</p>
+            <p>Candles {detection.diagnostics.candleCount}</p>
+            <p>Visible through {visibleIndex}</p>
+            <p>
+              Pivot {config.swing.pivotLeft}/{config.swing.pivotRight}
+            </p>
+            <p>Min break % {config.bos.minimumBreakPercent}</p>
+            <p>Candidates {detection.diagnostics.swingCandidatesConsidered}</p>
+            <p>Confirmed swings {detection.diagnostics.confirmedSwings}</p>
+            <p>Wick-only ignored {detection.diagnostics.wickOnlyBreakCandidatesIgnored}</p>
+            <p>Valid BOS {detection.diagnostics.validBosEvents}</p>
+            <p>Repeated ignored {detection.diagnostics.repeatedBreaksIgnored}</p>
+            <p>Duration {detection.diagnostics.computationDurationMs.toFixed(1)} ms</p>
+            <p>
+              Window {windowStart}–{windowStart + windowCandles.length - 1}
+            </p>
+          </div>
+        </div>
+      </Disclosure>
     </div>
   )
 }

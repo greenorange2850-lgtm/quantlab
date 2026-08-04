@@ -1,6 +1,7 @@
 import type { Candle } from '@/data/candles'
 import { detectBreakOfStructure } from './bos-detector'
 import { cloneSmcDetectorConfig, DEFAULT_SMC_DETECTOR_CONFIG } from './defaults'
+import { sanitizeSmcDetectionResult } from './invariants'
 import { detectConfirmedSwings } from './swing-detector'
 import type { SmcDetectionResult, SmcDetectorConfig } from './types'
 import { SMC_DETECTOR_VERSION } from './types'
@@ -21,12 +22,20 @@ function emptyDiagnostics(
     validBosEvents: 0,
     repeatedBreaksIgnored: 0,
     computationDurationMs: durationMs,
+    invariants: {
+      invalidBullishBosCount: 0,
+      invalidBearishBosCount: 0,
+      bosBeforeConfirmationCount: 0,
+      repeatedSwingBreakCount: 0,
+      eventTimestampMismatchCount: 0,
+      ok: true,
+    },
   }
 }
 
 /**
  * Progressive detection API — only events knowable by `visibleIndex` (inclusive).
- * No look-ahead: unconfirmed swings and future BOS are excluded.
+ * Results are sanitized through hard BOS invariants before being marked complete.
  */
 export function detectSmcUntil(
   candles: readonly Candle[],
@@ -49,7 +58,7 @@ export function detectSmcUntil(
   const bosResult = detectBreakOfStructure(candles, swingResult.swings, safe.bos, last)
   const durationMs = performance.now() - started
 
-  return {
+  const raw: SmcDetectionResult = {
     swings: swingResult.swings,
     bosEvents: bosResult.bosEvents,
     diagnostics: {
@@ -62,6 +71,23 @@ export function detectSmcUntil(
       validBosEvents: bosResult.bosEvents.length,
       repeatedBreaksIgnored: bosResult.repeatedBreaksIgnored,
       computationDurationMs: durationMs,
+    },
+  }
+
+  const { result, report } = sanitizeSmcDetectionResult(raw, safe)
+  return {
+    ...result,
+    diagnostics: {
+      ...result.diagnostics,
+      computationDurationMs: durationMs,
+      invariants: {
+        invalidBullishBosCount: report.invalidBullishBosCount,
+        invalidBearishBosCount: report.invalidBearishBosCount,
+        bosBeforeConfirmationCount: report.bosBeforeConfirmationCount,
+        repeatedSwingBreakCount: report.repeatedSwingBreakCount,
+        eventTimestampMismatchCount: report.eventTimestampMismatchCount,
+        ok: report.ok,
+      },
     },
   }
 }

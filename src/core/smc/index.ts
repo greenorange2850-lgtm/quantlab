@@ -25,6 +25,13 @@ export {
 export { detectConfirmedSwings } from './swing-detector'
 export { detectBreakOfStructure } from './bos-detector'
 export { detectSmc, detectSmcUntil, resolveSmcConfig } from './detection-pipeline'
+export {
+  auditSmcInvariants,
+  sanitizeSmcDetectionResult,
+  isValidBullishBos,
+  isValidBearishBos,
+  type SmcInvariantReport,
+} from './invariants'
 
 export {
   SMC_MODULES,

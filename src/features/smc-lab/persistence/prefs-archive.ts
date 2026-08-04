@@ -21,7 +21,7 @@ const DEFAULT_PREFS: SmcLabPreferences = {
   layerToggles: {
     swings: true,
     bosLabels: true,
-    bosLines: true,
+    bosLines: false,
     manualMarks: true,
     validationMarks: true,
   },

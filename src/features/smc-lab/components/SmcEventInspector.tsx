@@ -83,6 +83,10 @@ export function SmcEventInspector({
       {isSwing ? (
         <div className="space-y-1 text-xs">
           <p>
+            <span className="text-muted-foreground">Swing candle index: </span>
+            {event.candleIndex}
+          </p>
+          <p>
             <span className="text-muted-foreground">Candle: </span>
             {new Date(event.timestamp).toLocaleString()}
           </p>
@@ -91,9 +95,12 @@ export function SmcEventInspector({
             <span className="font-mono">{event.price}</span>
           </p>
           <p>
+            <span className="text-muted-foreground">Confirmation index: </span>
+            {event.confirmedAtIndex}
+          </p>
+          <p>
             <span className="text-muted-foreground">Confirmed: </span>
-            {new Date(event.confirmedAtTimestamp).toLocaleString()} (index{' '}
-            {event.confirmedAtIndex})
+            {new Date(event.confirmedAtTimestamp).toLocaleString()}
           </p>
           <p>
             <span className="text-muted-foreground">Pivot: </span>
@@ -110,26 +117,47 @@ export function SmcEventInspector({
         (() => {
           const bos = event as SmcBosEvent
           const swing = swings.find((s) => s.id === bos.brokenSwingId)
+          const bull = bos.kind === 'BULLISH_BOS'
+          const priceOk = bull
+            ? bos.closePrice > bos.brokenSwingPrice
+            : bos.closePrice < bos.brokenSwingPrice
+          const confirmOk = bos.candleIndex >= bos.brokenSwingConfirmedAtIndex
           return (
             <div className="space-y-1 text-xs">
               <p className="font-medium">
-                {bos.kind === 'BULLISH_BOS' ? 'Bullish' : 'Bearish'} BOS detected
+                {bull ? 'Bullish' : 'Bearish'} BOS detected
               </p>
               <p>
-                <span className="text-muted-foreground">Latest confirmed swing: </span>
+                <span className="text-muted-foreground">brokenSwingId: </span>
+                <span className="font-mono text-[10px]">{bos.brokenSwingId}</span>
+              </p>
+              <p>
+                <span className="text-muted-foreground">brokenSwingPrice: </span>
                 <span className="font-mono">{bos.brokenSwingPrice}</span>
-                {swing ? ` (${swing.kind})` : ''}
+                {swing ? ` (${swing.kind})` : ' (swing missing from visible set)'}
               </p>
               <p>
-                <span className="text-muted-foreground">Swing confirmed: </span>
+                <span className="text-muted-foreground">Swing candle index: </span>
+                {bos.brokenSwingCandleIndex}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Swing confirmation index: </span>
+                {bos.brokenSwingConfirmedAtIndex}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Swing timestamp: </span>
                 {new Date(bos.brokenSwingTimestamp).toLocaleString()}
               </p>
               <p>
-                <span className="text-muted-foreground">Break candle: </span>
+                <span className="text-muted-foreground">BOS candle index: </span>
+                {bos.candleIndex}
+              </p>
+              <p>
+                <span className="text-muted-foreground">BOS timestamp (break candle): </span>
                 {new Date(bos.timestamp).toLocaleString()}
               </p>
               <p>
-                <span className="text-muted-foreground">Close: </span>
+                <span className="text-muted-foreground">BOS close: </span>
                 <span className="font-mono">{bos.closePrice}</span>
               </p>
               <p>
@@ -139,19 +167,41 @@ export function SmcEventInspector({
                 </span>
               </p>
               <p>
-                <span className="text-muted-foreground">Break amount: </span>
-                <span className="font-mono">{bos.breakAmount}</span>
+                <span className="text-muted-foreground">Break amount / %: </span>
+                <span className="font-mono">
+                  {bos.breakAmount} / {bos.breakPercent.toFixed(4)}%
+                </span>
               </p>
-              <p>
-                <span className="text-muted-foreground">Break: </span>
-                <span className="font-mono">{bos.breakPercent.toFixed(4)}%</span>
-              </p>
-              <p>
-                <span className="text-muted-foreground">Wick-only: </span>
-                {bos.wickOnlyIgnored ? 'Yes' : 'No'}
-              </p>
+              <div className="mt-2 space-y-1 rounded-lg border border-border/60 bg-white/[0.02] p-2">
+                <p className="font-medium">Rule checks</p>
+                <p>
+                  {bull ? 'bosClose > brokenSwingPrice' : 'bosClose < brokenSwingPrice'}:{' '}
+                  <span className={priceOk ? 'text-emerald-300' : 'text-danger'}>
+                    {priceOk ? 'PASS' : 'FAIL'} ({bos.closePrice} vs {bos.brokenSwingPrice})
+                  </span>
+                </p>
+                <p>
+                  bosIndex &gt;= confirmIndex:{' '}
+                  <span className={confirmOk ? 'text-emerald-300' : 'text-danger'}>
+                    {confirmOk ? 'PASS' : 'FAIL'} ({bos.candleIndex} vs{' '}
+                    {bos.brokenSwingConfirmedAtIndex})
+                  </span>
+                </p>
+                <p>
+                  Wick-only: {bos.wickOnlyIgnored ? 'Yes' : 'No'}
+                </p>
+              </div>
               <p className="text-pretty text-muted-foreground">{bos.reason}</p>
-              <p className="font-medium text-emerald-300">Result: Valid {bos.kind.replace('_', ' ')}</p>
+              <p
+                className={
+                  priceOk && confirmOk ? 'font-medium text-emerald-300' : 'font-medium text-danger'
+                }
+              >
+                Result:{' '}
+                {priceOk && confirmOk
+                  ? `Valid ${bos.kind.replaceAll('_', ' ')}`
+                  : 'INVALID — should not be displayed'}
+              </p>
             </div>
           )
         })()

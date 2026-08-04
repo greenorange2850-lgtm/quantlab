@@ -61,18 +61,30 @@ export interface SmcSwingEvent {
 export interface SmcBosEvent {
   id: string
   kind: 'BULLISH_BOS' | 'BEARISH_BOS'
+  /** Break candle index — never the swing index. */
   candleIndex: number
+  /** Break candle timestamp — never the swing timestamp. */
   timestamp: number
   closePrice: number
   brokenSwingId: string
   brokenSwingPrice: number
   brokenSwingTimestamp: number
+  brokenSwingCandleIndex: number
+  brokenSwingConfirmedAtIndex: number
   breakAmount: number
   breakPercent: number
   wickHigh: number
   wickLow: number
   wickOnlyIgnored: boolean
   reason: string
+}
+
+export interface SmcInvariantCounts {
+  invalidBullishBosCount: number
+  invalidBearishBosCount: number
+  bosBeforeConfirmationCount: number
+  repeatedSwingBreakCount: number
+  eventTimestampMismatchCount: number
 }
 
 export interface SmcDetectionDiagnostics {
@@ -85,6 +97,8 @@ export interface SmcDetectionDiagnostics {
   validBosEvents: number
   repeatedBreaksIgnored: number
   computationDurationMs: number
+  /** Present after pipeline invariant audit. All must be 0 for a complete result. */
+  invariants?: SmcInvariantCounts & { ok: boolean }
 }
 
 export interface SmcDetectionResult {

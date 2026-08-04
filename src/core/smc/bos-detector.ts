@@ -1,5 +1,6 @@
 import type { Candle } from '@/data/candles'
 import type { SmcBosConfig, SmcBosEvent, SmcSwingEvent } from './types'
+import { isValidBearishBos, isValidBullishBos } from './invariants'
 
 export interface BosDetectionInternal {
   bosEvents: SmcBosEvent[]
@@ -10,39 +11,166 @@ export interface BosDetectionInternal {
 function selectEligibleSwing(
   swings: readonly SmcSwingEvent[],
   kind: 'SWING_HIGH' | 'SWING_LOW',
-  beforeIndex: number,
+  breakIndex: number,
   requireLatest: boolean,
   alreadyBroken: ReadonlySet<string>,
   allowRepeated: boolean,
 ): SmcSwingEvent | null {
   const eligible = swings.filter((swing) => {
     if (swing.kind !== kind) return false
-    if (swing.confirmedAtIndex >= beforeIndex) return false
-    if (swing.candleIndex >= beforeIndex) return false
+    // Swing must be confirmed at or before the break candle (no look-ahead).
+    if (swing.confirmedAtIndex > breakIndex) return false
+    if (swing.candleIndex >= breakIndex) return false
     if (!allowRepeated && alreadyBroken.has(swing.id)) return false
     return true
   })
 
   if (eligible.length === 0) return null
-  if (requireLatest) {
-    return eligible.reduce((latest, swing) =>
-      swing.confirmedAtIndex > latest.confirmedAtIndex ||
-      (swing.confirmedAtIndex === latest.confirmedAtIndex &&
-        swing.candleIndex > latest.candleIndex)
-        ? swing
-        : latest,
-    )
+
+  return eligible.reduce((latest, swing) => {
+    if (requireLatest) {
+      if (swing.confirmedAtIndex > latest.confirmedAtIndex) return swing
+      if (
+        swing.confirmedAtIndex === latest.confirmedAtIndex &&
+        swing.candleIndex > latest.candleIndex
+      ) {
+        return swing
+      }
+      return latest
+    }
+    return swing.candleIndex > latest.candleIndex ? swing : latest
+  })
+}
+
+function tryEmitBullish(
+  candle: Candle,
+  index: number,
+  swing: SmcSwingEvent,
+  config: SmcBosConfig,
+  alreadyBroken: Set<string>,
+  counters: { wickOnlyIgnored: number; repeatedBreaksIgnored: number },
+): SmcBosEvent | null {
+  const wickBreak = candle.high > swing.price
+  const closeBreak = candle.close > swing.price
+
+  if (wickBreak && !closeBreak) {
+    counters.wickOnlyIgnored += 1
+    return null
   }
-  // When not requiring latest only, still break the most recent eligible first
-  // for deterministic ordering — callers iterate candles forward.
-  return eligible.reduce((latest, swing) =>
-    swing.candleIndex > latest.candleIndex ? swing : latest,
-  )
+  if (!closeBreak) return null
+
+  if (!isValidBullishBos({
+    closePrice: candle.close,
+    brokenSwingPrice: swing.price,
+    candleIndex: index,
+    confirmedAtIndex: swing.confirmedAtIndex,
+  })) {
+    return null
+  }
+
+  const breakAmount = candle.close - swing.price
+  const breakPercent =
+    swing.price === 0 ? 0 : (breakAmount / Math.abs(swing.price)) * 100
+  if (breakPercent + 1e-12 < config.minimumBreakPercent) return null
+
+  if (!config.allowRepeatedBreaksOfSameSwing && alreadyBroken.has(swing.id)) {
+    counters.repeatedBreaksIgnored += 1
+    return null
+  }
+
+  alreadyBroken.add(swing.id)
+  return {
+    id: `bos-bull-${index}-${swing.id}`,
+    kind: 'BULLISH_BOS',
+    candleIndex: index,
+    timestamp: candle.time,
+    closePrice: candle.close,
+    brokenSwingId: swing.id,
+    brokenSwingPrice: swing.price,
+    brokenSwingTimestamp: swing.timestamp,
+    brokenSwingCandleIndex: swing.candleIndex,
+    brokenSwingConfirmedAtIndex: swing.confirmedAtIndex,
+    breakAmount,
+    breakPercent,
+    wickHigh: candle.high,
+    wickLow: candle.low,
+    wickOnlyIgnored: false,
+    reason: [
+      `Bullish BOS at break index ${index} (time ${candle.time}):`,
+      `close ${candle.close} > Swing High ${swing.price}`,
+      `(swing id ${swing.id}, swing index ${swing.candleIndex}, confirmed index ${swing.confirmedAtIndex}).`,
+      `Break amount ${breakAmount}, break ${breakPercent.toFixed(4)}%.`,
+      `Invariant: close > swing AND breakIndex >= confirmIndex.`,
+    ].join(' '),
+  }
+}
+
+function tryEmitBearish(
+  candle: Candle,
+  index: number,
+  swing: SmcSwingEvent,
+  config: SmcBosConfig,
+  alreadyBroken: Set<string>,
+  counters: { wickOnlyIgnored: number; repeatedBreaksIgnored: number },
+): SmcBosEvent | null {
+  const wickBreak = candle.low < swing.price
+  const closeBreak = candle.close < swing.price
+
+  if (wickBreak && !closeBreak) {
+    counters.wickOnlyIgnored += 1
+    return null
+  }
+  if (!closeBreak) return null
+
+  if (!isValidBearishBos({
+    closePrice: candle.close,
+    brokenSwingPrice: swing.price,
+    candleIndex: index,
+    confirmedAtIndex: swing.confirmedAtIndex,
+  })) {
+    return null
+  }
+
+  const breakAmount = swing.price - candle.close
+  const breakPercent =
+    swing.price === 0 ? 0 : (breakAmount / Math.abs(swing.price)) * 100
+  if (breakPercent + 1e-12 < config.minimumBreakPercent) return null
+
+  if (!config.allowRepeatedBreaksOfSameSwing && alreadyBroken.has(swing.id)) {
+    counters.repeatedBreaksIgnored += 1
+    return null
+  }
+
+  alreadyBroken.add(swing.id)
+  return {
+    id: `bos-bear-${index}-${swing.id}`,
+    kind: 'BEARISH_BOS',
+    candleIndex: index,
+    timestamp: candle.time,
+    closePrice: candle.close,
+    brokenSwingId: swing.id,
+    brokenSwingPrice: swing.price,
+    brokenSwingTimestamp: swing.timestamp,
+    brokenSwingCandleIndex: swing.candleIndex,
+    brokenSwingConfirmedAtIndex: swing.confirmedAtIndex,
+    breakAmount,
+    breakPercent,
+    wickHigh: candle.high,
+    wickLow: candle.low,
+    wickOnlyIgnored: false,
+    reason: [
+      `Bearish BOS at break index ${index} (time ${candle.time}):`,
+      `close ${candle.close} < Swing Low ${swing.price}`,
+      `(swing id ${swing.id}, swing index ${swing.candleIndex}, confirmed index ${swing.confirmedAtIndex}).`,
+      `Break amount ${breakAmount}, break ${breakPercent.toFixed(4)}%.`,
+      `Invariant: close < swing AND breakIndex >= confirmIndex.`,
+    ].join(' '),
+  }
 }
 
 /**
  * Detect BOS events using only swings confirmed at or before each break candle.
- * Wick-only breaks (high/low beyond swing without close confirmation) are ignored.
+ * Wick-only breaks are ignored. Hard price invariants are enforced before emit.
  */
 export function detectBreakOfStructure(
   candles: readonly Candle[],
@@ -57,13 +185,11 @@ export function detectBreakOfStructure(
   const last = Math.min(visibleThroughIndex, candles.length - 1)
   const bosEvents: SmcBosEvent[] = []
   const brokenSwingIds = new Set<string>()
-  let wickOnlyIgnored = 0
-  let repeatedBreaksIgnored = 0
+  const counters = { wickOnlyIgnored: 0, repeatedBreaksIgnored: 0 }
 
   for (let i = 0; i <= last; i++) {
     const candle = candles[i]!
 
-    // --- Bullish BOS: close above latest confirmed Swing High ---
     const swingHigh = selectEligibleSwing(
       swings,
       'SWING_HIGH',
@@ -72,50 +198,11 @@ export function detectBreakOfStructure(
       brokenSwingIds,
       config.allowRepeatedBreaksOfSameSwing,
     )
-
     if (swingHigh) {
-      const wickBreak = candle.high > swingHigh.price
-      const closeBreak = candle.close > swingHigh.price
-      const breakAmount = candle.close - swingHigh.price
-      const breakPercent =
-        swingHigh.price === 0 ? 0 : (breakAmount / Math.abs(swingHigh.price)) * 100
-
-      if (wickBreak && !closeBreak) {
-        wickOnlyIgnored += 1
-      } else if (closeBreak) {
-        if (breakPercent + 1e-12 < config.minimumBreakPercent) {
-          // Close broke but below threshold — not a valid BOS.
-        } else if (!config.allowRepeatedBreaksOfSameSwing && brokenSwingIds.has(swingHigh.id)) {
-          repeatedBreaksIgnored += 1
-        } else {
-          brokenSwingIds.add(swingHigh.id)
-          bosEvents.push({
-            id: `bos-bull-${i}-${swingHigh.id}`,
-            kind: 'BULLISH_BOS',
-            candleIndex: i,
-            timestamp: candle.time,
-            closePrice: candle.close,
-            brokenSwingId: swingHigh.id,
-            brokenSwingPrice: swingHigh.price,
-            brokenSwingTimestamp: swingHigh.timestamp,
-            breakAmount,
-            breakPercent,
-            wickHigh: candle.high,
-            wickLow: candle.low,
-            wickOnlyIgnored: false,
-            reason: [
-              `Bullish BOS at index ${i}: close ${candle.close} broke Swing High ${swingHigh.price}`,
-              `(swing id ${swingHigh.id}, confirmed ${swingHigh.confirmedAtTimestamp}).`,
-              `Break amount ${breakAmount}, break ${breakPercent.toFixed(4)}%.`,
-              `Wick high ${candle.high} (wick-only ignored: no).`,
-              `Mode=${config.breakMode}, minBreak%=${config.minimumBreakPercent}.`,
-            ].join(' '),
-          })
-        }
-      }
+      const event = tryEmitBullish(candle, i, swingHigh, config, brokenSwingIds, counters)
+      if (event) bosEvents.push(event)
     }
 
-    // --- Bearish BOS: close below latest confirmed Swing Low ---
     const swingLow = selectEligibleSwing(
       swings,
       'SWING_LOW',
@@ -124,49 +211,15 @@ export function detectBreakOfStructure(
       brokenSwingIds,
       config.allowRepeatedBreaksOfSameSwing,
     )
-
     if (swingLow) {
-      const wickBreak = candle.low < swingLow.price
-      const closeBreak = candle.close < swingLow.price
-      const breakAmount = swingLow.price - candle.close
-      const breakPercent =
-        swingLow.price === 0 ? 0 : (breakAmount / Math.abs(swingLow.price)) * 100
-
-      if (wickBreak && !closeBreak) {
-        wickOnlyIgnored += 1
-      } else if (closeBreak) {
-        if (breakPercent + 1e-12 < config.minimumBreakPercent) {
-          // below threshold
-        } else if (!config.allowRepeatedBreaksOfSameSwing && brokenSwingIds.has(swingLow.id)) {
-          repeatedBreaksIgnored += 1
-        } else {
-          brokenSwingIds.add(swingLow.id)
-          bosEvents.push({
-            id: `bos-bear-${i}-${swingLow.id}`,
-            kind: 'BEARISH_BOS',
-            candleIndex: i,
-            timestamp: candle.time,
-            closePrice: candle.close,
-            brokenSwingId: swingLow.id,
-            brokenSwingPrice: swingLow.price,
-            brokenSwingTimestamp: swingLow.timestamp,
-            breakAmount,
-            breakPercent,
-            wickHigh: candle.high,
-            wickLow: candle.low,
-            wickOnlyIgnored: false,
-            reason: [
-              `Bearish BOS at index ${i}: close ${candle.close} broke Swing Low ${swingLow.price}`,
-              `(swing id ${swingLow.id}, confirmed ${swingLow.confirmedAtTimestamp}).`,
-              `Break amount ${breakAmount}, break ${breakPercent.toFixed(4)}%.`,
-              `Wick low ${candle.low} (wick-only ignored: no).`,
-              `Mode=${config.breakMode}, minBreak%=${config.minimumBreakPercent}.`,
-            ].join(' '),
-          })
-        }
-      }
+      const event = tryEmitBearish(candle, i, swingLow, config, brokenSwingIds, counters)
+      if (event) bosEvents.push(event)
     }
   }
 
-  return { bosEvents, wickOnlyIgnored, repeatedBreaksIgnored }
+  return {
+    bosEvents,
+    wickOnlyIgnored: counters.wickOnlyIgnored,
+    repeatedBreaksIgnored: counters.repeatedBreaksIgnored,
+  }
 }
