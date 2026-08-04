@@ -11,6 +11,8 @@ describe('v1 released navigation', () => {
     expect(byId['strategy-library']?.path).toBe('/strategies')
 
     expect(byId['strategy-lab']?.path).toBe('/strategy-lab')
+    expect(byId['smc-lab']?.label).toBe('SMC Lab')
+    expect(byId['smc-lab']?.path).toBe('/smc-lab')
     expect(byId['backtest-lab']?.path).toBe('/backtest-lab')
     expect(byId['dataset-library']?.path).toBe('/dataset-library')
     expect(byId['market-explorer']?.path).toBe('/market-explorer')

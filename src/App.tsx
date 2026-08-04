@@ -10,6 +10,7 @@ import { OptimizerPage } from '@/pages/OptimizerPage'
 import { StrategyComparePage } from '@/features/strategy-compare'
 import { StrategyLibraryPage } from '@/features/strategy-library'
 import { StrategyWorkspacePage } from '@/features/strategy-workspace'
+import { SmcLabPage } from '@/features/smc-lab'
 import { PlaceholderPage } from '@/pages/PlaceholderPage'
 
 const placeholders = [
@@ -64,6 +65,7 @@ export function App() {
           <Route path="/strategies" element={<StrategyLibraryPage />} />
           <Route path="/strategies/:strategyId" element={<StrategyWorkspacePage />} />
           <Route path="/strategy-compare" element={<StrategyComparePage />} />
+          <Route path="/smc-lab" element={<SmcLabPage />} />
           {/* Legacy redirects — Research Sessions are an implementation detail. */}
           <Route path="/research-analysis" element={<LegacyResearchAnalysisRedirect />} />
           <Route path="/research-sessions" element={<LegacySessionsRedirect />} />

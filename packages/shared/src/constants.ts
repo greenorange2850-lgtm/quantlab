@@ -39,6 +39,7 @@ export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/' },
   { id: 'optimizer', label: 'New Research', icon: 'SlidersHorizontal', path: '/optimizer' },
   { id: 'strategy-library', label: 'Strategy Library', icon: 'Library', path: '/strategies' },
+  { id: 'smc-lab', label: 'SMC Lab', icon: 'ScanSearch', path: '/smc-lab' },
   { id: 'strategy-lab', label: 'Strategy Lab', icon: 'Layers', path: '/strategy-lab' },
   { id: 'backtest-lab', label: 'Backtest Lab', icon: 'FlaskConical', path: '/backtest-lab' },
   { id: 'dataset-library', label: 'Dataset Library', icon: 'Database', path: '/dataset-library' },

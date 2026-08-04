@@ -27,6 +27,7 @@ const pageTitles: Record<string, string> = {
   '/knowledge-base': 'Strategy Library',
   '/optimizer': 'New Research',
   '/new-research': 'New Research',
+  '/smc-lab': 'SMC Lab',
   '/reports': 'Reports',
   '/settings': 'Settings',
 }
