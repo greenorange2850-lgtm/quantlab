@@ -12,6 +12,7 @@ import { detectFairValueGaps } from './fvg-detector'
 import { sanitizeSmcDetectionResult } from './invariants'
 import { detectLiquiditySweeps } from './liquidity-sweep-detector'
 import { detectOrderBlocks } from './order-block-detector'
+import { applySmcIntelligence } from './ranking'
 import {
   classifyInternalExternalStructure,
   type StructureClassificationInternal,
@@ -433,13 +434,16 @@ export function detectSmcUntil(
     },
   }
 
-  return {
-    ...withCounts,
-    diagnostics: {
-      ...withCounts.diagnostics,
-      summary: buildDiagnosticsSummary(withCounts, eventCountBreakdown.uniqueReviewableEvents),
+  return applySmcIntelligence(
+    {
+      ...withCounts,
+      diagnostics: {
+        ...withCounts.diagnostics,
+        summary: buildDiagnosticsSummary(withCounts, eventCountBreakdown.uniqueReviewableEvents),
+      },
     },
-  }
+    'balanced',
+  )
 }
 
 /** Full-history detection — equivalent to detectSmcUntil(..., candles.length - 1). */

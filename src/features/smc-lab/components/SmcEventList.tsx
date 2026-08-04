@@ -1,5 +1,5 @@
 import type { Candle } from '@/data/candles'
-import type { SmcDetectionKind, SmcDetectionResult } from '@/core/smc'
+import type { SmcDetectionKind, SmcDetectionResult, SmcRankedEventMeta } from '@/core/smc'
 import { listReviewableEvents } from '../event-counts'
 import { getSmcEventDisplayValue } from '../event-display'
 import type { SmcReviewRecord } from '../persistence/types'
@@ -33,6 +33,9 @@ interface SmcEventListProps {
   onSelect: (eventId: string) => void
   /** When true (default), list unique reviewable events only. */
   reviewableOnly?: boolean
+  /** When true, hide events marked not visible by ranking (Focus/Balanced). */
+  rankingVisibleOnly?: boolean
+  importanceById?: Record<string, SmcRankedEventMeta>
 }
 
 const FILTERS: { id: SmcEventFilter; label: string }[] = [
@@ -94,12 +97,22 @@ export function SmcEventList({
   onFilterChange,
   onSelect,
   reviewableOnly = true,
+  rankingVisibleOnly = false,
+  importanceById,
 }: SmcEventListProps) {
   const events = (reviewableOnly ? listReviewableEvents(detection) : flattenDetectionEvents(detection)).sort(
-    (a, b) => a.candleIndex - b.candleIndex,
+    (a, b) => {
+      const sa = importanceById?.[a.id]?.importanceScore ?? 0
+      const sb = importanceById?.[b.id]?.importanceScore ?? 0
+      if (rankingVisibleOnly && sb !== sa) return sb - sa
+      return a.candleIndex - b.candleIndex
+    },
   )
 
   const filtered = events.filter((event) => {
+    if (rankingVisibleOnly && importanceById && importanceById[event.id]?.visible === false) {
+      return false
+    }
     const review = reviewsByEventId.get(event.id)
     if (filter === 'ALL') return true
     if (filter === 'UNREVIEWED') return !review
@@ -112,6 +125,10 @@ export function SmcEventList({
     <div className="rounded-xl border border-border/70 bg-card">
       <div className="border-b border-border/60 px-3 py-2">
         <p className="text-sm font-medium">Detected Events</p>
+        <p className="text-[10px] text-muted-foreground">
+          Showing {filtered.length}
+          {rankingVisibleOnly ? ' ranked-visible' : ''} events
+        </p>
         <div className="-mx-1 mt-2 flex gap-1 overflow-x-auto px-1 pb-1">
           {FILTERS.map((item) => (
             <button
@@ -137,6 +154,7 @@ export function SmcEventList({
           filtered.map((event) => {
             const review = reviewsByEventId.get(event.id)
             const display = getSmcEventDisplayValue(event, candles)
+            const score = importanceById?.[event.id]?.importanceScore
             return (
               <li key={event.id}>
                 <button
@@ -151,6 +169,11 @@ export function SmcEventList({
                     <Badge variant="outline" className="text-[9px]">
                       {kindLabel(event.kind)}
                     </Badge>
+                    {score != null ? (
+                      <Badge variant="outline" className="text-[9px] font-mono">
+                        {score}
+                      </Badge>
+                    ) : null}
                     <span className="font-mono text-[11px] text-muted-foreground">
                       {new Date(event.timestamp).toLocaleString()}
                     </span>
