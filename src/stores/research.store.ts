@@ -3,10 +3,12 @@ import type { Candle } from '@/data/candles'
 import {
   buildResearchReport,
   createEmptyProgress,
+  createPauseController,
   createThrottledProgressHandler,
   DEFAULT_MA_CROSS_RANGES,
   runRandomSearch,
   validateRandomSearchConfig,
+  type PauseController,
   type RandomSearchConfig,
   type RandomSearchProgress,
   type ResearchReport,
@@ -31,6 +33,7 @@ export type ResearchUiStatus =
   | 'cancelled'
   | 'failed'
   | 'empty'
+  | 'partial'
 
 export type StartRandomSearchResult = {
   session: ResearchSession
@@ -50,12 +53,19 @@ interface ResearchState {
   appliedParameters: MovingAverageCrossParams | null
   selectedCandidateId: string | null
   abortController: AbortController | null
+  pauseController: PauseController | null
 
   startRandomSearch: (input: {
     config: RandomSearchConfig
     candles: Candle[]
   }) => Promise<StartRandomSearchResult | null>
   cancelRandomSearch: () => void
+  pauseRandomSearch: () => void
+  resumeRandomSearch: () => void
+  /** Persist a cancelled run as a marked-partial Research Session (user opt-in). */
+  savePartialSession: () => PersistedResearchSession | null
+  /** Clear a cancelled run without writing to the archive. */
+  discardCancelledSession: () => void
   applyParameters: (params: MovingAverageCrossParams) => void
   clearAppliedParameters: () => void
   selectCandidate: (id: string | null) => void
@@ -82,11 +92,13 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   appliedParameters: null,
   selectedCandidateId: null,
   abortController: null,
+  pauseController: null,
 
   clearError: () => set({ error: null, validationErrors: [] }),
 
   reset: () => {
     get().abortController?.abort()
+    get().pauseController?.resume()
     set({
       status: 'idle',
       progress: null,
@@ -96,6 +108,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       validationErrors: [],
       selectedCandidateId: null,
       abortController: null,
+      pauseController: null,
     })
   },
 
@@ -120,7 +133,10 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       status,
       session: entry.session,
       report: entry.report,
-      progress: markProgressCompleted(entry.session.progress),
+      progress:
+        entry.session.status === 'partial'
+          ? entry.session.progress
+          : markProgressCompleted(entry.session.progress),
       error: entry.session.error,
       selectedCandidateId: entry.report.bestCandidate?.id ?? null,
       validationErrors: [],
@@ -130,7 +146,61 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   cancelRandomSearch: () => {
     const controller = get().abortController
     if (!controller || get().status !== 'running') return
+    get().pauseController?.resume()
     controller.abort()
+  },
+
+  pauseRandomSearch: () => {
+    if (get().status !== 'running') return
+    get().pauseController?.pause()
+  },
+
+  resumeRandomSearch: () => {
+    get().pauseController?.resume()
+  },
+
+  savePartialSession: () => {
+    const { session, report, status } = get()
+    if (status !== 'cancelled' || !session || !report) return null
+
+    const partialSession: ResearchSession = {
+      ...session,
+      status: 'partial',
+      optimizationResult: session.optimizationResult
+        ? { ...session.optimizationResult, stabilityIncomplete: true }
+        : session.optimizationResult,
+    }
+    const partialReport = buildResearchReport(partialSession)
+    const entry: PersistedResearchSession = {
+      session: partialSession,
+      report: partialReport,
+      savedAt: Date.now(),
+    }
+    saveResearchSession(entry)
+    syncResearchSessionQueries()
+    set({
+      status: 'partial',
+      session: partialSession,
+      report: partialReport,
+      progress: partialSession.progress,
+      selectedCandidateId:
+        partialReport.recommendedCandidate?.id ??
+        partialReport.bestCandidate?.id ??
+        null,
+    })
+    return entry
+  },
+
+  discardCancelledSession: () => {
+    if (get().status !== 'cancelled') return
+    set({
+      status: 'idle',
+      session: null,
+      report: null,
+      progress: null,
+      error: null,
+      selectedCandidateId: null,
+    })
   },
 
   startRandomSearch: async ({ config, candles }) => {
@@ -160,6 +230,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
     }
 
     const controller = new AbortController()
+    const pauseController = createPauseController()
     const throttled = createThrottledProgressHandler((progress) => {
       set({ progress })
     })
@@ -173,12 +244,14 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       validationErrors: [],
       selectedCandidateId: null,
       abortController: controller,
+      pauseController,
     })
 
     const session = await runRandomSearch({
       config,
       candles,
       signal: controller.signal,
+      pauseController,
       onProgress: (progress) => {
         throttled.emit(progress)
       },
@@ -244,7 +317,11 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       progress: session.progress,
       error: session.error,
       abortController: null,
-      selectedCandidateId: report.bestCandidate?.id ?? null,
+      pauseController: null,
+      selectedCandidateId:
+        report.recommendedCandidate?.id ??
+        report.bestCandidate?.id ??
+        null,
     })
 
     return { session, report, persisted }
@@ -259,4 +336,6 @@ export const defaultRandomSearchDraft = {
   minimumTrades: '' as string,
   minimumProfitFactor: '' as string,
   strategyParams: { ...DEFAULT_MA_CROSS_PARAMS },
+  searchPreset: 'balanced' as const,
+  autoStopOnConverge: false,
 }

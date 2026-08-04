@@ -155,7 +155,7 @@ function ratingFromExistingMetrics(summary: BacktestReport['summary']): Research
 }
 
 /**
- * Build a research report from a completed (or terminal) Random Search session.
+ * Build a research report from a completed (or terminal) Adaptive Search session.
  * Uses candidate scores already derived from BacktestReport — no UI recomputation.
  */
 export function buildResearchReport(
@@ -164,9 +164,18 @@ export function buildResearchReport(
 ): ResearchReport {
   const passing = session.candidates.filter((candidate) => candidate.passedConstraints)
   const ranked = [...passing].sort((a, b) => b.score - a.score)
-  const best =
+  const recommended =
+    (session.recommendedCandidateId
+      ? session.candidates.find((candidate) => candidate.id === session.recommendedCandidateId)
+      : null) ??
     (session.bestCandidateId
       ? session.candidates.find((candidate) => candidate.id === session.bestCandidateId)
+      : null) ??
+    ranked[0] ??
+    null
+  const rawBest =
+    (session.rawBestCandidateId
+      ? session.candidates.find((candidate) => candidate.id === session.rawBestCandidateId)
       : null) ?? ranked[0] ?? null
 
   return {
@@ -177,12 +186,16 @@ export function buildResearchReport(
     iterationsCompleted: session.progress.candidatesTested,
     candidatesEvaluated: session.candidates.length,
     candidatesPassingConstraints: passing.length,
-    bestCandidate: best,
+    bestCandidate: recommended,
     topCandidates: ranked.slice(0, topN),
     config: session.config,
     error: session.error,
     createdAt: session.createdAt,
     completedAt: session.completedAt,
-    analysis: buildResearchAnalysisNarrative(session, best),
+    analysis: buildResearchAnalysisNarrative(session, recommended),
+    optimization: session.optimizationResult ?? null,
+    recommendedCandidate: recommended,
+    rawBestCandidate: rawBest,
+    baseline: session.baseline ?? null,
   }
 }

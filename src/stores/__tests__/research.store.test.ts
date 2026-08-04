@@ -165,7 +165,8 @@ describe('research store random search workflow', () => {
     expect(state.progress?.status).toBe('COMPLETED')
     expect(result?.persisted).toBe(true)
     expect(result?.session.id).toBe(state.report!.sessionId)
-    expect(runBacktestPipeline).toHaveBeenCalledTimes(3)
+    // Baseline + 3 search candidates
+    expect(runBacktestPipeline).toHaveBeenCalledTimes(4)
 
     // Generated session must appear in the shared archive-backed query list.
     const archived = getResearchSession(state.report!.sessionId)
@@ -246,7 +247,8 @@ describe('research store random search workflow', () => {
 
     resolveFirst()
     await first
-    expect(runBacktestPipeline).toHaveBeenCalledTimes(2)
+    // Baseline + 2 search candidates
+    expect(runBacktestPipeline).toHaveBeenCalledTimes(3)
   })
 
   it('Apply Parameters updates form state only and does not rerun', async () => {
@@ -387,6 +389,60 @@ describe('research store random search workflow', () => {
     expect(listResearchSessionsBySavedAt()).toHaveLength(0)
     // UI is not stuck in running.
     expect(useResearchStore.getState().abortController).toBeNull()
+  })
+
+  it('can save a cancelled run as a marked-partial session', async () => {
+    let resolveIter!: () => void
+    const gate = new Promise<void>((resolve) => {
+      resolveIter = resolve
+    })
+
+    vi.mocked(runBacktestPipeline).mockImplementation(async (params) => {
+      await gate
+      return {
+        report: stubReport(1.3),
+        candles: params?.candles ?? [],
+        context: {
+          strategyName: 'Moving Average Cross',
+          strategyVersion: 'rs',
+          timeframe: '1H',
+          candles: params?.candles ?? [],
+        },
+        backtestId: `bt-partial-${Date.now()}`,
+        strategyParams: {
+          fastPeriod: 10,
+          slowPeriod: 40,
+          rsiPeriod: 14,
+        },
+      }
+    })
+
+    const run = useResearchStore.getState().startRandomSearch({
+      candles: buildCandles(25),
+      config: {
+        iterations: 4,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 25,
+        initialCapital: 10_000,
+        seed: 12,
+      },
+    })
+
+    await Promise.resolve()
+    useResearchStore.getState().cancelRandomSearch()
+    resolveIter()
+    await run
+
+    expect(useResearchStore.getState().status).toBe('cancelled')
+    const entry = useResearchStore.getState().savePartialSession()
+    expect(entry).not.toBeNull()
+    expect(entry?.session.status).toBe('partial')
+    expect(useResearchStore.getState().status).toBe('partial')
+    expect(listResearchSessionsBySavedAt()).toHaveLength(1)
+    expect(listResearchSessionsBySavedAt()[0]?.session.status).toBe('partial')
   })
 
   it('failure does not persist a session and leaves a FAILED progress state', async () => {

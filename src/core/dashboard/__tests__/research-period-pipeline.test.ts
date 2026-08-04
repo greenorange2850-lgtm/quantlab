@@ -68,8 +68,8 @@ describe('calendar research period propagation', () => {
         },
       })
 
-      expect(spy).toHaveBeenCalledTimes(4)
-      expect(seen).toHaveLength(4)
+      expect(spy).toHaveBeenCalledTimes(5)
+      expect(seen).toHaveLength(5)
       for (const batch of seen) {
         expect(batch).toBe(candles)
       }

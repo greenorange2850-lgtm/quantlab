@@ -4,6 +4,7 @@ import {
   AlertCircle,
   FlaskConical,
   Loader2,
+  Pause,
   Play,
   RefreshCw,
   Square,
@@ -27,9 +28,13 @@ import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import {
   formatDurationMs,
   formatLiveStatusLabel,
+  getSearchPreset,
+  SEARCH_PRESETS,
   type ParameterRange,
   type ScoringObjective,
+  type SearchPresetId,
 } from '@/core/research'
+import { DEFAULT_MA_CROSS_PARAMS, type MovingAverageCrossParams } from '@/core/strategy'
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
 import {
   BINANCE_KLINES_PAGE_LIMIT,
@@ -46,6 +51,7 @@ import {
   formatCountOrDash,
   formatScoreOrDash,
   NextRecommendationPanel,
+  OptimizationResultPanel,
   OptimizerTransparencyPanel,
   ResearchHealthPanel,
   ResearchProgressPanel,
@@ -89,6 +95,10 @@ export function OptimizerPage() {
   const selectedCandidateId = useResearchStore((state) => state.selectedCandidateId)
   const startRandomSearch = useResearchStore((state) => state.startRandomSearch)
   const cancelRandomSearch = useResearchStore((state) => state.cancelRandomSearch)
+  const pauseRandomSearch = useResearchStore((state) => state.pauseRandomSearch)
+  const resumeRandomSearch = useResearchStore((state) => state.resumeRandomSearch)
+  const savePartialSession = useResearchStore((state) => state.savePartialSession)
+  const discardCancelledSession = useResearchStore((state) => state.discardCancelledSession)
   const applyParameters = useResearchStore((state) => state.applyParameters)
   const selectCandidate = useResearchStore((state) => state.selectCandidate)
   const clearError = useResearchStore((state) => state.clearError)
@@ -152,6 +162,11 @@ export function OptimizerPage() {
   const [ranges, setRanges] = useState<ParameterRange[]>(
     defaultRandomSearchDraft.parameterRanges.map((range) => ({ ...range })),
   )
+  const [searchPreset, setSearchPreset] = useState<SearchPresetId>('balanced')
+  const [baselineParams, setBaselineParams] = useState<MovingAverageCrossParams>({
+    ...DEFAULT_MA_CROSS_PARAMS,
+  })
+  const [autoStopOnConverge, setAutoStopOnConverge] = useState(false)
   const [maxDrawdownPercent, setMaxDrawdownPercent] = useState('')
   const [minimumTrades, setMinimumTrades] = useState('')
   const [minimumProfitFactor, setMinimumProfitFactor] = useState('')
@@ -260,6 +275,9 @@ export function OptimizerPage() {
         startDate: resolvedPeriod.period.startMs,
         endDate: resolvedPeriod.period.endMs,
         initialCapital: Number(initialCapital) || defaultBacktestPipelineParams.initialCapital,
+        baselineParameters: baselineParams,
+        searchPreset,
+        autoStopOnConverge,
         constraints: {
           maxDrawdown: maxDd !== undefined ? maxDd / 100 : undefined,
           minimumTrades: parseOptionalNumber(minimumTrades),
@@ -281,7 +299,10 @@ export function OptimizerPage() {
       (progress.status === 'CANCELLED' ||
         progress.status === 'FAILED' ||
         progress.status === 'FINALIZING' ||
-        progress.status === 'COMPLETED'))
+        progress.status === 'COMPLETED' ||
+        progress.status === 'PAUSED' ||
+        progress.status === 'PAUSING' ||
+        progress.status === 'CONVERGED'))
 
   const progressPercent =
     progress && progress.totalCandidates > 0
@@ -296,9 +317,9 @@ export function OptimizerPage() {
             <Sparkles className="h-5 w-5 text-accent" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold tracking-tight">Random Search</h2>
+            <h2 className="text-lg font-semibold tracking-tight">Adaptive Optimizer</h2>
             <p className="text-pretty text-xs text-muted-foreground">
-              Sample many parameter combinations. Use Strategy Lab for a single backtest.
+              Baseline → Exploration → Refinement → Stability. Transparent, deterministic research.
             </p>
           </div>
         </div>
@@ -383,9 +404,67 @@ export function OptimizerPage() {
                 ))}
               </select>
             </div>
+            <div className="min-w-0 space-y-2">
+              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Search preset
+              </label>
+              <select
+                value={searchPreset}
+                disabled={isRunning}
+                onChange={(event) => {
+                  const id = event.target.value as SearchPresetId
+                  setSearchPreset(id)
+                  if (id !== 'custom') {
+                    const preset = getSearchPreset(id)
+                    setRanges(preset.parameterRanges.map((range) => ({ ...range })))
+                  }
+                }}
+                className="flex h-11 w-full rounded-lg border border-border bg-white/[0.03] px-3 text-sm"
+              >
+                {SEARCH_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id} className="bg-card-solid">
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                {getSearchPreset(searchPreset).description}
+              </p>
+            </div>
+            <div className="min-w-0 space-y-2 md:col-span-2">
+              <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={autoStopOnConverge}
+                  disabled={isRunning}
+                  onChange={(event) => setAutoStopOnConverge(event.target.checked)}
+                />
+                Auto-stop when converged (off by default)
+              </label>
+            </div>
           </div>
 
           <div className="space-y-4">
+            <Disclosure title="Baseline parameters (Strategy Lab)">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {(['fastPeriod', 'slowPeriod', 'rsiPeriod'] as const).map((key) => (
+                  <div key={key} className="min-w-0 space-y-1">
+                    <label className="text-[10px] uppercase text-muted-foreground">{key}</label>
+                    <Input
+                      value={String(baselineParams[key])}
+                      disabled={isRunning}
+                      onChange={(event) => {
+                        const value = Number(event.target.value)
+                        if (!Number.isFinite(value)) return
+                        setBaselineParams((current) => ({ ...current, [key]: Math.round(value) }))
+                      }}
+                      className="h-9 bg-white/[0.03] px-2 text-xs"
+                    />
+                  </div>
+                ))}
+              </div>
+            </Disclosure>
+
             <Disclosure title="Parameter ranges">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 {ranges.map((range) => (
@@ -536,14 +615,35 @@ export function OptimizerPage() {
               )}
             </Button>
             {isRunning && (
-              <Button
-                variant="secondary"
-                className="min-h-11 w-full sm:min-h-9 sm:w-auto"
-                onClick={cancelRandomSearch}
-              >
-                <Square className="mr-2 h-4 w-4" />
-                Cancel
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                  onClick={() =>
+                    progress?.status === 'PAUSED' ? resumeRandomSearch() : pauseRandomSearch()
+                  }
+                >
+                  {progress?.status === 'PAUSED' ? (
+                    <>
+                      <Play className="mr-2 h-4 w-4" />
+                      Continue
+                    </>
+                  ) : (
+                    <>
+                      <Pause className="mr-2 h-4 w-4" />
+                      Pause
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                  onClick={cancelRandomSearch}
+                >
+                  <Square className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+              </>
             )}
             {status === 'failed' && (
               <Button
@@ -593,8 +693,24 @@ export function OptimizerPage() {
                 tone="muted"
               />
               <MetricTile
+                label="Unique / Dupes"
+                value={`${formatCountOrDash(progress.uniqueCandidates)} / ${formatCountOrDash(progress.duplicatesSkipped)}`}
+                size="secondary"
+                tone="muted"
+              />
+              <MetricTile
+                label="Baseline Score"
+                value={formatScoreOrDash(progress.baselineScore ?? null)}
+                size="secondary"
+              />
+              <MetricTile
                 label="Current Best Research Score"
                 value={formatScoreOrDash(progress.bestScore)}
+                size="secondary"
+              />
+              <MetricTile
+                label="Recommended Score"
+                value={formatScoreOrDash(progress.recommendedScore ?? null)}
                 size="secondary"
               />
               <MetricTile
@@ -621,6 +737,12 @@ export function OptimizerPage() {
                 tone="muted"
               />
               <MetricTile
+                label="Paused Time"
+                value={formatDurationMs(progress.pausedMs ?? 0)}
+                size="secondary"
+                tone="muted"
+              />
+              <MetricTile
                 label="Estimated Time Remaining"
                 value={formatDurationMs(progress.estimatedRemainingMs)}
                 size="secondary"
@@ -632,6 +754,37 @@ export function OptimizerPage() {
                 size="secondary"
               />
             </div>
+            {progress.stageBudgets && (
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground sm:grid-cols-4">
+                <span>
+                  Baseline {progress.stageBudgets.baseline.completed ? 'Completed' : 'Pending'}
+                </span>
+                <span>
+                  Exploration {progress.stageBudgets.exploration.done} /{' '}
+                  {progress.stageBudgets.exploration.total}
+                </span>
+                <span>
+                  Refinement {progress.stageBudgets.refinement.done} /{' '}
+                  {progress.stageBudgets.refinement.total}
+                </span>
+                <span>
+                  Stability {progress.stageBudgets.stability.done} /{' '}
+                  {progress.stageBudgets.stability.total}
+                </span>
+              </div>
+            )}
+            {progress.newBestEvent && (
+              <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
+                New Best Found · Score{' '}
+                {progress.newBestEvent.previousScore?.toFixed(2) ?? '—'} →{' '}
+                {progress.newBestEvent.score.toFixed(2)} · PF{' '}
+                {progress.newBestEvent.previousProfitFactor?.toFixed(2) ?? '—'} →{' '}
+                {progress.newBestEvent.profitFactor.toFixed(2)} · DD{' '}
+                {(((progress.newBestEvent.previousMaxDrawdown ?? 0) * 100) || 0).toFixed(2)}% →{' '}
+                {(progress.newBestEvent.maxDrawdown * 100).toFixed(2)}% · Trades{' '}
+                {progress.newBestEvent.previousTradeCount ?? '—'} → {progress.newBestEvent.tradeCount}
+              </div>
+            )}
             <div className="space-y-1.5">
               <div className="flex justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
                 <span>Progress</span>
@@ -670,6 +823,53 @@ export function OptimizerPage() {
         </div>
       )}
 
+      {report && (report.optimization || report.baseline) && (
+        <OptimizationResultPanel
+          report={report}
+          optimization={
+            report.optimization ?? {
+              baseline: report.baseline ?? null,
+              rawBestCandidateId: report.rawBestCandidate?.id ?? null,
+              recommendedCandidateId: report.recommendedCandidate?.id ?? report.bestCandidate?.id ?? null,
+              recommendation: {
+                rawBestCandidateId: report.rawBestCandidate?.id ?? null,
+                recommendedCandidateId:
+                  report.recommendedCandidate?.id ?? report.bestCandidate?.id ?? null,
+                ruleId: 'raw_best',
+                explanation: 'Legacy session without adaptive optimization metadata.',
+              },
+              stability: null,
+              plateau: null,
+              verdict: 'Insufficient Evidence',
+              verdictDetail:
+                'Adaptive baseline / stability data is unavailable for this legacy session.',
+              improvements: [],
+              metricChanges: [],
+              parameterChanges: [],
+              searchExplanation: {
+                stagesCompleted: [],
+                candidatesEvaluated: report.candidatesEvaluated,
+                uniqueCandidates: report.candidatesEvaluated,
+                duplicatesSkipped: 0,
+                generatedCandidates: report.candidatesEvaluated,
+                duplicateRate: 0,
+                improvementCount: 0,
+                lastImprovement: null,
+                plateauDetail: null,
+                stabilitySummary: null,
+                spaceExhausted: false,
+              },
+              rejectionReasonCounts: {},
+              datasetCandleCount: 0,
+              datasetStartMs: null,
+              datasetEndMs: null,
+              stabilityIncomplete: true,
+              schemaVersion: 0,
+            }
+          }
+        />
+      )}
+
       {status === 'empty' && (
         <Card className="border-dashed">
           <CardContent className="py-8 text-center">
@@ -683,9 +883,55 @@ export function OptimizerPage() {
 
       {status === 'cancelled' && (
         <Card>
-          <CardContent className="py-4 text-xs text-muted-foreground">
-            Random Search cancelled after {progress?.candidatesTested ?? 0} candidates.
-            No Research Session was persisted for this cancelled run.
+          <CardContent className="space-y-3 py-4">
+            <p className="text-xs text-muted-foreground">
+              Optimization cancelled after {progress?.candidatesTested ?? 0} /{' '}
+              {progress?.totalCandidates ?? iterations} candidates.
+              Results are provisional and were not archived yet.
+            </p>
+            {session?.optimizationResult?.stabilityIncomplete !== false && (
+              <p className="text-xs text-warning">
+                Stability analysis was incomplete. A saved partial session will be marked provisional.
+              </p>
+            )}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                onClick={() => {
+                  const entry = savePartialSession()
+                  if (entry) {
+                    void navigate(`/optimizer?session=${entry.session.id}`)
+                  }
+                }}
+              >
+                Save Partial Result
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                onClick={() => discardCancelledSession()}
+              >
+                Discard
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {status === 'partial' && (
+        <Card className="border-warning/30">
+          <CardContent className="space-y-2 py-4 text-xs">
+            <p className="font-medium text-warning">Partial Optimization Result</p>
+            <p className="text-muted-foreground">
+              Search stopped after {progress?.candidatesTested ?? 0} /{' '}
+              {progress?.totalCandidates ?? session?.config.iterations ?? '—'} candidates.
+              The current best is provisional.
+              {session?.optimizationResult?.stabilityIncomplete
+                ? ' Stability analysis was incomplete.'
+                : ''}
+            </p>
           </CardContent>
         </Card>
       )}

@@ -6,10 +6,15 @@ export const DEFAULT_PROGRESS_THROTTLE_MS = 150
 
 const IMMEDIATE_STATUSES: ReadonlySet<RandomSearchLiveStatus> = new Set([
   'INITIALIZING',
+  'BASELINE',
   'FINALIZING',
   'COMPLETED',
   'FAILED',
   'CANCELLED',
+  'PAUSING',
+  'PAUSED',
+  'CANCELLING',
+  'CONVERGED',
 ])
 
 export function createEmptyProgress(totalCandidates: number): RandomSearchProgress {
@@ -27,6 +32,17 @@ export function createEmptyProgress(totalCandidates: number): RandomSearchProgre
     elapsedMs: 0,
     estimatedRemainingMs: null,
     status: 'INITIALIZING',
+    stage: null,
+    uniqueCandidates: 0,
+    duplicatesSkipped: 0,
+    generatedCandidates: 0,
+    baselineScore: null,
+    rawBestScore: null,
+    recommendedScore: null,
+    pausedMs: 0,
+    plateauDetected: false,
+    lastImprovementEvent: null,
+    newBestEvent: null,
   }
 }
 
@@ -47,7 +63,18 @@ export function deriveLiveSearchStatus(input: {
   justImproved: boolean
 }): Exclude<
   RandomSearchLiveStatus,
-  'INITIALIZING' | 'FINALIZING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+  | 'INITIALIZING'
+  | 'BASELINE'
+  | 'FINALIZING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'PAUSING'
+  | 'PAUSED'
+  | 'CANCELLING'
+  | 'REFINING'
+  | 'STABILITY_CHECK'
+  | 'CONVERGED'
 > {
   const { tested, total, bestScore, candidatesSinceLastImprovement, justImproved } = input
 
@@ -108,16 +135,30 @@ export function formatLiveStatusLabel(status: RandomSearchLiveStatus): string {
   switch (status) {
     case 'INITIALIZING':
       return 'Initializing'
+    case 'BASELINE':
+      return 'Baseline'
     case 'EXPLORING':
       return 'Exploring'
+    case 'REFINING':
+      return 'Refining'
+    case 'STABILITY_CHECK':
+      return 'Stability Check'
     case 'IMPROVING':
       return 'Improving'
     case 'PLATEAUING':
       return 'Plateauing'
+    case 'CONVERGED':
+      return 'Converged'
     case 'FINALIZING':
       return 'Finalizing'
     case 'COMPLETED':
       return 'Completed'
+    case 'PAUSING':
+      return 'Pausing'
+    case 'PAUSED':
+      return 'Paused'
+    case 'CANCELLING':
+      return 'Cancelling'
     case 'FAILED':
       return 'Failed'
     case 'CANCELLED':
