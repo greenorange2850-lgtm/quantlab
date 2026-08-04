@@ -517,10 +517,11 @@ function inferPriorTrend(
   _visibleIndex: number,
   config: QmlConfig,
 ): { ok: true; priorTrend: string; trendStrength: number } | { ok: false; reason: string } {
-  const expected =
+  const expectedTrends = new Set(
     direction === 'BULLISH'
-      ? (['Bearish', 'Pullback', 'Reversal'] as const)
-      : (['Bullish', 'Pullback', 'Reversal'] as const)
+      ? ['Bearish', 'Pullback', 'Reversal']
+      : ['Bullish', 'Pullback', 'Reversal'],
+  )
 
   const sourceMeta = dow.bySwingId[source.id]
   const extremeMeta = dow.bySwingId[extreme.id]
@@ -549,7 +550,7 @@ function inferPriorTrend(
   const trend = dow.trend
   const strength = dow.strength
   const priorOk =
-    expected.includes(trend as (typeof expected)[number]) ||
+    expectedTrends.has(trend) ||
     trend === 'Unknown' ||
     trend === 'Range' ||
     // Allow when Dow labels show the progression even if current trend already shifted
