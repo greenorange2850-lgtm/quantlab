@@ -40,8 +40,11 @@ describe('SMC event display mapper', () => {
     const display = getSmcEventDisplayValue(event)
     expect(display.primary).not.toBe('0')
     expect(isArtificialZeroDisplay(display.primary)).toBe(false)
-    expect(display.primary).toContain('64250.5')
-    expect(display.fields.find((f) => f.label === 'Candle close')?.value).toContain('64250.5')
+    // Locale may insert thousands separators (e.g. 64,250.5).
+    expect(display.primary.replace(/,/g, '')).toContain('64250.5')
+    expect(
+      display.fields.find((f) => f.label === 'Candle close')?.value.replace(/,/g, ''),
+    ).toContain('64250.5')
     expect(display.fields.find((f) => f.label === 'Body / ATR')?.value).not.toBe('0')
   })
 
