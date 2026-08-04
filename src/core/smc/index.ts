@@ -178,6 +178,24 @@ export {
 } from './lifecycle'
 
 export {
+  SMC_DOW_THEORY_VERSION,
+  analyzeDowTheory,
+  applyDowTheoryLayer,
+  emptyDowTheoryLayer,
+  toDowTheorySnapshot,
+  classifyDowSwingProgression,
+  inferDowTrend,
+  type DowSwingLabel,
+  type DowTrend,
+  type DowStructurePhase,
+  type SmcDowSwingMeta,
+  type SmcDowTheorySnapshot,
+  type SmcDowTheoryDiagnostics,
+  type SmcDowTheoryLayer,
+  type DowTheoryClassifiedSwing,
+} from './dow-theory'
+
+export {
   BUILTIN_SMC_PROFILES,
   BUILTIN_SMC_PRESETS,
   QUANTLAB_DEFAULT_PROFILE,

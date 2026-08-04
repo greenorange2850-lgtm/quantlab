@@ -12,6 +12,7 @@ import { detectFairValueGaps } from './fvg-detector'
 import { sanitizeSmcDetectionResult } from './invariants'
 import { detectLiquiditySweeps } from './liquidity-sweep-detector'
 import { detectOrderBlocks } from './order-block-detector'
+import { analyzeDowTheory, emptyDowTheoryLayer } from './dow-theory'
 import { applySmcIntelligence } from './ranking'
 import {
   classifyInternalExternalStructure,
@@ -163,8 +164,8 @@ function runTimed(
 /**
  * Progressive detection API — only events knowable by `visibleIndex` (inclusive).
  * Module order:
- * 1 Swings → 2 Structure → 3 Equal levels → 4/5 BOS/CHoCH → 6 Displacement →
- * 7 FVG → 8 Liquidity Sweep → 9 Order Block → 10 mitigation (inside detectors)
+ * 1 Swings → 2 Structure → 3 Dow Theory → 4 Equal levels → 5/6 BOS/CHoCH →
+ * 7 Displacement → 8 FVG → 9 Liquidity Sweep → 10 Order Block → 11 mitigation
  */
 export function detectSmcUntil(
   candles: readonly Candle[],
@@ -223,6 +224,15 @@ export function detectSmcUntil(
   )
 
   const annotatedSwings = classified.annotatedBaseSwings
+
+  // Dow Theory — after swing classification, before BOS/CHoCH. Derived only.
+  let dowTheory = emptyDowTheoryLayer(last)
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('dowTheory', true, timings, () => {
+      dowTheory = analyzeDowTheory(classified.classified, last)
+    }),
+  )
 
   let equalLevels = { events: [] as ReturnType<typeof detectEqualLevels>['events'] }
   maxBlock = Math.max(
@@ -343,6 +353,7 @@ export function detectSmcUntil(
     liquiditySweepEvents: sweeps.events,
     orderBlockEvents: orderBlocks.events,
     structureState: breaks.structureState,
+    dowTheory,
     diagnostics: {
       ...emptyDiagnostics(candles.length, last, durationMs, 'COMPLETE'),
       swingCandidatesConsidered: swingResult.candidatesConsidered,
@@ -370,6 +381,7 @@ export function detectSmcUntil(
       structureState: breaks.structureState,
       liquiditySweepDiagnostics: sweeps.diagnostics,
       detectionStatus: 'COMPLETE',
+      dowTheory: dowTheory.diagnostics,
     },
   }
 
@@ -379,6 +391,7 @@ export function detectSmcUntil(
   const eventCountBreakdown = buildEventCountBreakdownFields(result)
   const withCounts: SmcDetectionResult = {
     ...result,
+    dowTheory: result.dowTheory ?? dowTheory,
     diagnostics: {
       ...result.diagnostics,
       computationDurationMs: durationMs,
@@ -389,6 +402,7 @@ export function detectSmcUntil(
       liquiditySweepDiagnostics: sweeps.diagnostics,
       eventCountBreakdown,
       detectionStatus: failed ? 'FAILED' : 'COMPLETE',
+      dowTheory: (result.dowTheory ?? dowTheory).diagnostics,
       invariantDetails: report.details,
       invariants: {
         invalidBullishBosCount: report.invalidBullishBosCount,

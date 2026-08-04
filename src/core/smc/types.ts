@@ -1,4 +1,8 @@
 import type { Candle } from '@/data/candles'
+import type {
+  SmcDowTheoryDiagnostics,
+  SmcDowTheoryLayer,
+} from './dow-theory/types'
 import type { SmcIntelligenceLayer, SmcRankingDiagnostics } from './ranking/types'
 
 /** Phase-2 detection kinds. */
@@ -517,6 +521,8 @@ export interface SmcDetectionDiagnostics {
   invariantDetails?: string[]
   /** Intelligence ranking diagnostics (post-detector). */
   ranking?: SmcRankingDiagnostics
+  /** Dow Theory derived diagnostics (post swing classification). */
+  dowTheory?: SmcDowTheoryDiagnostics
 }
 
 export interface SmcDetectionResult {
@@ -536,6 +542,11 @@ export interface SmcDetectionResult {
    * scores and visibility only. Absent until ranking is applied.
    */
   intelligence?: SmcIntelligenceLayer
+  /**
+   * Dow Theory derived layer. Consumes classified swings only —
+   * never mutates detector swing objects. Absent until pipeline runs Dow Theory.
+   */
+  dowTheory?: SmcDowTheoryLayer
 }
 
 export type SmcEvent =
