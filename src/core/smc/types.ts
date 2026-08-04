@@ -1,4 +1,5 @@
 import type { Candle } from '@/data/candles'
+import type { SmcIntelligenceLayer, SmcRankingDiagnostics } from './ranking/types'
 
 /** Phase-2 detection kinds. */
 export type SmcDetectionKind =
@@ -514,6 +515,8 @@ export interface SmcDetectionDiagnostics {
   /** Present after pipeline invariant audit. All must be 0 for a complete result. */
   invariants?: SmcInvariantCounts & { ok: boolean }
   invariantDetails?: string[]
+  /** Intelligence ranking diagnostics (post-detector). */
+  ranking?: SmcRankingDiagnostics
 }
 
 export interface SmcDetectionResult {
@@ -528,6 +531,11 @@ export interface SmcDetectionResult {
   orderBlockEvents: SmcOrderBlockEvent[]
   structureState: SmcStructureState
   diagnostics: SmcDetectionDiagnostics
+  /**
+   * Post-detector intelligence layer. Never mutates detector algorithms —
+   * scores and visibility only. Absent until ranking is applied.
+   */
+  intelligence?: SmcIntelligenceLayer
 }
 
 export type SmcEvent =
