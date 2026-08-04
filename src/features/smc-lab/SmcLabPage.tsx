@@ -79,6 +79,7 @@ import {
   type SmcModuleProgress,
 } from './run-detection-job'
 import { SmcGoldenChartCompare, SmcValidationDashboard } from './validation'
+import { buildLabVisibilityPipelineDiagnostics } from './visibility-pipeline'
 import type { SmcSavedLabConfig } from './persistence/types'
 
 const CHART_WINDOW = 72
@@ -289,6 +290,28 @@ export function SmcLabPage() {
       highlightSwingId: brokenId,
     }
   }, [candles, visibleIndex, selectedEventId, progressive])
+
+  const visibilityPipeline = useMemo(
+    () =>
+      buildLabVisibilityPipelineDiagnostics({
+        fullDetection: progressive,
+        chartDetection: progressiveVisible,
+        layers,
+        windowStart,
+        windowLength: windowCandles.length,
+        listFilter: eventFilter,
+        rankingVisibleOnly: visibilityMode !== 'debug',
+      }),
+    [
+      progressive,
+      progressiveVisible,
+      layers,
+      windowStart,
+      windowCandles.length,
+      eventFilter,
+      visibilityMode,
+    ],
+  )
 
   const reviewsByEventId = useMemo(() => {
     const map = new Map<string, SmcReviewRecord>()
@@ -1278,6 +1301,42 @@ export function SmcLabPage() {
                       <p>Visibility mode: {detection.diagnostics.ranking.mode}</p>
                     </>
                   ) : null}
+                  <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
+                    <p className="font-medium">Visibility pipeline</p>
+                    <p>
+                      Overall detector {visibilityPipeline.overall.detectorCount} · ranked{' '}
+                      {visibilityPipeline.overall.rankedCount} · visible{' '}
+                      {visibilityPipeline.overall.visibleCount} · chartRendered{' '}
+                      {visibilityPipeline.overall.chartRenderedCount} · listRendered{' '}
+                      {visibilityPipeline.overall.listRenderedCount}
+                    </p>
+                    {(
+                      [
+                        'BOS',
+                        'CHoCH',
+                        'LiquiditySweep',
+                        'Swing',
+                        'Displacement',
+                        'FVG',
+                        'OrderBlock',
+                      ] as const
+                    ).map((module) => {
+                      const row = visibilityPipeline.byModule[module]
+                      if (row.detectorCount === 0 && row.visibleCount === 0) return null
+                      return (
+                        <p key={module}>
+                          {module}: detector {row.detectorCount} · ranked {row.rankedCount} ·
+                          visible {row.visibleCount} · chart {row.chartRenderedCount} · list{' '}
+                          {row.listRenderedCount}
+                        </p>
+                      )
+                    })}
+                    {visibilityPipeline.notes.map((note) => (
+                      <p key={note} className="text-amber-200">
+                        {note}
+                      </p>
+                    ))}
+                  </div>
                   <p className="mt-2">External swings: {s.externalSwings}</p>
                   <p>Internal swings: {s.internalSwings}</p>
                   <p className="mt-2">External BOS: {s.externalBos}</p>

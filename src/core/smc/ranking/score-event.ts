@@ -47,9 +47,10 @@ function baseForKind(event: SmcEvent): { base: number; label: string } {
       return { base: 68, label: 'Base external BOS' }
     }
     if (bos.brokenSwingClassification === 'INTERNAL') {
-      return { base: 42, label: 'Base internal BOS' }
+      // Must clear Balanced general floor (45) even after mild duplicate soft-penalty.
+      return { base: 55, label: 'Base internal BOS' }
     }
-    return { base: 50, label: 'Base BOS' }
+    return { base: 55, label: 'Base BOS' }
   }
   if (kind === 'BULLISH_CHOCH' || kind === 'BEARISH_CHOCH') {
     const choch = event as SmcChochEvent
@@ -57,9 +58,9 @@ function baseForKind(event: SmcEvent): { base: number; label: string } {
       return { base: 72, label: 'Base external CHoCH' }
     }
     if (choch.brokenSwingClassification === 'INTERNAL') {
-      return { base: 48, label: 'Base internal CHoCH' }
+      return { base: 58, label: 'Base internal CHoCH' }
     }
-    return { base: 55, label: 'Base CHoCH' }
+    return { base: 58, label: 'Base CHoCH' }
   }
   if (kind.includes('DISPLACEMENT')) return { base: 52, label: 'Base displacement' }
   if (kind === 'BULLISH_FVG_CREATED' || kind === 'BEARISH_FVG_CREATED') {
@@ -278,10 +279,14 @@ export function scoreSmcEvent(
     score += 10
   }
 
-  // Nearby duplicates (penalty applied when peers exist; final keep/drop is visibility)
+  // Nearby duplicates (softer for structure breaks so Balanced does not wipe BOS/CHoCH clusters)
   if (context.nearbySameFamilyIds.length > 0) {
-    push(reasons, -12, 'Nearby duplicate')
-    score -= 12
+    const isStructureBreak =
+      (event.kind.includes('BOS') && !event.kind.includes('ORDER')) ||
+      event.kind.includes('CHOCH')
+    const penalty = isStructureBreak ? -6 : -12
+    push(reasons, penalty, 'Nearby duplicate')
+    score += penalty
   }
 
   return {
