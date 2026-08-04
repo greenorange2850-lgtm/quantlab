@@ -6,9 +6,11 @@ export const DEFAULT_PROGRESS_THROTTLE_MS = 150
 
 const IMMEDIATE_STATUSES: ReadonlySet<RandomSearchLiveStatus> = new Set([
   'INITIALIZING',
+  'BASELINE',
   'PAUSING',
   'PAUSED',
   'CANCELLING',
+  'CONVERGED',
   'FINALIZING',
   'COMPLETED',
   'FAILED',
@@ -32,6 +34,16 @@ export function createEmptyProgress(totalCandidates: number): RandomSearchProgre
     pausedMs: 0,
     estimatedRemainingMs: null,
     status: 'INITIALIZING',
+    stage: null,
+    uniqueCandidates: 0,
+    duplicatesSkipped: 0,
+    generatedCandidates: 0,
+    baselineScore: null,
+    rawBestScore: null,
+    recommendedScore: null,
+    plateauDetected: false,
+    lastImprovementEvent: null,
+    newBestEvent: null,
   }
 }
 
@@ -53,9 +65,13 @@ export function deriveLiveSearchStatus(input: {
 }): Exclude<
   RandomSearchLiveStatus,
   | 'INITIALIZING'
+  | 'BASELINE'
   | 'PAUSING'
   | 'PAUSED'
   | 'CANCELLING'
+  | 'REFINING'
+  | 'STABILITY_CHECK'
+  | 'CONVERGED'
   | 'FINALIZING'
   | 'COMPLETED'
   | 'FAILED'
@@ -166,12 +182,20 @@ export function formatLiveStatusLabel(status: RandomSearchLiveStatus): string {
   switch (status) {
     case 'INITIALIZING':
       return 'Initializing'
+    case 'BASELINE':
+      return 'Baseline'
     case 'EXPLORING':
       return 'Exploring'
+    case 'REFINING':
+      return 'Refining'
+    case 'STABILITY_CHECK':
+      return 'Stability Check'
     case 'IMPROVING':
       return 'Improving'
     case 'PLATEAUING':
       return 'Plateauing'
+    case 'CONVERGED':
+      return 'Converged'
     case 'PAUSING':
       return 'Pausing'
     case 'PAUSED':
@@ -223,9 +247,14 @@ export type ProgressBuildState = {
 
 export function buildProgressPayload(
   state: ProgressBuildState,
-  timing: TimingState,
+  timingOrStartedAt: TimingState | number,
   nowMs: number,
 ): RandomSearchProgress {
+  const timing =
+    typeof timingOrStartedAt === 'number'
+      ? createTimingState(timingOrStartedAt)
+      : timingOrStartedAt
+
   const base: RandomSearchProgress = {
     totalCandidates: state.totalCandidates,
     candidatesTested: state.candidatesTested,

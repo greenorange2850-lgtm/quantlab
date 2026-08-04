@@ -1,5 +1,11 @@
 import type { BacktestReport } from '@/core/analytics/types'
-import type { ResearchReport, ResearchSession } from '@/core/research'
+import {
+  buildResearchReport,
+  type OptimizationResultSummary,
+  type RandomSearchCandidate,
+  type ResearchReport,
+  type ResearchSession,
+} from '@/core/research'
 
 export interface PersistedResearchSession {
   session: ResearchSession
@@ -83,38 +89,158 @@ function slimBacktestReport(report: BacktestReport): BacktestReport {
   }
 }
 
-/** Compact form written to localStorage (same key / shape, smaller payload). */
+/**
+ * Retained in durable archive (documented slim policy):
+ * - session config, progress, counters, seed, stage budgets
+ * - slim candidate reports (equity endpoints + summary; no trades/curves)
+ * - top / improvement / recommended / raw-best / baseline candidate ids
+ * - improvement timeline + optimization summary (verdict, stability, plateau)
+ * - rejection reason aggregates
+ *
+ * Omitted / rebuilt on hydrate:
+ * - duplicated report.bestCandidate / recommended / rawBest / topCandidates bodies
+ * - full equity curves, trades, monthly return series
+ * - analysis narrative (rebuilt via buildResearchReport)
+ */
 export function slimResearchSessionForStorage(
   entry: PersistedResearchSession,
 ): PersistedResearchSession {
-  const slimCandidates = entry.session.candidates.map((candidate) => ({
-    ...candidate,
-    report: slimBacktestReport(candidate.report),
-  }))
+  // Keep top candidates + improvement timeline; drop bulk rejected full reports.
+  const topIds = new Set(
+    [
+      entry.report.bestCandidate?.id,
+      entry.report.recommendedCandidate?.id,
+      entry.report.rawBestCandidate?.id,
+      entry.session.bestCandidateId,
+      entry.session.rawBestCandidateId,
+      entry.session.recommendedCandidateId,
+      ...(entry.session.improvementTimeline ?? []).map((e) => e.candidateId),
+    ].filter(Boolean) as string[],
+  )
+
+  const slimCandidates = entry.session.candidates.map((candidate) => {
+    const keep = topIds.has(candidate.id) || candidate.passedConstraints
+    if (!keep && entry.session.candidates.length > 40) {
+      // Aggregate-only stub for deep rejected tails — retain score/params for counts.
+      return slimCandidateStub(candidate)
+    }
+    return {
+      ...candidate,
+      report: slimBacktestReport(candidate.report),
+    }
+  })
+
+  const slimBaseline = entry.session.baseline
+    ? {
+        ...entry.session.baseline,
+        report: slimBacktestReport(entry.session.baseline.report),
+      }
+    : entry.session.baseline
+
+  const slimOptimization = slimOptimizationResult(
+    entry.session.optimizationResult ?? null,
+    slimBaseline ?? null,
+  )
 
   const slimSession: ResearchSession = {
     ...entry.session,
     candidates: slimCandidates,
+    baseline: slimBaseline,
+    optimizationResult: slimOptimization,
+    improvementTimeline: (entry.session.improvementTimeline ?? []).slice(-40),
   }
 
+  // Persist a minimal report shell — full presentation fields are rebuilt on hydrate
+  // from session.candidates to avoid duplicating the same BacktestReport 4–5×.
   const slimReport: ResearchReport = {
-    ...entry.report,
-    bestCandidate: entry.report.bestCandidate
-      ? {
-          ...entry.report.bestCandidate,
-          report: slimBacktestReport(entry.report.bestCandidate.report),
-        }
-      : null,
-    topCandidates: entry.report.topCandidates.map((candidate) => ({
-      ...candidate,
-      report: slimBacktestReport(candidate.report),
-    })),
+    sessionId: entry.report.sessionId,
+    status: entry.report.status,
+    objective: entry.report.objective,
+    iterationsRequested: entry.report.iterationsRequested,
+    iterationsCompleted: entry.report.iterationsCompleted,
+    candidatesEvaluated: entry.report.candidatesEvaluated,
+    candidatesPassingConstraints: entry.report.candidatesPassingConstraints,
+    bestCandidate: null,
+    topCandidates: [],
+    config: entry.report.config,
+    error: entry.report.error,
+    createdAt: entry.report.createdAt,
+    completedAt: entry.report.completedAt,
+    analysis: {
+      summary: entry.report.analysis.summary.slice(0, 280),
+      strengths: [],
+      weaknesses: [],
+      suggestions: [],
+      riskLevel: entry.report.analysis.riskLevel,
+      rating: entry.report.analysis.rating,
+    },
+    // Omit nested optimization/baseline from report shell — restored via session.
+    optimization: null,
+    recommendedCandidate: null,
+    rawBestCandidate: null,
+    baseline: null,
   }
 
   return {
     session: slimSession,
     report: slimReport,
     savedAt: entry.savedAt,
+  }
+}
+
+function slimCandidateStub(candidate: RandomSearchCandidate): RandomSearchCandidate {
+  return {
+    ...candidate,
+    report: slimBacktestReport(candidate.report),
+  }
+}
+
+function slimOptimizationResult(
+  result: OptimizationResultSummary | null,
+  _slimBaseline: ResearchSession['baseline'],
+): OptimizationResultSummary | null {
+  if (!result) return null
+  return {
+    ...result,
+    // session.baseline is the durable source of truth — avoid a second report copy.
+    baseline: null,
+    improvements: result.improvements.slice(-20),
+  }
+}
+
+/** Rebuild presentation report from slim session after durable reload. */
+export function expandPersistedResearchSession(
+  entry: PersistedResearchSession,
+): PersistedResearchSession {
+  try {
+    const session: ResearchSession = {
+      ...entry.session,
+      optimizationResult: entry.session.optimizationResult
+        ? {
+            ...entry.session.optimizationResult,
+            baseline:
+              entry.session.optimizationResult.baseline ??
+              entry.session.baseline ??
+              null,
+            improvements:
+              entry.session.optimizationResult.improvements.length > 0
+                ? entry.session.optimizationResult.improvements
+                : entry.session.improvementTimeline ?? [],
+          }
+        : entry.session.optimizationResult,
+    }
+    const report = buildResearchReport(session)
+    // Preserve packaged analysis when session lacks enough data to rebuild richly.
+    if (!report.bestCandidate && entry.report.bestCandidate) {
+      return entry
+    }
+    return {
+      session,
+      report,
+      savedAt: entry.savedAt,
+    }
+  } catch {
+    return entry
   }
 }
 
@@ -147,7 +273,7 @@ export function ensureResearchSessionArchiveHydrated(): void {
   const canonical = readStorage()
   for (const [id, value] of Object.entries(canonical)) {
     if (!memory.has(id)) {
-      memory.set(id, value)
+      memory.set(id, expandPersistedResearchSession(value))
     }
   }
 

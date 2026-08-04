@@ -10,7 +10,7 @@ export function BacktestLabPage() {
     >
       <BacktestSetupForm
         title="Backtest Lab"
-        description="Configure symbol and timeframe from live Binance markets, then run historical backtests."
+        description="Configure Binance Live or a Local Dataset, then run historical backtests."
         variant="backtest"
       />
     </motion.div>

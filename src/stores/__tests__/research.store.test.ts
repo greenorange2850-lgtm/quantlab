@@ -165,7 +165,7 @@ describe('research store random search workflow', () => {
     expect(state.progress?.status).toBe('COMPLETED')
     expect(result?.persisted).toBe(true)
     expect(result?.session.id).toBe(state.report!.sessionId)
-    expect(runBacktestPipeline).toHaveBeenCalledTimes(3)
+    expect(runBacktestPipeline).toHaveBeenCalledTimes(4)
 
     // Generated session must appear in the shared archive-backed query list.
     const archived = getResearchSession(state.report!.sessionId)
@@ -246,7 +246,7 @@ describe('research store random search workflow', () => {
 
     resolveFirst()
     await first
-    expect(runBacktestPipeline).toHaveBeenCalledTimes(2)
+    expect(runBacktestPipeline).toHaveBeenCalledTimes(3)
   })
 
   it('Apply Parameters updates form state only and does not rerun', async () => {
@@ -507,11 +507,14 @@ describe('research store random search workflow', () => {
     })
     expect(useResearchStore.getState().error).toMatch(/already running/i)
 
+    // Pause while baseline is in flight; after it finishes the engine enters PAUSED
+    // before starting search candidates.
     useResearchStore.getState().pauseRandomSearch()
     pending.shift()?.()
     await vi.waitFor(() => {
       expect(useResearchStore.getState().status).toBe('paused')
     })
+    expect(started).toBe(1)
 
     await useResearchStore.getState().startRandomSearch({
       candles: buildCandles(10),
@@ -531,7 +534,8 @@ describe('research store random search workflow', () => {
     useResearchStore.getState().resumeRandomSearch()
     expect(useResearchStore.getState().status).toBe('running')
 
-    for (let n = started + 1; n <= 3; n++) {
+    // baseline + 3 search candidates => 4 pipeline calls
+    for (let n = started + 1; n <= 4; n++) {
       await vi.waitFor(() => expect(started).toBeGreaterThanOrEqual(n))
       pending.shift()?.()
     }

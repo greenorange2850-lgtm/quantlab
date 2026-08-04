@@ -111,12 +111,17 @@ export function liveStatusToSessionStatus(
     case 'CANCELLED':
     case 'CANCELLING':
       return 'cancelled'
+    case 'PAUSED':
+    case 'PAUSING':
+      return 'running'
     case 'INITIALIZING':
+    case 'BASELINE':
     case 'EXPLORING':
+    case 'REFINING':
+    case 'STABILITY_CHECK':
     case 'IMPROVING':
     case 'PLATEAUING':
-    case 'PAUSING':
-    case 'PAUSED':
+    case 'CONVERGED':
     case 'FINALIZING':
       return 'running'
   }
@@ -128,20 +133,25 @@ export function liveStatusToPhaseStatus(
   if (!status) return null
   switch (status) {
     case 'INITIALIZING':
+    case 'BASELINE':
     case 'EXPLORING':
+    case 'REFINING':
+    case 'STABILITY_CHECK':
       return 'exploring'
     case 'IMPROVING':
       return 'improving'
     case 'PLATEAUING':
-    case 'PAUSING':
-    case 'PAUSED':
       return 'plateauing'
+    case 'CONVERGED':
     case 'FINALIZING':
     case 'COMPLETED':
     case 'FAILED':
     case 'CANCELLED':
     case 'CANCELLING':
       return 'converged'
+    case 'PAUSING':
+    case 'PAUSED':
+      return 'exploring'
   }
 }
 

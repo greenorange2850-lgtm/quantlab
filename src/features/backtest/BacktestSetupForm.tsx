@@ -5,18 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Disclosure } from '@/components/ui/disclosure'
-import { SymbolSelect } from '@/components/market/SymbolSelect'
-import { TimeframeSelect } from '@/components/market/TimeframeSelect'
 import {
   ResearchPeriodSelect,
   defaultResearchPeriodSelection,
 } from '@/components/market/ResearchPeriodSelect'
-import { useBinanceKlines } from '@/api/queries/binance-market'
+import { MarketSourceFields } from '@/components/market/MarketSourceFields'
+import { useResearchCandles } from '@/api/queries/research-candles'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import { DEFAULT_MA_CROSS_PARAMS, type MovingAverageCrossParams } from '@/core/strategy'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { useResearchStore } from '@/stores/research.store'
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
+import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
 import {
   BINANCE_KLINES_PAGE_LIMIT,
   estimateCandleCount,
@@ -41,6 +41,8 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
   const appliedParameters = useResearchStore((state) => state.appliedParameters)
   const clearAppliedParameters = useResearchStore((state) => state.clearAppliedParameters)
 
+  const [sourceKind, setSourceKind] = useState<MarketSourceKind>(DEFAULT_MARKET_SOURCE.kind)
+  const [datasetId, setDatasetId] = useState<string | null>(null)
   const [symbol, setSymbol] = useState(defaultBacktestPipelineParams.symbol)
   const [interval, setInterval] = useState<BacktestTimeframe>(
     defaultBacktestPipelineParams.interval as BacktestTimeframe,
@@ -74,7 +76,11 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
     }
   }, [periodSelection])
 
-  const candlesQuery = useBinanceKlines(symbol, interval, {
+  const candlesQuery = useResearchCandles({
+    sourceKind,
+    datasetId,
+    symbol,
+    interval,
     startTime: resolvedPeriod.period?.startMs ?? null,
     endTime: resolvedPeriod.period?.endMs ?? null,
   })
@@ -158,29 +164,26 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
               <Input value="Moving Average Cross" disabled className="w-full bg-white/[0.03]" />
             </div>
 
-            <div className="min-w-0 space-y-2">
-              <label
-                htmlFor="backtest-symbol"
-                className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-              >
-                Market pair
-              </label>
-              <SymbolSelect id="backtest-symbol" value={symbol} onChange={setSymbol} />
-            </div>
-
-            <div className="min-w-0 space-y-2">
-              <label
-                htmlFor="backtest-timeframe"
-                className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-              >
-                Timeframe
-              </label>
-              <TimeframeSelect
-                id="backtest-timeframe"
-                value={interval}
-                onChange={setInterval}
-              />
-            </div>
+            <MarketSourceFields
+              idPrefix="strategy-lab"
+              disabled={isRunning}
+              value={{ sourceKind, datasetId, symbol, interval }}
+              onChange={(next) => {
+                if (next.sourceKind !== undefined) setSourceKind(next.sourceKind)
+                if (next.datasetId !== undefined) setDatasetId(next.datasetId)
+                if (next.symbol !== undefined) setSymbol(next.symbol)
+                if (next.interval !== undefined) {
+                  setInterval(next.interval as BacktestTimeframe)
+                }
+              }}
+              onDatasetReady={(dataset) => {
+                setPeriodSelection({
+                  preset: 'custom',
+                  customStartMs: dataset.startDate,
+                  customEndMs: dataset.endDate,
+                })
+              }}
+            />
 
             <div className="min-w-0 space-y-2 md:col-span-2">
               <ResearchPeriodSelect
@@ -259,12 +262,14 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
             {candlesLoading && (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading {symbol} {interval} candles for the selected period…
+                Loading {symbol} {interval} via {candlesQuery.providerLabel}…
               </span>
             )}
             {!candlesLoading && candlesReady && resolvedPeriod.period && (
               <p>
                 Ready: {candlesQuery.data?.length ?? 0} candles loaded
+                {' · '}
+                via {candlesQuery.providerLabel}
                 {' · '}
                 coverage{' '}
                 {formatPeriodSpan(
