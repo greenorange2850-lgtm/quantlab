@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import type { SmcReviewRecord, SmcWrongTag } from '../persistence/types'
+import { diagnoseDowChartJoin, resolveDowSwingLabel } from '../dow-label'
 
 const SWING_TAGS: { id: SmcWrongTag; label: string }[] = [
   { id: 'wrong_pivot', label: 'Wrong pivot' },
@@ -136,10 +137,53 @@ export function SmcEventInspector({
   const candle = candles[event.candleIndex]
   const wrongTags = tagsForEvent(event.kind)
   const chain = eventChainFrom(event)
-  const dowMeta = dowTheory?.bySwingId[event.id] ?? null
-  const dowLabel =
-    dowMeta?.label ??
-    (dowTheory ? dowTheory.swingClassification[event.id] : undefined)
+  const classifiedSwing =
+    isSwingKind(event.kind) && 'originalSwingId' in event
+      ? (event as SmcClassifiedSwingEvent)
+      : null
+  const dowLookupSwing = classifiedSwing
+    ? {
+        id: classifiedSwing.id,
+        originalSwingId: classifiedSwing.originalSwingId,
+        classification: classifiedSwing.classification,
+        sourceSwingId: classifiedSwing.originalSwingId,
+        kind: classifiedSwing.kind,
+      }
+    : isSwingKind(event.kind)
+      ? {
+          id: event.id,
+          originalSwingId: event.id,
+          classification: ('classification' in event && event.classification === 'INTERNAL'
+            ? 'INTERNAL'
+            : 'EXTERNAL') as 'INTERNAL' | 'EXTERNAL',
+          sourceSwingId: event.id,
+          kind: event.kind,
+        }
+      : null
+  const dowJoinDiagnostics =
+    dowLookupSwing && dowTheory
+      ? diagnoseDowChartJoin(
+          dowLookupSwing,
+          dowTheory.swingClassification,
+          dowTheory.bySwingId,
+          true,
+          dowLookupSwing.kind,
+        )
+      : null
+  const dowLabel = dowLookupSwing
+    ? resolveDowSwingLabel(
+        dowLookupSwing,
+        dowTheory?.swingClassification,
+        dowTheory?.bySwingId,
+      )
+    : undefined
+  const dowMeta = dowTheory
+    ? (dowJoinDiagnostics?.matchedLookupKey
+        ? dowTheory.bySwingId[dowJoinDiagnostics.matchedLookupKey]
+        : undefined) ??
+      dowTheory.bySwingId[event.id] ??
+      null
+    : null
 
   return (
     <div className="space-y-3 rounded-xl border border-border/70 bg-card p-4">
@@ -247,6 +291,11 @@ export function SmcEventInspector({
               </span>
             </Row>
           ) : null}
+          {dowJoinDiagnostics ? (
+            <Row label="Chart label">
+              <span className="font-mono">{dowJoinDiagnostics.finalLabel}</span>
+            </Row>
+          ) : null}
           {dowMeta?.reason ? (
             <p className="text-[10px] text-muted-foreground">{dowMeta.reason}</p>
           ) : null}
@@ -255,6 +304,27 @@ export function SmcEventInspector({
             <span className="font-mono">{dowTheory.strength}</span>
           </Row>
           <Row label="Structure phase">{dowTheory.structurePhase}</Row>
+          {dowJoinDiagnostics ? (
+            <details className="pt-1">
+              <summary className="cursor-pointer text-[10px] text-muted-foreground">
+                Dow chart join diagnostics
+              </summary>
+              <pre className="mt-1 overflow-x-auto rounded bg-black/30 p-2 font-mono text-[10px] leading-relaxed text-sky-100">
+                {JSON.stringify(
+                  {
+                    chartEventId: dowJoinDiagnostics.chartEventId,
+                    originalSwingId: dowJoinDiagnostics.originalSwingId,
+                    classificationLookupKeysTried:
+                      dowJoinDiagnostics.classificationLookupKeysTried,
+                    matchedClassification: dowJoinDiagnostics.matchedClassification,
+                    finalLabel: dowJoinDiagnostics.finalLabel,
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+            </details>
+          ) : null}
         </div>
       ) : null}
 

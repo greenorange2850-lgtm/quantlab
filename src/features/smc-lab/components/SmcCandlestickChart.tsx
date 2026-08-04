@@ -17,8 +17,7 @@ import type {
 import type { SmcLabPreferences, SmcManualAnnotation } from '../persistence/types'
 import type { SmcRankedEventMeta } from '@/core/smc'
 import {
-  formatSwingChartLabel,
-  resolveDowSwingLabel,
+  projectSwingChartMarker,
   structureSwingShortLabel,
   swingLabelChipWidth,
 } from '../dow-label'
@@ -327,16 +326,22 @@ export function SmcCandlestickChart({
   const showDow = layers.dowTheoryLabels ?? true
   for (const swing of visibleClassified) {
     const isHigh = swing.kind.includes('HIGH')
-    const dowLabel = resolveDowSwingLabel(swing, dowSwingClassification, dowBySwingId)
-    const text = formatSwingChartLabel(swing.kind, dowLabel, showDow)
+    // Deterministic join: exact event id → originalSwingId/sourceSwingId wrappers.
+    // Density/collision below must keep the full combined text (never strip only Dow suffix).
+    const marker = projectSwingChartMarker(
+      swing,
+      dowSwingClassification,
+      dowBySwingId,
+      showDow,
+    )
     labels.push({
-      id: swing.id,
+      id: marker.id,
       localIndex: swing.candleIndex - windowStartIndex,
       preferAbove: isHigh,
-      text,
+      text: marker.text,
       fill: isHigh ? '#e9d5ff' : '#99f6e4',
       bg: isHigh ? '#7e22ce' : '#0f766e',
-      width: swingLabelChipWidth(text),
+      width: marker.width,
       price: swing.price,
     })
   }

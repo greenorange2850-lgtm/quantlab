@@ -88,6 +88,7 @@ import {
 } from './run-detection-job'
 import { SmcGoldenChartCompare, SmcValidationDashboard } from './validation'
 import { buildLabVisibilityPipelineDiagnostics } from './visibility-pipeline'
+import { projectSwingChartMarkers } from './dow-label'
 import type { SmcSavedLabConfig } from './persistence/types'
 
 const CHART_WINDOW = 72
@@ -343,6 +344,22 @@ export function SmcLabPage() {
       displacementEvents: keep(progressiveVisible.displacementEvents),
     }
   }, [progressiveVisible, lifecycleProjection.structureEvents, smartVisibilityPreset])
+
+  /** Rendered swing marker dump for Dow join proof / diagnostics (pre-density). */
+  const chartDowMarkers = useMemo(() => {
+    const showDow = layers.dowTheoryLabels ?? true
+    return projectSwingChartMarkers(
+      chartStructure.classifiedSwings,
+      dowTheoryView.swingClassification,
+      dowTheoryView.bySwingId,
+      showDow,
+    )
+  }, [
+    chartStructure.classifiedSwings,
+    dowTheoryView.swingClassification,
+    dowTheoryView.bySwingId,
+    layers.dowTheoryLabels,
+  ])
 
   const { windowStart, windowCandles, highlightSwingId } = useMemo(() => {
     const maxVisible = Math.min(candles.length - 1, visibleIndex)
@@ -1187,6 +1204,20 @@ export function SmcLabPage() {
           <span className="font-mono text-muted-foreground">
             HH {dowTheoryView.diagnostics.hhCount} · HL {dowTheoryView.diagnostics.hlCount} · LH{' '}
             {dowTheoryView.diagnostics.lhCount} · LL {dowTheoryView.diagnostics.llCount}
+          </span>
+          <span className="w-full font-mono text-[10px] text-muted-foreground">
+            Chart markers:{' '}
+            {chartDowMarkers.length === 0
+              ? '—'
+              : chartDowMarkers
+                  .filter((m) => m.dowLabel != null)
+                  .slice(0, 8)
+                  .map((m) => m.text)
+                  .join(' · ') ||
+                chartDowMarkers
+                  .slice(0, 4)
+                  .map((m) => m.text)
+                  .join(' · ')}
           </span>
         </CardContent>
       </Card>

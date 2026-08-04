@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { detectSmc, DEFAULT_SMC_DETECTOR_CONFIG } from '@/core/smc'
 import {
   formatSwingChartLabel,
+  projectSwingChartMarker,
   resolveDowSwingLabel,
 } from '@/features/smc-lab/dow-label'
 import type { Candle } from '@/data/candles'
@@ -34,7 +35,8 @@ describe('dow chart id wiring', () => {
       const resolved = resolveDowSwingLabel(s, map, byId)
       expect(resolved).toBe(map[s.id])
       const text = formatSwingChartLabel(s.kind, resolved, true)
-      expect(text).toMatch(/ (HH|HL|LH|LL)$/)
+      expect(text).toMatch(/·(HH|HL|LH|LL)$/)
+      expect(projectSwingChartMarker(s, map, byId, true).text).toBe(text)
       expect(text.startsWith('eS') || text.startsWith('iS')).toBe(true)
     }
   })
