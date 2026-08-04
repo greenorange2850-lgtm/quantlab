@@ -34,7 +34,7 @@ export function SessionActions({
           available={isReplayAvailableForBacktest(bestBacktestId)}
         />
       ) : null}
-      <Link to={`/strategy-compare?session=${sessionId}`} className="w-full sm:w-auto">
+      <Link to={`/strategy-compare?strategy=${sessionId}`} className="w-full sm:w-auto">
         <Button variant="outline" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
           <ArrowLeftRight className="mr-2 h-4 w-4" />
           Compare

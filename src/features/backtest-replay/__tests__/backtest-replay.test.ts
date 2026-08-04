@@ -33,6 +33,10 @@ import {
   persistBacktestReplay,
   replayUnavailableMessage,
 } from '../load-replay'
+import {
+  clearReplayAvailabilityIndex,
+  isReplayAvailableForBacktest,
+} from '../replay-availability'
 import { clearBacktestDetailArchive, saveBacktestDetail } from '@/backtests/detail-archive'
 import { buildPersistedDetail } from '@/backtests/restore-dashboard'
 
@@ -247,15 +251,47 @@ describe('execution diagnostics do not change engine results', () => {
 describe('slim archive / persistence', () => {
   beforeEach(() => {
     clearBacktestDetailArchive()
+    clearReplayAvailabilityIndex()
     setBacktestReplayStoreForTests(new MemoryBacktestReplayStore())
   })
 
   it('reports unavailable for slim archives without candles/trades', async () => {
     expect(canOpenReplayFromDetail({ candles: [], trades: [] })).toBe(false)
+    expect(isReplayAvailableForBacktest('missing-id')).toBe(false)
     expect(replayUnavailableMessage('slim_archive')).toContain('Full replay data is unavailable')
 
     const availability = await loadBacktestReplay('missing-id')
     expect(availability.available).toBe(false)
+  })
+
+  it('marks replay available synchronously when persistBacktestReplay runs', async () => {
+    const candles = makeCandles(20)
+    const strategy = new MovingAverageCrossStrategy({
+      fastPeriod: 3,
+      slowPeriod: 8,
+      rsiPeriod: 3,
+    })
+    const result = new BacktestEngine().run(candles, strategy, {
+      initialCapital: 10_000,
+      commissionPercent: 0.1,
+      positionSizePercent: 100,
+      symbol: 'BTCUSDT',
+      riskConfig: defaultRiskConfig,
+    })
+    const report = buildBacktestReport(result)
+
+    expect(isReplayAvailableForBacktest('bt-sync-avail')).toBe(false)
+    await persistBacktestReplay({
+      backtestId: 'bt-sync-avail',
+      candles,
+      trades: report.trades,
+      report,
+      strategyName: 'Moving Average Cross',
+      strategyVersion: 'v1',
+      timeframe: '15M',
+      strategyParams: strategy.params,
+    })
+    expect(isReplayAvailableForBacktest('bt-sync-avail')).toBe(true)
   })
 
   it('persists IndexedDB (memory) replay and reloads candles/trades/events', async () => {

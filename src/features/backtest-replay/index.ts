@@ -6,4 +6,9 @@ export {
   persistBacktestReplay,
   replayUnavailableMessage,
 } from './load-replay'
-export { isReplayAvailableForBacktest } from './replay-availability'
+export {
+  clearReplayAvailabilityIndex,
+  isReplayAvailableForBacktest,
+  isReplayMarkedAvailable,
+  markReplayAvailable,
+} from './replay-availability'

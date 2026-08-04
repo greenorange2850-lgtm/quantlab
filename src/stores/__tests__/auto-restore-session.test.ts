@@ -24,6 +24,9 @@ vi.mock('@/core/dashboard/run-backtest-pipeline', async () => {
 import { runBacktestPipeline } from '@/core/dashboard/run-backtest-pipeline'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { useResearchStore } from '@/stores/research.store'
+import { resolveActiveStrategyBacktestId } from '@/hooks/use-auto-restore-latest-session'
+import { useAppStore } from '@/stores/app.store'
+import { ensureStrategyDraft } from '@/strategies'
 
 function sampleReport(symbol = 'BTCUSDT', netProfit = 25): BacktestReport {
   return {
@@ -108,6 +111,7 @@ function sampleReport(symbol = 'BTCUSDT', netProfit = 25): BacktestReport {
 function resetStores() {
   clearBacktestDetailArchive()
   clearResearchSessionArchive()
+  useAppStore.setState({ activeStrategyId: null })
   useBacktestStore.setState({
     dashboard: createEmptyDashboard(),
     report: null,
@@ -130,6 +134,66 @@ function resetStores() {
 describe('auto restore latest session', () => {
   beforeEach(() => {
     resetStores()
+  })
+
+  it('resolves active Strategy winning backtest over arbitrary latest', () => {
+    expect(resolveActiveStrategyBacktestId(null)).toBeNull()
+
+    const session: ResearchSession = {
+      id: 'strat-active',
+      status: 'completed',
+      config: {
+        iterations: 2,
+        parameterRanges: [],
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 100,
+        initialCapital: 10_000,
+      },
+      candidates: [
+        {
+          id: 'cand-1',
+          parameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+          score: 1.5,
+          passedConstraints: true,
+          report: sampleReport('BTCUSDT', 40),
+          backtestId: 'bt-winner',
+        },
+      ],
+      bestCandidateId: 'cand-1',
+      recommendedCandidateId: 'cand-1',
+      error: null,
+      createdAt: 1,
+      completedAt: 2,
+      progress: {
+        totalCandidates: 2,
+        candidatesTested: 2,
+        candidatesAccepted: 1,
+        candidatesRejected: 1,
+        currentCandidateScore: 1.5,
+        bestScore: 1.5,
+        bestTradeCount: 1,
+        bestCandidateParameters: { fastPeriod: 10, slowPeriod: 30, rsiPeriod: 14 },
+        improvementsCount: 1,
+        candidatesSinceLastImprovement: 0,
+        elapsedMs: 0,
+        wallElapsedMs: 0,
+        pausedMs: 0,
+        estimatedRemainingMs: 0,
+        status: 'COMPLETED',
+      },
+    }
+    const report = buildResearchReport(session)
+    saveResearchSession({ session, report, savedAt: Date.now() })
+    ensureStrategyDraft({
+      id: 'strat-active',
+      market: 'BTCUSDT',
+      timeframe: '1H',
+    })
+    useAppStore.setState({ activeStrategyId: 'strat-active' })
+
+    expect(resolveActiveStrategyBacktestId('strat-active')).toBe('bt-winner')
   })
 
   it('refresh restores latest session into active dashboard without rerunning', () => {

@@ -24,11 +24,18 @@ export function shouldAwaitDashboardSessionHydrate(input: {
 }
 
 /**
- * Optimizer deep-link: prefer `session` (used by Sessions / Analysis / Compare).
- * Keep `analysis` as a legacy fallback for bookmarks.
+ * Optimizer deep-link: prefer `strategy` (Strategy-first), then legacy `session`
+ * / `analysis` bookmarks.
  */
 export function resolveOptimizerSessionId(params: {
   get: (key: string) => string | null
 }): string | null {
-  return params.get('session') ?? params.get('analysis')
+  return params.get('strategy') ?? params.get('session') ?? params.get('analysis')
+}
+
+/** Strategy workspace / Compare deep-link — Strategy id with session alias. */
+export function resolveStrategyIdParam(params: {
+  get: (key: string) => string | null
+}): string | null {
+  return params.get('strategy') ?? params.get('session')
 }

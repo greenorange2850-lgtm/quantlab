@@ -23,9 +23,17 @@ import {
 } from '@/research/session-archive'
 import { syncResearchSessionQueries } from '@/api/queries/research-sessions'
 import { registerStrategyDraftFromSession } from '@/api/queries/strategies'
-import { saveBacktestDetail } from '@/backtests/detail-archive'
+import { backtestDetailKeys } from '@/api/queries/backtest-details'
+import { appQueryClient } from '@/api/query-client'
+import { getBacktestDetail, saveBacktestDetail } from '@/backtests/detail-archive'
 import { buildPersistedDetail } from '@/backtests/restore-dashboard'
 import { createBacktestSummaryFromReport } from '@/core/dashboard'
+import {
+  markReplayAvailable,
+  persistBacktestReplay,
+} from '@/features/backtest-replay'
+import { useAppStore } from '@/stores/app.store'
+import { useBacktestStore } from '@/stores/backtest.store'
 
 export type ResearchUiStatus =
   | 'idle'
@@ -95,11 +103,35 @@ function markProgressCompleted(progress: RandomSearchProgress): RandomSearchProg
   }
 }
 
+/**
+ * Persist candidate backtest details after Random Search.
+ * Full candle + replay payloads are attached only for winning candidates so
+ * Open Replay works immediately without bloating every rejected run.
+ */
 function archiveCandidateDetails(
   session: ResearchSession,
   config: RandomSearchConfig,
-): void {
+  candles: Candle[],
+  report: ResearchReport,
+): string | null {
+  const winnerIds = new Set(
+    [
+      report.recommendedCandidate?.id,
+      report.bestCandidate?.id,
+      report.rawBestCandidate?.id,
+      session.recommendedCandidateId,
+      session.bestCandidateId,
+      session.rawBestCandidateId,
+    ].filter(Boolean) as string[],
+  )
+
+  let winningBacktestId: string | null =
+    report.recommendedCandidate?.backtestId ??
+    report.bestCandidate?.backtestId ??
+    null
+
   for (const candidate of session.candidates) {
+    const isWinner = winnerIds.has(candidate.id)
     const summary = createBacktestSummaryFromReport(
       candidate.report,
       {
@@ -117,11 +149,50 @@ function archiveCandidateDetails(
           strategyName: 'Moving Average Cross',
           strategyVersion: summary.version,
           timeframe: summary.timeframe,
+          // Winners keep candles so sync replay availability / detail fallback work.
+          candles: isWinner && candles.length > 0 ? candles : undefined,
         },
         existingSummary: summary,
       }),
     )
+
+    if (
+      isWinner &&
+      candles.length > 0 &&
+      candidate.report.trades.length > 0
+    ) {
+      markReplayAvailable(candidate.backtestId)
+      void persistBacktestReplay({
+        backtestId: candidate.backtestId,
+        candles,
+        trades: candidate.report.trades,
+        report: candidate.report,
+        strategyName: 'Moving Average Cross',
+        strategyVersion: summary.version,
+        timeframe: summary.timeframe,
+        strategyParams: candidate.parameters,
+      })
+      if (!winningBacktestId) winningBacktestId = candidate.backtestId
+    }
   }
+
+  return winningBacktestId
+}
+
+/** Promote the winning Strategy backtest onto the Dashboard as the active view. */
+function promoteStrategyToDashboard(
+  strategyId: string,
+  winningBacktestId: string | null,
+): void {
+  useAppStore.getState().setActiveStrategyId(strategyId)
+
+  if (!winningBacktestId) return
+  const detail = getBacktestDetail(winningBacktestId)
+  if (!detail) return
+
+  useBacktestStore.getState().applyActiveStrategyDetail(detail)
+  appQueryClient.setQueryData(backtestDetailKeys.latest(), detail)
+  appQueryClient.setQueryData(backtestDetailKeys.detail(detail.id), detail)
 }
 
 function isBusyStatus(status: ResearchUiStatus): boolean {
@@ -361,7 +432,14 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       // Draft Strategy shell — Random Search remains temporary until Save Strategy.
       registerStrategyDraftFromSession(persistedEntry)
       persisted = true
-      archiveCandidateDetails(session, config)
+      const winningBacktestId = archiveCandidateDetails(
+        session,
+        config,
+        candles,
+        report,
+      )
+      // Dashboard + active Strategy track the winning result — not a stale session.
+      promoteStrategyToDashboard(session.id, winningBacktestId)
 
       if (shouldPersistCompleted) {
         set({ progress: session.progress })

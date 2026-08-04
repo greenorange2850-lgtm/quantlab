@@ -66,6 +66,11 @@ interface BacktestState {
   restoreBacktest: (id: string) => Promise<void>
   /** Apply a TanStack-fetched latest detail as the active session (no rerun). */
   applyStartupSession: (detail: PersistedBacktestDetail) => void
+  /**
+   * Promote a Strategy's winning backtest onto the Dashboard as the live view
+   * (used after Random Search completion — not a refresh hydrate).
+   */
+  applyActiveStrategyDetail: (detail: PersistedBacktestDetail) => void
   markSessionHydrateIdle: () => void
   markSessionHydrateFailed: (message: string) => void
   markSessionHydrateEmpty: () => void
@@ -175,6 +180,33 @@ export const useBacktestStore = create<BacktestState>()(
       isRestoring: false,
       restoreError: null,
       autoRestored: true,
+      isHydratingSession: false,
+      sessionHydrateError: null,
+      hasAttemptedSessionHydrate: true,
+    })
+  },
+
+  applyActiveStrategyDetail: (detail) => {
+    const recentBacktests = recentSummariesFromArchive(detail.id)
+    const dashboard = restoreDashboardFromDetail(detail, recentBacktests)
+    const lastParams = lastParamsFromDetail(detail)
+    const liveSession: LiveSessionSnapshot = {
+      dashboard,
+      report: detail.report,
+      lastParams,
+    }
+
+    set({
+      dashboard,
+      report: detail.report,
+      lastParams,
+      liveSession,
+      viewMode: 'live',
+      restoredId: null,
+      isRestoring: false,
+      restoreError: null,
+      // Fresh Strategy promotion — not a refresh restore badge.
+      autoRestored: false,
       isHydratingSession: false,
       sessionHydrateError: null,
       hasAttemptedSessionHydrate: true,

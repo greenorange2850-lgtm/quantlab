@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+#### Strategy workflow audit
+- Random Search now persists replay payloads (candles + trades) for winning candidates and marks Open Replay available immediately
+- Dashboard restores the **active Strategy** winning backtest instead of an arbitrary latest Research Session / detail
+- Save Strategy updates list + detail query caches immediately (Draft → Saved) without a refresh
+- Compare / Optimizer deep links prefer `?strategy=` (legacy `?session=` still works)
+- Auto-restore no longer hydrates an unrelated latest research session into the research store
+
 ### Changed
 
 #### Strategy-first UX
@@ -17,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Completed Random Search navigates to the Strategy draft (`/strategies/:id?tab=optimization`)
 - Legacy routes `/research-sessions` and `/research-analysis` redirect to Strategy Library / workspace
 - Strategy metadata overlay (`quantlab.strategy-metadata.v1`) for name / saved state; research archive key unchanged
+- Dashboard restore badge copy: “Strategy restored”
 
 ## [1.0.0] - 2026-07-29
 

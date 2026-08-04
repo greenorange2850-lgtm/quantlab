@@ -8,9 +8,17 @@ import {
 import { clearBacktestDetailArchive, getBacktestDetail } from '@/backtests/detail-archive'
 import { DEFAULT_MA_CROSS_RANGES } from '@/core/research'
 import type { BacktestReport } from '@/core/analytics/types'
+import { TradeDirection } from '@/core/backtest/Trade'
 import { defaultRiskConfig } from '@/core/risk/config'
 import { appQueryClient } from '@/api/query-client'
 import { researchSessionKeys } from '@/api/queries/research-sessions'
+import {
+  clearReplayAvailabilityIndex,
+  isReplayAvailableForBacktest,
+} from '@/features/backtest-replay'
+import { clearStrategyMetadataArchive } from '@/strategies'
+import { useAppStore } from '@/stores/app.store'
+import { createEmptyDashboard } from '@/core/dashboard'
 
 vi.mock('@/core/dashboard/run-backtest-pipeline', () => ({
   runBacktestPipeline: vi.fn(),
@@ -29,6 +37,22 @@ function buildCandles(count: number): Candle[] {
     close: 100.5 + i,
     volume: 10,
   }))
+}
+
+function stubTrade(symbol = 'BTCUSDT') {
+  return {
+    id: 't-1',
+    symbol,
+    entryTime: Date.parse('2024-01-01T01:00:00.000Z'),
+    exitTime: Date.parse('2024-01-01T05:00:00.000Z'),
+    entryPrice: 100,
+    exitPrice: 110,
+    quantity: 1,
+    direction: TradeDirection.LONG,
+    pnl: 10,
+    commission: 0.1,
+    duration: 14_400_000,
+  }
 }
 
 function stubReport(pf: number): BacktestReport {
@@ -81,7 +105,7 @@ function stubReport(pf: number): BacktestReport {
       averageTrade: 10,
       finalBalance: 10_120,
     },
-    trades: [],
+    trades: [stubTrade()],
     config: {
       initialCapital: 10_000,
       commissionPercent: 0.1,
@@ -96,10 +120,21 @@ describe('research store random search workflow', () => {
   beforeEach(() => {
     clearResearchSessionArchive()
     clearBacktestDetailArchive()
+    clearStrategyMetadataArchive()
+    clearReplayAvailabilityIndex()
     appQueryClient.clear()
     useResearchStore.getState().reset()
     useResearchStore.setState({ appliedParameters: null })
-    useBacktestStore.setState({ isRunning: false, error: null })
+    useAppStore.setState({ activeStrategyId: null })
+    useBacktestStore.setState({
+      isRunning: false,
+      error: null,
+      dashboard: createEmptyDashboard(),
+      report: null,
+      autoRestored: false,
+      hasAttemptedSessionHydrate: false,
+      liveSession: null,
+    })
     vi.mocked(runBacktestPipeline).mockReset()
     vi.mocked(runBacktestPipeline).mockImplementation(async (params) => {
       const fast = params?.strategyParams?.fastPeriod ?? 20
@@ -293,6 +328,37 @@ describe('research store random search workflow', () => {
     const detail = getBacktestDetail(best.backtestId)
     expect(detail).not.toBeNull()
     expect(detail?.report.summary.profitFactor).toBe(best.report.summary.profitFactor)
+    // Winning candidate keeps candles so Open Replay can open immediately.
+    expect(detail?.context.candles?.length).toBe(35)
+    expect(isReplayAvailableForBacktest(best.backtestId)).toBe(true)
+  })
+
+  it('promotes the winning Strategy onto Dashboard and sets activeStrategyId', async () => {
+    const result = await useResearchStore.getState().startRandomSearch({
+      candles: buildCandles(30),
+      config: {
+        iterations: 2,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'ETHUSDT',
+        interval: '15m',
+        limit: 30,
+        initialCapital: 10_000,
+        seed: 11,
+      },
+    })
+
+    expect(result?.persisted).toBe(true)
+    expect(useAppStore.getState().activeStrategyId).toBe(result!.session.id)
+
+    const best = result!.report.bestCandidate ?? result!.report.recommendedCandidate
+    expect(best).not.toBeNull()
+    const dashboard = useBacktestStore.getState()
+    expect(dashboard.dashboard.hasBacktest).toBe(true)
+    expect(dashboard.report?.summary.profitFactor).toBe(best!.report.summary.profitFactor)
+    expect(dashboard.autoRestored).toBe(false)
+    expect(dashboard.viewMode).toBe('live')
+    expect(isReplayAvailableForBacktest(best!.backtestId)).toBe(true)
   })
 
   it('marks empty when no candidates pass constraints', async () => {

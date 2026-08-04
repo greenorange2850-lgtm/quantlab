@@ -28,9 +28,9 @@ const placeholders = [
 /** Legacy Research Analysis → Strategy workspace (AI Analysis tab). */
 function LegacyResearchAnalysisRedirect() {
   const [params] = useSearchParams()
-  const sessionId = params.get('session')
-  if (sessionId) {
-    return <Navigate to={`/strategies/${sessionId}?tab=ai`} replace />
+  const strategyId = params.get('strategy') ?? params.get('session')
+  if (strategyId) {
+    return <Navigate to={`/strategies/${strategyId}?tab=ai`} replace />
   }
   return <Navigate to="/strategies" replace />
 }

@@ -12,7 +12,7 @@ import {
 } from '@/api/queries/research-sessions'
 import { useBacktestDetail, useLatestBacktestDetail } from '@/api/queries/backtest-details'
 import { buildResearchReport } from '@/core/research'
-import { shouldAwaitResearchArchive } from '@/research/ui-gates'
+import { resolveStrategyIdParam, shouldAwaitResearchArchive } from '@/research/ui-gates'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { useResearchStore } from '@/stores/research.store'
 import {
@@ -52,7 +52,8 @@ function CompareSkeleton() {
  */
 export function StrategyComparePage() {
   const [searchParams] = useSearchParams()
-  const sessionId = searchParams.get('session')
+  // Strategy-first URL; `session` kept as a legacy alias.
+  const strategyId = resolveStrategyIdParam(searchParams)
   const candidateId = searchParams.get('candidate')
   const baselineId = searchParams.get('baseline')
   const archiveReady = useResearchSessionArchiveReady()
@@ -62,9 +63,9 @@ export function StrategyComparePage() {
   const restoredId = useBacktestStore((state) => state.restoredId)
   const liveSession = useBacktestStore((state) => state.liveSession)
 
-  const byIdQuery = useResearchSession(sessionId)
-  const latestResearchQuery = useLatestResearchSession(!sessionId)
-  const researchQuery = sessionId ? byIdQuery : latestResearchQuery
+  const byIdQuery = useResearchSession(strategyId)
+  const latestResearchQuery = useLatestResearchSession(!strategyId)
+  const researchQuery = strategyId ? byIdQuery : latestResearchQuery
 
   const baselineDetailQuery = useBacktestDetail(baselineId)
   const latestBacktestQuery = useLatestBacktestDetail(!baselineId)
@@ -212,7 +213,7 @@ export function StrategyComparePage() {
   return (
     <div className="mx-auto w-full max-w-6xl min-w-0 space-y-5">
       <Header
-        sessionId={researchReport.sessionId}
+        strategyId={researchReport.sessionId}
         candidateLabel={`${params.fastPeriod}/${params.slowPeriod}/${params.rsiPeriod}`}
       />
 
@@ -235,11 +236,11 @@ export function StrategyComparePage() {
 }
 
 function Header({
-  sessionId,
+  strategyId,
   candidateLabel,
   showOptimizerAction = true,
 }: {
-  sessionId?: string
+  strategyId?: string
   candidateLabel?: string
   showOptimizerAction?: boolean
 }) {
@@ -254,10 +255,10 @@ function Header({
           <p className="text-pretty text-xs text-muted-foreground">
             Compare the baseline backtest with the selected optimized candidate.
           </p>
-          {sessionId ? (
+          {strategyId ? (
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge variant="outline" className="font-mono text-[10px]">
-                {sessionId}
+                {strategyId}
               </Badge>
               {candidateLabel ? (
                 <Badge variant="accent" className="font-mono text-[10px]">
@@ -270,12 +271,12 @@ function Header({
       </div>
       {showOptimizerAction ? (
         <Link
-          to={sessionId ? `/optimizer?session=${sessionId}` : '/optimizer'}
+          to={strategyId ? `/optimizer?strategy=${strategyId}` : '/optimizer'}
           className="w-full sm:w-auto"
         >
           <Button variant="secondary" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
             <SlidersHorizontal className="mr-2 h-4 w-4" />
-            Optimizer
+            New Research
           </Button>
         </Link>
       ) : null}
