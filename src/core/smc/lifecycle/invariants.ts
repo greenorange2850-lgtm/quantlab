@@ -48,8 +48,8 @@ export function auditLifecycleProjectionInvariants(
       details.push(`Invalidated OB ${zone.zoneId} extends past invalidation`)
     }
     if (
-      zone.zoneKind === 'LIQUIDITY_LEVEL' &&
-      zone.state === 'SWEPT' &&
+      (zone.zoneKind === 'LIQUIDITY_LEVEL' || zone.zoneKind === 'EQUAL_LEVEL') &&
+      (zone.state === 'SWEPT' || zone.state === 'SWEEPED') &&
       zone.mitigationIndex != null &&
       zone.endIndex > zone.mitigationIndex
     ) {
@@ -57,7 +57,7 @@ export function auditLifecycleProjectionInvariants(
       details.push(`Swept liquidity ${zone.zoneId} extends past sweep`)
     }
     if (
-      zone.zoneKind === 'LIQUIDITY_LEVEL' &&
+      (zone.zoneKind === 'LIQUIDITY_LEVEL' || zone.zoneKind === 'EQUAL_LEVEL') &&
       zone.state === 'BROKEN' &&
       zone.activeAtVisibleIndex
     ) {

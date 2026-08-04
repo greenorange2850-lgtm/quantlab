@@ -14,13 +14,19 @@ function isFinishedZone(state: SmcZoneProjection['state']): boolean {
     state === 'INVALIDATED' ||
     state === 'EXPIRED' ||
     state === 'SWEPT' ||
+    state === 'SWEEPED' ||
     state === 'BROKEN' ||
-    state === 'SUPERSEDED'
+    state === 'SUPERSEDED' ||
+    state === 'CONSUMED'
   )
 }
 
 function isTouchedLike(state: SmcZoneProjection['state']): boolean {
-  return state === 'TOUCHED' || state === 'PARTIALLY_MITIGATED'
+  return (
+    state === 'TOUCHED' ||
+    state === 'PARTIALLY_MITIGATED' ||
+    state === 'PARTIAL'
+  )
 }
 
 /**
@@ -51,26 +57,48 @@ export function filterZonesBySmartVisibility(
         visible = true
         reason = 'Debug shows all lifecycle zones'
       } else if (preset === 'history') {
-        visible = true
-        reason = isFinishedZone(zone.state)
-          ? 'History: finished zone visible but clipped'
-          : 'History: active/touched zone'
+        // History: everything except expired
+        visible = zone.state !== 'EXPIRED'
+        reason = !visible
+          ? 'History: expired hidden'
+          : isFinishedZone(zone.state)
+            ? 'History: finished zone visible but clipped'
+            : 'History: active/touched zone'
       } else if (preset === 'active-only') {
-        visible = zone.activeAtVisibleIndex && zone.state === 'ACTIVE'
+        visible =
+          zone.activeAtVisibleIndex &&
+          (zone.state === 'ACTIVE' || zone.state === 'NEW')
         reason = visible
           ? 'Active Only: untouched active zone'
           : 'Hidden by Active Only (not untouched active)'
       } else {
-        // balanced
-        if (zone.activeAtVisibleIndex && zone.state === 'ACTIVE') {
+        // balanced — ACTIVE / TOUCHED / recent PARTIAL
+        const recentPartial =
+          (zone.state === 'PARTIAL' || zone.state === 'PARTIALLY_MITIGATED') &&
+          zone.lifecycle != null &&
+          zone.lifecycle.ageCandles <= 48
+        if (
+          zone.activeAtVisibleIndex &&
+          (zone.state === 'ACTIVE' || zone.state === 'NEW')
+        ) {
           visible = settings.showActive
           reason = visible ? 'Balanced: active zone' : 'Hidden by lifecycle setting (active off)'
+        } else if (zone.state === 'TOUCHED' || recentPartial) {
+          visible = settings.showTouched
+          reason = visible
+            ? 'Balanced: touched/partial zone'
+            : 'Hidden by lifecycle setting (touched off)'
         } else if (isTouchedLike(zone.state)) {
           visible = settings.showTouched
           reason = visible
             ? 'Balanced: touched/partial zone'
             : 'Hidden by lifecycle setting (touched off)'
-        } else if (zone.state === 'FILLED' || zone.state === 'MITIGATED' || zone.state === 'SWEPT') {
+        } else if (
+          zone.state === 'FILLED' ||
+          zone.state === 'MITIGATED' ||
+          zone.state === 'SWEPT' ||
+          zone.state === 'SWEEPED'
+        ) {
           visible = settings.showMitigatedFilled
           reason = visible
             ? 'Balanced: finished zone shown by setting'
@@ -84,9 +112,9 @@ export function filterZonesBySmartVisibility(
           reason = visible
             ? 'Balanced: invalidated zone shown by setting'
             : 'Hidden by Balanced (invalidated)'
-        } else if (zone.state === 'SUPERSEDED') {
+        } else if (zone.state === 'SUPERSEDED' || zone.state === 'CONSUMED') {
           visible = false
-          reason = 'Hidden superseded liquidity'
+          reason = 'Hidden superseded/consumed liquidity'
         }
       }
 

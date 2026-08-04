@@ -1,3 +1,5 @@
+import type { ZoneLifecycleMeta, ZoneLifecycleReport } from './zone-lifecycle-types'
+
 /** Chart-facing zone lifecycle states (projection only — not detector enums). */
 export type SmcChartZoneState =
   | 'ACTIVE'
@@ -10,6 +12,10 @@ export type SmcChartZoneState =
   | 'SWEPT'
   | 'BROKEN'
   | 'SUPERSEDED'
+  | 'NEW'
+  | 'PARTIAL'
+  | 'SWEEPED'
+  | 'CONSUMED'
 
 export type SmcZoneKind = 'FVG' | 'ORDER_BLOCK' | 'EQUAL_LEVEL' | 'LIQUIDITY_LEVEL'
 
@@ -53,6 +59,8 @@ export interface SmcZoneProjection {
   /** Why the zone remains visible / is hidden under the active preset. */
   visibilityReason: string
   extendsToVisibleEdge: boolean
+  /** Phase 6 managed lifecycle metadata (optional for backward compat). */
+  lifecycle?: ZoneLifecycleMeta
 }
 
 export interface SmcStructureEventProjection {
@@ -139,6 +147,10 @@ export interface SmcLifecycleProjectionResult {
   zones: SmcZoneProjection[]
   /** Zones after smart-visibility filter (what the chart should draw). */
   visibleZones: SmcZoneProjection[]
+  /** Phase 6 managed zones (source of truth for lifecycle metadata). */
+  managedZones: ZoneLifecycleMeta[]
+  /** Phase 6 aggregate lifecycle report. */
+  lifecycleReport: ZoneLifecycleReport
   structureEvents: SmcStructureEventProjection[]
   setup: SmcSetupVisualContext | null
   diagnostics: SmcLifecycleDiagnostics

@@ -218,6 +218,21 @@ export function SmcDiagnosticsWorkspace() {
       <Disclosure title="Zone lifecycle diagnostics">
         <div className="space-y-1 font-mono text-[11px]">
           <p>Status: {lifecycleProjection.diagnostics.status}</p>
+          <p className="mt-1 font-medium text-foreground/80">Lifecycle report</p>
+          <p>
+            Zones Created {lifecycleProjection.lifecycleReport.zonesCreated} · Active{' '}
+            {lifecycleProjection.lifecycleReport.active} · Touched{' '}
+            {lifecycleProjection.lifecycleReport.touched} · Partial{' '}
+            {lifecycleProjection.lifecycleReport.partial} · Mitigated{' '}
+            {lifecycleProjection.lifecycleReport.mitigated} · Invalidated{' '}
+            {lifecycleProjection.lifecycleReport.invalidated} · Expired{' '}
+            {lifecycleProjection.lifecycleReport.expired}
+          </p>
+          <p>
+            Sweeped {lifecycleProjection.lifecycleReport.sweeped} · Consumed{' '}
+            {lifecycleProjection.lifecycleReport.consumed} · Average Lifetime{' '}
+            {lifecycleProjection.lifecycleReport.averageLifetimeCandles} candles
+          </p>
           <p>
             FVG active {lifecycleProjection.diagnostics.fvgActiveUntouched} · touched{' '}
             {lifecycleProjection.diagnostics.fvgTouched} · partial{' '}

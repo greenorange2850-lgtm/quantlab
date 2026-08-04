@@ -14,6 +14,7 @@ import type {
   SmcSwingEvent,
   SmcZoneProjection,
 } from '@/core/smc'
+import { renderStyleForLifecycleState } from '@/core/smc/lifecycle/zone-lifecycle-render'
 import type { SmcLabPreferences, SmcManualAnnotation } from '../persistence/types'
 import type { SmcRankedEventMeta } from '@/core/smc'
 import {
@@ -102,34 +103,53 @@ function stackOffsets(
   return offsets
 }
 
-function zoneOpacity(state: string, setupHighlighted: boolean): number {
+function zoneOpacity(state: string, setupHighlighted: boolean, zone?: SmcZoneProjection): number {
   if (setupHighlighted) return 0.32
+  if (zone?.lifecycle) {
+    const style = renderStyleForLifecycleState(zone.lifecycle.currentState)
+    if (style.hiddenByDefault) return 0
+    return style.opacity
+  }
   switch (state) {
+    case 'NEW':
     case 'ACTIVE':
-      return 0.2
+      return 0.28
     case 'TOUCHED':
+      return 0.2
+    case 'PARTIAL':
     case 'PARTIALLY_MITIGATED':
-      return 0.14
+      return 0.18
     case 'FILLED':
     case 'MITIGATED':
     case 'SWEPT':
+    case 'SWEEPED':
+    case 'CONSUMED':
+    case 'SUPERSEDED':
+      return 0.1
     case 'INVALIDATED':
     case 'BROKEN':
+      return 0.16
     case 'EXPIRED':
-      return 0.07
+      return 0
     default:
       return 0.1
   }
 }
 
-function zoneStrokeDash(state: string): string | undefined {
-  if (state === 'TOUCHED' || state === 'PARTIALLY_MITIGATED') return '4 2'
+function zoneStrokeDash(state: string, zone?: SmcZoneProjection): string | undefined {
+  if (zone?.lifecycle) {
+    return renderStyleForLifecycleState(zone.lifecycle.currentState).strokeDasharray
+  }
+  if (state === 'PARTIAL' || state === 'PARTIALLY_MITIGATED') return '4 3'
+  if (state === 'TOUCHED') return undefined
   if (
     state === 'FILLED' ||
     state === 'MITIGATED' ||
     state === 'INVALIDATED' ||
     state === 'SWEPT' ||
-    state === 'BROKEN'
+    state === 'SWEEPED' ||
+    state === 'BROKEN' ||
+    state === 'CONSUMED'
   ) {
     return '3 2'
   }
@@ -142,8 +162,11 @@ function layerAllowsZone(zone: SmcZoneProjection, layers: SmcChartLayerToggles):
     zone.state === 'MITIGATED' ||
     zone.state === 'INVALIDATED' ||
     zone.state === 'SWEPT' ||
+    zone.state === 'SWEEPED' ||
     zone.state === 'BROKEN' ||
-    zone.state === 'EXPIRED'
+    zone.state === 'EXPIRED' ||
+    zone.state === 'CONSUMED' ||
+    zone.state === 'SUPERSEDED'
   if (zone.zoneKind === 'FVG') {
     if (finished) return layers.mitigatedFvg
     return layers.activeFvg
@@ -512,6 +535,10 @@ export function SmcCandlestickChart({
           {/* Lifecycle zone projections (preferred) */}
           {(zoneProjections ?? []).map((zone) => {
             if (!layerAllowsZone(zone, layers) && !zone.setupRefs.length) return null
+            const lifeStyle = zone.lifecycle
+              ? renderStyleForLifecycleState(zone.lifecycle.currentState)
+              : null
+            if (lifeStyle?.hiddenByDefault && lifeStyle.opacity <= 0) return null
             const setupHighlighted =
               Boolean(setupContext?.zoneIds.includes(zone.zoneId)) ||
               selectedZoneId === zone.zoneId
@@ -528,13 +555,39 @@ export function SmcCandlestickChart({
                 ? bull
                   ? '#3b82f6'
                   : '#a855f7'
-                : zone.zoneKind === 'LIQUIDITY_LEVEL'
+                : zone.zoneKind === 'LIQUIDITY_LEVEL' || zone.zoneKind === 'EQUAL_LEVEL'
                   ? '#f59e0b'
                   : bull
                     ? '#22c55e'
                     : '#ef4444'
-            const stroke = setupHighlighted ? '#fde68a' : fill
+            const stroke =
+              lifeStyle?.showInvalidationCross
+                ? '#ef4444'
+                : setupHighlighted
+                  ? '#fde68a'
+                  : fill
             const midY = (Math.min(yTop, yBot) + Math.max(yTop, yBot)) / 2
+            const rx = Math.min(x1, x2)
+            const ry = Math.min(yTop, yBot)
+            const rw = Math.max(2, Math.abs(x2 - x1))
+            const rh = Math.max(2, Math.abs(yBot - yTop))
+            const labelSuffix =
+              lifeStyle?.labelSuffix ??
+              (zone.state === 'ACTIVE'
+                ? ''
+                : zone.state === 'TOUCHED'
+                  ? '·T'
+                  : zone.state === 'PARTIALLY_MITIGATED' || zone.state === 'PARTIAL'
+                    ? '·P'
+                    : zone.state === 'FILLED' || zone.state === 'MITIGATED'
+                      ? '·M'
+                      : zone.state === 'INVALIDATED'
+                        ? '·X'
+                        : zone.state === 'SWEPT' || zone.state === 'SWEEPED'
+                          ? '·S'
+                          : zone.state === 'CONSUMED' || zone.state === 'SUPERSEDED'
+                            ? '·C'
+                            : '')
             return (
               <g
                 key={`zone-${zone.zoneId}`}
@@ -542,37 +595,47 @@ export function SmcCandlestickChart({
                 onClick={() => onSelectZone?.(zone.zoneId)}
               >
                 <rect
-                  x={Math.min(x1, x2)}
-                  y={Math.min(yTop, yBot)}
-                  width={Math.max(2, Math.abs(x2 - x1))}
-                  height={Math.max(2, Math.abs(yBot - yTop))}
+                  x={rx}
+                  y={ry}
+                  width={rw}
+                  height={rh}
                   fill={fill}
-                  opacity={zoneOpacity(zone.state, setupHighlighted)}
+                  opacity={zoneOpacity(zone.state, setupHighlighted, zone)}
                   stroke={stroke}
                   strokeWidth={setupHighlighted ? 1.5 : 0.75}
-                  strokeDasharray={zoneStrokeDash(zone.state)}
+                  strokeDasharray={zoneStrokeDash(zone.state, zone)}
                 />
+                {lifeStyle?.showInvalidationCross ? (
+                  <>
+                    <line
+                      x1={rx}
+                      y1={ry}
+                      x2={rx + rw}
+                      y2={ry + rh}
+                      stroke="#ef4444"
+                      strokeWidth={1.25}
+                      opacity={0.85}
+                    />
+                    <line
+                      x1={rx + rw}
+                      y1={ry}
+                      x2={rx}
+                      y2={ry + rh}
+                      stroke="#ef4444"
+                      strokeWidth={1.25}
+                      opacity={0.85}
+                    />
+                  </>
+                ) : null}
                 <text
-                  x={Math.min(x1, x2) + 2}
+                  x={rx + 2}
                   y={midY}
                   className="fill-white"
                   fontSize={8}
                   opacity={0.85}
                 >
                   {zone.shortLabel}
-                  {zone.state === 'ACTIVE'
-                    ? ''
-                    : zone.state === 'TOUCHED'
-                      ? '·T'
-                      : zone.state === 'PARTIALLY_MITIGATED'
-                        ? '·P'
-                        : zone.state === 'FILLED' || zone.state === 'MITIGATED'
-                          ? '·M'
-                          : zone.state === 'INVALIDATED'
-                            ? '·X'
-                            : zone.state === 'SWEPT'
-                              ? '·S'
-                              : ''}
+                  {labelSuffix}
                 </text>
               </g>
             )
