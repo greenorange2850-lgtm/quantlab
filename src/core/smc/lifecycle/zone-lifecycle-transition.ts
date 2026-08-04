@@ -1,5 +1,4 @@
 import type {
-  ZoneLifecycleFamily,
   ZoneLifecycleState,
   ZoneLifecycleTransitionInput,
   ZoneLifecycleTransitionResult,
