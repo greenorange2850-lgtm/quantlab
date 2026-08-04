@@ -339,6 +339,15 @@ export function BacktestReplayPage() {
     )
   }
 
+  if (loadState.status !== 'ready') {
+    return (
+      <EmptyReplayMessage
+        title="Replay unavailable"
+        message="Replay data could not be loaded for this backtest."
+      />
+    )
+  }
+
   const replaySource = loadState.availability.source
 
   return (
