@@ -60,6 +60,7 @@ const LAYER_LABELS: Array<[keyof SmcChartLayerToggles, string]> = [
   ['validationMarks', 'Validation marks'],
   ['connectorLines', 'Connector lines'],
   ['diagnosticsLabels', 'Diagnostics labels'],
+  ['dowTheoryLabels', 'Show Dow Theory labels'],
 ]
 
 const DENSITY_OPTIONS: Array<{ id: SmcDensityPreset; label: string }> = [

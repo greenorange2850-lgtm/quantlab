@@ -136,6 +136,8 @@ export interface SmcLabPreferences {
     validationMarks: boolean
     connectorLines: boolean
     diagnosticsLabels: boolean
+    /** Show HH/HL/LH/LL beside eSH/eSL/iSH/iSL on the chart. */
+    dowTheoryLabels: boolean
   }
   densityPreset: SmcDensityPreset
   /** Ranking Focus / Balanced / Debug. */

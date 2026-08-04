@@ -1,9 +1,11 @@
 import type { Candle } from '@/data/candles'
 import type {
+  DowSwingLabel,
   SmcBosEvent,
   SmcChochEvent,
   SmcClassifiedSwingEvent,
   SmcDisplacementEvent,
+  SmcDowSwingMeta,
   SmcEqualLevelEvent,
   SmcFvgEvent,
   SmcLiquiditySweepEvent,
@@ -14,6 +16,11 @@ import type {
 } from '@/core/smc'
 import type { SmcLabPreferences, SmcManualAnnotation } from '../persistence/types'
 import type { SmcRankedEventMeta } from '@/core/smc'
+import {
+  projectSwingChartMarker,
+  structureSwingShortLabel,
+  swingLabelChipWidth,
+} from '../dow-label'
 
 /** Chart layer toggles — mirrors SmcLabPreferences['layerToggles']. */
 export type SmcChartLayerToggles = SmcLabPreferences['layerToggles']
@@ -43,6 +50,10 @@ interface SmcCandlestickChartProps {
   densityWarning?: string | null
   /** Importance metadata for overlap collapse (higher score kept). */
   importanceById?: Record<string, SmcRankedEventMeta>
+  /** Dow Theory swingId → HH/HL/LH/LL (null = seed). From result.dowTheory.swingClassification. */
+  dowSwingClassification?: Record<string, DowSwingLabel | null>
+  /** Optional bySwingId map for robust label lookup (result.dowTheory.bySwingId). */
+  dowBySwingId?: Record<string, SmcDowSwingMeta>
 }
 
 const WIDTH = 720
@@ -89,25 +100,6 @@ function stackOffsets(
     offsets.set(item.id, lane * 12)
   }
   return offsets
-}
-
-function swingLabel(kind: string): string {
-  switch (kind) {
-    case 'EXTERNAL_SWING_HIGH':
-      return 'eSH'
-    case 'EXTERNAL_SWING_LOW':
-      return 'eSL'
-    case 'INTERNAL_SWING_HIGH':
-      return 'iSH'
-    case 'INTERNAL_SWING_LOW':
-      return 'iSL'
-    case 'SWING_HIGH':
-      return 'SH'
-    case 'SWING_LOW':
-      return 'SL'
-    default:
-      return kind.slice(0, 3)
-  }
 }
 
 function zoneOpacity(state: string, setupHighlighted: boolean): number {
@@ -258,6 +250,8 @@ export function SmcCandlestickChart({
   windowStartIndex,
   densityWarning = null,
   importanceById,
+  dowSwingClassification = {},
+  dowBySwingId = {},
 }: SmcCandlestickChartProps) {
   if (candles.length === 0) {
     return (
@@ -328,29 +322,40 @@ export function SmcCandlestickChart({
 
   const labels: ChartLabel[] = []
 
+  // Default ON when the pref key is absent (older saved layer objects).
+  const showDow = layers.dowTheoryLabels ?? true
   for (const swing of visibleClassified) {
     const isHigh = swing.kind.includes('HIGH')
+    // Deterministic join: exact event id → originalSwingId/sourceSwingId wrappers.
+    // Density/collision below must keep the full combined text (never strip only Dow suffix).
+    const marker = projectSwingChartMarker(
+      swing,
+      dowSwingClassification,
+      dowBySwingId,
+      showDow,
+    )
     labels.push({
-      id: swing.id,
+      id: marker.id,
       localIndex: swing.candleIndex - windowStartIndex,
       preferAbove: isHigh,
-      text: swingLabel(swing.kind),
+      text: marker.text,
       fill: isHigh ? '#e9d5ff' : '#99f6e4',
       bg: isHigh ? '#7e22ce' : '#0f766e',
-      width: 28,
+      width: marker.width,
       price: swing.price,
     })
   }
   for (const swing of visibleBaseSwings) {
     const isHigh = swing.kind === 'SWING_HIGH'
+    const text = structureSwingShortLabel(swing.kind)
     labels.push({
       id: swing.id,
       localIndex: swing.candleIndex - windowStartIndex,
       preferAbove: isHigh,
-      text: swingLabel(swing.kind),
+      text,
       fill: '#fff',
       bg: isHigh ? '#7e22ce' : '#0f766e',
-      width: 24,
+      width: swingLabelChipWidth(text),
       price: swing.price,
     })
   }

@@ -15,6 +15,7 @@ import {
   cloneSmcDetectorConfig,
   countProfileEvents,
   createGoldenDatasetId,
+  analyzeDowTheory,
   createMockSetupVisualContext,
   DEFAULT_SMC_DETECTOR_CONFIG,
   describeCandleEventDifference,
@@ -87,6 +88,7 @@ import {
 } from './run-detection-job'
 import { SmcGoldenChartCompare, SmcValidationDashboard } from './validation'
 import { buildLabVisibilityPipelineDiagnostics } from './visibility-pipeline'
+import { projectSwingChartMarkers } from './dow-label'
 import type { SmcSavedLabConfig } from './persistence/types'
 
 const CHART_WINDOW = 72
@@ -170,7 +172,11 @@ export function SmcLabPage() {
   )
 
   const [config, setConfig] = useState<SmcDetectorConfig>(initialPrefs.detectorConfig)
-  const [layers, setLayers] = useState<SmcChartLayerToggles>(initialPrefs.layerToggles)
+  const [layers, setLayers] = useState<SmcChartLayerToggles>(() => ({
+    ...initialPrefs.layerToggles,
+    // Ensure Dow labels default ON even if an older prefs blob omitted the key.
+    dowTheoryLabels: initialPrefs.layerToggles.dowTheoryLabels ?? true,
+  }))
   const [densityPreset, setDensityPreset] = useState<SmcDensityPreset>(
     initialPrefs.densityPreset,
   )
@@ -279,6 +285,31 @@ export function SmcLabPage() {
     [progressive, visibleIndex, smartVisibilityPreset, zoneLifecycle, setupContext],
   )
 
+  /**
+   * Progressive Dow Theory view — derived from knowable classified swings only.
+   * Prefer live projection at the cursor; fall back to result.dowTheory at the
+   * final candle so the chart always consumes the pipeline map.
+   */
+  const dowTheoryView = useMemo(() => {
+    const live = analyzeDowTheory(progressive.classifiedSwings, visibleIndex)
+    const fromResult = detection.dowTheory
+    if (
+      fromResult &&
+      detection.diagnostics.visibleThroughIndex != null &&
+      visibleIndex >= detection.diagnostics.visibleThroughIndex &&
+      progressive.classifiedSwings.length === detection.classifiedSwings.length
+    ) {
+      return fromResult
+    }
+    return live
+  }, [
+    progressive.classifiedSwings,
+    visibleIndex,
+    detection.dowTheory,
+    detection.diagnostics.visibleThroughIndex,
+    detection.classifiedSwings.length,
+  ])
+
   const selectedZone: SmcZoneProjection | null = useMemo(() => {
     if (!selectedZoneId) return null
     return (
@@ -313,6 +344,22 @@ export function SmcLabPage() {
       displacementEvents: keep(progressiveVisible.displacementEvents),
     }
   }, [progressiveVisible, lifecycleProjection.structureEvents, smartVisibilityPreset])
+
+  /** Rendered swing marker dump for Dow join proof / diagnostics (pre-density). */
+  const chartDowMarkers = useMemo(() => {
+    const showDow = layers.dowTheoryLabels ?? true
+    return projectSwingChartMarkers(
+      chartStructure.classifiedSwings,
+      dowTheoryView.swingClassification,
+      dowTheoryView.bySwingId,
+      showDow,
+    )
+  }, [
+    chartStructure.classifiedSwings,
+    dowTheoryView.swingClassification,
+    dowTheoryView.bySwingId,
+    layers.dowTheoryLabels,
+  ])
 
   const { windowStart, windowCandles, highlightSwingId } = useMemo(() => {
     const maxVisible = Math.min(candles.length - 1, visibleIndex)
@@ -1129,7 +1176,51 @@ export function SmcLabPage() {
         layers={layers}
         windowStartIndex={windowStart}
         importanceById={detection.intelligence?.byEventId}
+        dowSwingClassification={
+          dowTheoryView.swingClassification ?? detection.dowTheory?.swingClassification ?? {}
+        }
+        dowBySwingId={dowTheoryView.bySwingId ?? detection.dowTheory?.bySwingId ?? {}}
       />
+
+      <Card hover={false}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Dow Theory</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3 text-[11px]">
+          <label className="flex min-h-11 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={layers.dowTheoryLabels ?? true}
+              onChange={(e) =>
+                setLayers((prev) => ({ ...prev, dowTheoryLabels: e.target.checked }))
+              }
+            />
+            Show Dow Theory labels
+          </label>
+          <Badge variant="outline">{dowTheoryView.trend}</Badge>
+          <span className="font-mono text-muted-foreground">
+            Strength {dowTheoryView.strength} · {dowTheoryView.structurePhase}
+          </span>
+          <span className="font-mono text-muted-foreground">
+            HH {dowTheoryView.diagnostics.hhCount} · HL {dowTheoryView.diagnostics.hlCount} · LH{' '}
+            {dowTheoryView.diagnostics.lhCount} · LL {dowTheoryView.diagnostics.llCount}
+          </span>
+          <span className="w-full font-mono text-[10px] text-muted-foreground">
+            Chart markers:{' '}
+            {chartDowMarkers.length === 0
+              ? '—'
+              : chartDowMarkers
+                  .filter((m) => m.dowLabel != null)
+                  .slice(0, 8)
+                  .map((m) => m.text)
+                  .join(' · ') ||
+                chartDowMarkers
+                  .slice(0, 4)
+                  .map((m) => m.text)
+                  .join(' · ')}
+          </span>
+        </CardContent>
+      </Card>
 
       <Card hover={false}>
         <CardHeader className="pb-2">
@@ -1289,6 +1380,7 @@ export function SmcLabPage() {
             setTags(review?.reasonTags ?? [])
           }
         }}
+        dowTheory={dowTheoryView}
       />
 
       {/* 6. Event List */}
@@ -1641,6 +1733,23 @@ export function SmcLabPage() {
                       <p>Visibility mode: {detection.diagnostics.ranking.mode}</p>
                     </>
                   ) : null}
+                  <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
+                    <p className="font-medium">Dow Theory</p>
+                    <p>
+                      result.dowTheory:{' '}
+                      {detection.dowTheory ? 'populated' : 'missing'} · progressive labels{' '}
+                      {Object.keys(dowTheoryView.swingClassification).length}
+                    </p>
+                    <p>
+                      Trend {dowTheoryView.trend} · strength {dowTheoryView.strength} · phase{' '}
+                      {dowTheoryView.structurePhase}
+                    </p>
+                    <p>
+                      HH {dowTheoryView.diagnostics.hhCount} · HL {dowTheoryView.diagnostics.hlCount}{' '}
+                      · LH {dowTheoryView.diagnostics.lhCount} · LL{' '}
+                      {dowTheoryView.diagnostics.llCount}
+                    </p>
+                  </div>
                   <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
                     <p className="font-medium">Zone lifecycle projection</p>
                     <p>Status: {lifecycleProjection.diagnostics.status}</p>

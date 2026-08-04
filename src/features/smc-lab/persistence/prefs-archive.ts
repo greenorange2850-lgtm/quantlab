@@ -34,6 +34,7 @@ export const DEFAULT_SMC_LAYER_TOGGLES: SmcLabPreferences['layerToggles'] = {
   validationMarks: true,
   connectorLines: false,
   diagnosticsLabels: false,
+  dowTheoryLabels: true,
 }
 
 export function layersForDensityPreset(
@@ -43,6 +44,7 @@ export function layersForDensityPreset(
     case 'minimal':
       return {
         ...DEFAULT_SMC_LAYER_TOGGLES,
+        dowTheoryLabels: true,
         externalSwings: true,
         internalSwings: false,
         bosLabels: true,
@@ -60,6 +62,7 @@ export function layersForDensityPreset(
     case 'structure':
       return {
         ...DEFAULT_SMC_LAYER_TOGGLES,
+        dowTheoryLabels: true,
         externalSwings: true,
         internalSwings: true,
         bosLabels: true,
@@ -74,6 +77,7 @@ export function layersForDensityPreset(
     case 'liquidity':
       return {
         ...DEFAULT_SMC_LAYER_TOGGLES,
+        dowTheoryLabels: true,
         externalSwings: true,
         internalSwings: false,
         bosLabels: false,
@@ -103,6 +107,7 @@ export function layersForDensityPreset(
         displacement: true,
         connectorLines: true,
         diagnosticsLabels: true,
+        dowTheoryLabels: true,
       }
     default:
       return { ...DEFAULT_SMC_LAYER_TOGGLES }
