@@ -1,13 +1,22 @@
 import type {
-  SmcBosEvent,
   SmcDetectionKind,
   SmcDetectionResult,
-  SmcSwingEvent,
+  SmcEvent,
 } from '@/core/smc'
 import type { SmcReviewRecord } from './persistence/types'
 
+export type SmcReviewModule =
+  | 'Swings'
+  | 'BOS'
+  | 'CHoCH'
+  | 'Displacement'
+  | 'FVG'
+  | 'Liquidity Sweep'
+  | 'Order Block'
+  | 'Other'
+
 export interface SmcReviewSummaryBucket {
-  kind: SmcDetectionKind | 'ALL'
+  kind: SmcDetectionKind | 'ALL' | SmcReviewModule
   detected: number
   reviewed: number
   correct: number
@@ -40,9 +49,35 @@ function finalize(bucket: SmcReviewSummaryBucket): SmcReviewSummaryBucket {
   }
 }
 
+export function moduleForKind(kind: SmcDetectionKind): SmcReviewModule {
+  if (kind.includes('SWING') || kind.includes('EQUAL_')) return 'Swings'
+  if (kind.includes('BOS')) return 'BOS'
+  if (kind.includes('CHOCH')) return 'CHoCH'
+  if (kind.includes('DISPLACEMENT')) return 'Displacement'
+  if (kind.includes('FVG')) return 'FVG'
+  if (kind.includes('LIQUIDITY_SWEEP')) return 'Liquidity Sweep'
+  if (kind.includes('ORDER_BLOCK')) return 'Order Block'
+  return 'Other'
+}
+
+export function flattenDetectionEvents(detection: SmcDetectionResult): SmcEvent[] {
+  return [
+    ...detection.swings,
+    ...detection.classifiedSwings,
+    ...detection.bosEvents,
+    ...detection.chochEvents,
+    ...detection.displacementEvents,
+    ...detection.fvgEvents,
+    ...detection.equalLevelEvents,
+    ...detection.liquiditySweepEvents,
+    ...detection.orderBlockEvents,
+  ]
+}
+
 /**
  * Build review summary. Only reviews whose configHash matches the active
- * detection config are counted as applicable.
+ * detection config are counted as applicable. Unreviewed events are excluded
+ * from reviewed accuracy.
  */
 export function buildReviewSummary(input: {
   detection: SmcDetectionResult
@@ -50,56 +85,75 @@ export function buildReviewSummary(input: {
   activeConfigHash: string
 }): {
   overall: SmcReviewSummaryBucket
-  byKind: Record<SmcDetectionKind, SmcReviewSummaryBucket>
+  byKind: Partial<Record<SmcDetectionKind, SmcReviewSummaryBucket>>
+  byModule: Record<SmcReviewModule, SmcReviewSummaryBucket>
+  historicalReviews: SmcReviewRecord[]
 } {
-  const events: Array<SmcSwingEvent | SmcBosEvent> = [
-    ...input.detection.swings,
-    ...input.detection.bosEvents,
-  ]
+  const events = flattenDetectionEvents(input.detection)
 
   const applicable = input.reviews.filter((r) => r.configHash === input.activeConfigHash)
+  const historicalReviews = input.reviews.filter((r) => r.configHash !== input.activeConfigHash)
   const byEventId = new Map(applicable.map((r) => [r.fingerprint.eventId, r]))
 
-  const kinds: SmcDetectionKind[] = [
-    'SWING_HIGH',
-    'SWING_LOW',
-    'BULLISH_BOS',
-    'BEARISH_BOS',
+  const byKind: Partial<Record<SmcDetectionKind, SmcReviewSummaryBucket>> = {}
+  const modules: SmcReviewModule[] = [
+    'Swings',
+    'BOS',
+    'CHoCH',
+    'Displacement',
+    'FVG',
+    'Liquidity Sweep',
+    'Order Block',
+    'Other',
   ]
-  const byKind = Object.fromEntries(kinds.map((k) => [k, emptyBucket(k)])) as Record<
-    SmcDetectionKind,
+  const byModule = Object.fromEntries(modules.map((m) => [m, emptyBucket(m)])) as Record<
+    SmcReviewModule,
     SmcReviewSummaryBucket
   >
   const overall = emptyBucket('ALL')
 
   for (const event of events) {
-    const bucket = byKind[event.kind]
-    bucket.detected += 1
+    const kindBucket = byKind[event.kind] ?? emptyBucket(event.kind)
+    kindBucket.detected += 1
+    byKind[event.kind] = kindBucket
+
+    const module = moduleForKind(event.kind)
+    const moduleBucket = byModule[module]
+    moduleBucket.detected += 1
     overall.detected += 1
+
     const review = byEventId.get(event.id)
     if (!review) continue
-    bucket.reviewed += 1
+    kindBucket.reviewed += 1
+    moduleBucket.reviewed += 1
     overall.reviewed += 1
     if (review.verdict === 'correct') {
-      bucket.correct += 1
+      kindBucket.correct += 1
+      moduleBucket.correct += 1
       overall.correct += 1
     } else if (review.verdict === 'wrong') {
-      bucket.wrong += 1
+      kindBucket.wrong += 1
+      moduleBucket.wrong += 1
       overall.wrong += 1
     } else {
-      bucket.unsure += 1
+      kindBucket.unsure += 1
+      moduleBucket.unsure += 1
       overall.unsure += 1
     }
   }
 
+  for (const key of Object.keys(byKind) as SmcDetectionKind[]) {
+    byKind[key] = finalize(byKind[key]!)
+  }
+  for (const key of modules) {
+    byModule[key] = finalize(byModule[key])
+  }
+
   return {
     overall: finalize(overall),
-    byKind: {
-      SWING_HIGH: finalize(byKind.SWING_HIGH),
-      SWING_LOW: finalize(byKind.SWING_LOW),
-      BULLISH_BOS: finalize(byKind.BULLISH_BOS),
-      BEARISH_BOS: finalize(byKind.BEARISH_BOS),
-    },
+    byKind,
+    byModule,
+    historicalReviews,
   }
 }
 

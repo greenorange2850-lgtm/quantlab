@@ -10,6 +10,17 @@ export interface SmcInvariantReport {
   invalidBearishBosCount: number
   bosBeforeConfirmationCount: number
   repeatedSwingBreakCount: number
+  invalidBullishChochCount: number
+  invalidBearishChochCount: number
+  chochWithoutPriorStructureCount: number
+  duplicateBreakOfSameSwingCount: number
+  fvgInvalidGeometryCount: number
+  sweepWithoutPenetrationCount: number
+  sweepWithoutCloseReclaimCount: number
+  orderBlockAfterSourceBreakCount: number
+  orderBlockWithoutRequiredDisplacementCount: number
+  orderBlockWithoutRequiredFvgCount: number
+  dependencyReferenceMissingCount: number
   eventTimestampMismatchCount: number
   /** True only when every count is zero. */
   ok: boolean
@@ -22,26 +33,80 @@ function emptyReport(): SmcInvariantReport {
     invalidBearishBosCount: 0,
     bosBeforeConfirmationCount: 0,
     repeatedSwingBreakCount: 0,
+    invalidBullishChochCount: 0,
+    invalidBearishChochCount: 0,
+    chochWithoutPriorStructureCount: 0,
+    duplicateBreakOfSameSwingCount: 0,
+    fvgInvalidGeometryCount: 0,
+    sweepWithoutPenetrationCount: 0,
+    sweepWithoutCloseReclaimCount: 0,
+    orderBlockAfterSourceBreakCount: 0,
+    orderBlockWithoutRequiredDisplacementCount: 0,
+    orderBlockWithoutRequiredFvgCount: 0,
+    dependencyReferenceMissingCount: 0,
     eventTimestampMismatchCount: 0,
     ok: true,
     details: [],
   }
 }
 
+function finalize(report: SmcInvariantReport): SmcInvariantReport {
+  report.ok =
+    report.invalidBullishBosCount === 0 &&
+    report.invalidBearishBosCount === 0 &&
+    report.bosBeforeConfirmationCount === 0 &&
+    report.repeatedSwingBreakCount === 0 &&
+    report.invalidBullishChochCount === 0 &&
+    report.invalidBearishChochCount === 0 &&
+    report.chochWithoutPriorStructureCount === 0 &&
+    report.duplicateBreakOfSameSwingCount === 0 &&
+    report.fvgInvalidGeometryCount === 0 &&
+    report.sweepWithoutPenetrationCount === 0 &&
+    report.sweepWithoutCloseReclaimCount === 0 &&
+    report.orderBlockAfterSourceBreakCount === 0 &&
+    report.orderBlockWithoutRequiredDisplacementCount === 0 &&
+    report.orderBlockWithoutRequiredFvgCount === 0 &&
+    report.dependencyReferenceMissingCount === 0 &&
+    report.eventTimestampMismatchCount === 0
+  return report
+}
+
 /**
- * Hard invariants for Phase-1 BOS correctness.
+ * Hard invariants for SMC detection correctness.
  * A bullish close of 64489.98 against a swing high of 64700 MUST fail.
  */
 export function auditSmcInvariants(
   result: SmcDetectionResult,
   config: SmcDetectorConfig,
-  candles?: ReadonlyArray<{ time: number; close: number }>,
+  candles?: ReadonlyArray<{ time: number; close: number; high?: number; low?: number }>,
 ): SmcInvariantReport {
   const report = emptyReport()
-  const swingsById = new Map(result.swings.map((s) => [s.id, s]))
+  const swings = result.swings ?? []
+  const classifiedSwings = result.classifiedSwings ?? []
+  const bosEvents = result.bosEvents ?? []
+  const chochEvents = result.chochEvents ?? []
+  const displacementEvents = result.displacementEvents ?? []
+  const fvgEvents = result.fvgEvents ?? []
+  const equalLevelEvents = result.equalLevelEvents ?? []
+  const liquiditySweepEvents = result.liquiditySweepEvents ?? []
+  const orderBlockEvents = result.orderBlockEvents ?? []
+
+  const swingsById = new Map(swings.map((s) => [s.id, s]))
+  const allIds = new Set<string>([
+    ...swings.map((s) => s.id),
+    ...classifiedSwings.map((s) => s.id),
+    ...bosEvents.map((s) => s.id),
+    ...chochEvents.map((s) => s.id),
+    ...displacementEvents.map((s) => s.id),
+    ...fvgEvents.map((s) => s.id),
+    ...equalLevelEvents.map((s) => s.id),
+    ...liquiditySweepEvents.map((s) => s.id),
+    ...orderBlockEvents.map((s) => s.id),
+  ])
+
   const brokenCounts = new Map<string, number>()
 
-  for (const bos of result.bosEvents) {
+  for (const bos of bosEvents) {
     const swing = swingsById.get(bos.brokenSwingId)
     brokenCounts.set(bos.brokenSwingId, (brokenCounts.get(bos.brokenSwingId) ?? 0) + 1)
 
@@ -79,7 +144,6 @@ export function auditSmcInvariants(
       )
     }
 
-    // Timestamp must be the break candle, not the swing.
     if (bos.timestamp === bos.brokenSwingTimestamp && bos.candleIndex !== bos.brokenSwingCandleIndex) {
       report.eventTimestampMismatchCount += 1
       report.details.push(
@@ -102,6 +166,51 @@ export function auditSmcInvariants(
         )
       }
     }
+
+    if (bos.refs) {
+      for (const ref of bos.refs) {
+        if (!allIds.has(ref.id) && !swingsById.has(ref.id)) {
+          report.dependencyReferenceMissingCount += 1
+          report.details.push(`BOS ${bos.id} missing ref ${ref.id}`)
+        }
+      }
+    }
+  }
+
+  for (const choch of chochEvents) {
+    brokenCounts.set(choch.brokenSwingId, (brokenCounts.get(choch.brokenSwingId) ?? 0) + 1)
+
+    if (
+      choch.previousStructureState === 'UNDETERMINED_STRUCTURE' ||
+      (choch.kind === 'BULLISH_CHOCH' && choch.previousStructureState !== 'BEARISH_STRUCTURE') ||
+      (choch.kind === 'BEARISH_CHOCH' && choch.previousStructureState !== 'BULLISH_STRUCTURE')
+    ) {
+      report.chochWithoutPriorStructureCount += 1
+      report.details.push(`CHoCH ${choch.id} without valid prior opposing structure`)
+    }
+
+    if (choch.kind === 'BULLISH_CHOCH' && !(choch.closePrice > choch.brokenSwingPrice)) {
+      report.invalidBullishChochCount += 1
+      report.details.push(`Invalid bullish CHoCH ${choch.id}`)
+    }
+    if (choch.kind === 'BEARISH_CHOCH' && !(choch.closePrice < choch.brokenSwingPrice)) {
+      report.invalidBearishChochCount += 1
+      report.details.push(`Invalid bearish CHoCH ${choch.id}`)
+    }
+    if (choch.candleIndex < choch.brokenSwingConfirmedAtIndex) {
+      report.invalidBullishChochCount += choch.kind === 'BULLISH_CHOCH' ? 1 : 0
+      report.invalidBearishChochCount += choch.kind === 'BEARISH_CHOCH' ? 1 : 0
+      report.details.push(`CHoCH ${choch.id} before swing confirmation`)
+    }
+  }
+
+  // Same swing cannot emit both BOS and CHoCH
+  const bosSwingIds = new Set(bosEvents.map((e) => e.brokenSwingId))
+  for (const choch of chochEvents) {
+    if (bosSwingIds.has(choch.brokenSwingId)) {
+      report.duplicateBreakOfSameSwingCount += 1
+      report.details.push(`Swing ${choch.brokenSwingId} emitted both BOS and CHoCH`)
+    }
   }
 
   if (!config.bos.allowRepeatedBreaksOfSameSwing) {
@@ -113,14 +222,64 @@ export function auditSmcInvariants(
     }
   }
 
-  report.ok =
-    report.invalidBullishBosCount === 0 &&
-    report.invalidBearishBosCount === 0 &&
-    report.bosBeforeConfirmationCount === 0 &&
-    report.repeatedSwingBreakCount === 0 &&
-    report.eventTimestampMismatchCount === 0
+  for (const fvg of fvgEvents) {
+    if (fvg.kind !== 'BULLISH_FVG_CREATED' && fvg.kind !== 'BEARISH_FVG_CREATED') continue
+    if (!(fvg.upperBoundary > fvg.lowerBoundary)) {
+      report.fvgInvalidGeometryCount += 1
+      report.details.push(`FVG ${fvg.id} invalid geometry`)
+    }
+  }
 
-  return report
+  for (const sweep of liquiditySweepEvents) {
+    if (sweep.penetration <= 0) {
+      report.sweepWithoutPenetrationCount += 1
+      report.details.push(`Sweep ${sweep.id} without penetration`)
+    }
+    if (sweep.kind === 'BUY_SIDE_LIQUIDITY_SWEEP') {
+      if (!(sweep.wickExtreme > sweep.sweptLevel) || !(sweep.close < sweep.sweptLevel)) {
+        report.sweepWithoutCloseReclaimCount += 1
+        report.details.push(`BSL sweep ${sweep.id} failed reclaim invariants`)
+      }
+    }
+    if (sweep.kind === 'SELL_SIDE_LIQUIDITY_SWEEP') {
+      if (!(sweep.wickExtreme < sweep.sweptLevel) || !(sweep.close > sweep.sweptLevel)) {
+        report.sweepWithoutCloseReclaimCount += 1
+        report.details.push(`SSL sweep ${sweep.id} failed reclaim invariants`)
+      }
+    }
+  }
+
+  for (const ob of orderBlockEvents) {
+    if (
+      ob.kind !== 'BULLISH_ORDER_BLOCK_CREATED' &&
+      ob.kind !== 'BEARISH_ORDER_BLOCK_CREATED'
+    ) {
+      continue
+    }
+    if (ob.sourceCandleIndex >= ob.candleIndex) {
+      report.orderBlockAfterSourceBreakCount += 1
+      report.details.push(`Order Block ${ob.id} source candle not before break`)
+    }
+    if (config.orderBlock.requireDisplacement && !ob.sourceDisplacementId) {
+      report.orderBlockWithoutRequiredDisplacementCount += 1
+      report.details.push(`Order Block ${ob.id} missing required displacement`)
+    }
+    if (config.orderBlock.requireFvg && !ob.sourceFvgId) {
+      report.orderBlockWithoutRequiredFvgCount += 1
+      report.details.push(`Order Block ${ob.id} missing required FVG`)
+    }
+    for (const ref of ob.refs) {
+      if (!allIds.has(ref.id) && !swingsById.has(ref.id)) {
+        // broken swing id may be base swing — ok if in swingsById
+        if (!swingsById.has(ref.id)) {
+          report.dependencyReferenceMissingCount += 1
+          report.details.push(`Order Block ${ob.id} missing ref ${ref.id}`)
+        }
+      }
+    }
+  }
+
+  return finalize(report)
 }
 
 /** Drop events that violate hard invariants. Never presents invalid BOS as complete. */
@@ -148,12 +307,62 @@ export function sanitizeSmcDetectionResult(
     bosEvents.push(bos)
   }
 
+  const chochEvents = result.chochEvents.filter((choch) => {
+    if (choch.previousStructureState === 'UNDETERMINED_STRUCTURE') return false
+    if (choch.kind === 'BULLISH_CHOCH') {
+      return (
+        choch.previousStructureState === 'BEARISH_STRUCTURE' &&
+        choch.closePrice > choch.brokenSwingPrice &&
+        choch.candleIndex >= choch.brokenSwingConfirmedAtIndex &&
+        !seenBroken.has(choch.brokenSwingId)
+      )
+    }
+    return (
+      choch.previousStructureState === 'BULLISH_STRUCTURE' &&
+      choch.closePrice < choch.brokenSwingPrice &&
+      choch.candleIndex >= choch.brokenSwingConfirmedAtIndex &&
+      !seenBroken.has(choch.brokenSwingId)
+    )
+  })
+  for (const c of chochEvents) seenBroken.add(c.brokenSwingId)
+
+  const orderBlockEvents = result.orderBlockEvents.filter((ob) => {
+    if (
+      ob.kind !== 'BULLISH_ORDER_BLOCK_CREATED' &&
+      ob.kind !== 'BEARISH_ORDER_BLOCK_CREATED'
+    ) {
+      return true
+    }
+    if (ob.sourceCandleIndex >= ob.candleIndex) return false
+    if (config.orderBlock.requireDisplacement && !ob.sourceDisplacementId) return false
+    if (config.orderBlock.requireFvg && !ob.sourceFvgId) return false
+    return true
+  })
+
+  const liquiditySweepEvents = result.liquiditySweepEvents.filter((sweep) => {
+    if (sweep.penetration <= 0) return false
+    if (sweep.kind === 'BUY_SIDE_LIQUIDITY_SWEEP') {
+      return sweep.wickExtreme > sweep.sweptLevel && sweep.close < sweep.sweptLevel
+    }
+    return sweep.wickExtreme < sweep.sweptLevel && sweep.close > sweep.sweptLevel
+  })
+
   const sanitized: SmcDetectionResult = {
     ...result,
     bosEvents,
+    chochEvents,
+    orderBlockEvents,
+    liquiditySweepEvents,
     diagnostics: {
       ...result.diagnostics,
       validBosEvents: bosEvents.length,
+      validChochEvents: chochEvents.length,
+      liquiditySweepEvents: liquiditySweepEvents.length,
+      orderBlockEvents: orderBlockEvents.filter(
+        (e) =>
+          e.kind === 'BULLISH_ORDER_BLOCK_CREATED' ||
+          e.kind === 'BEARISH_ORDER_BLOCK_CREATED',
+      ).length,
     },
   }
 

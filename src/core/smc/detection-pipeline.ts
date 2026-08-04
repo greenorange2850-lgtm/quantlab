@@ -1,9 +1,20 @@
 import type { Candle } from '@/data/candles'
-import { detectBreakOfStructure } from './bos-detector'
 import { cloneSmcDetectorConfig, DEFAULT_SMC_DETECTOR_CONFIG } from './defaults'
+import { detectDisplacement } from './displacement-detector'
+import { detectEqualLevels } from './equal-levels-detector'
+import { detectFairValueGaps } from './fvg-detector'
 import { sanitizeSmcDetectionResult } from './invariants'
+import { detectLiquiditySweeps } from './liquidity-sweep-detector'
+import { detectOrderBlocks } from './order-block-detector'
+import { classifyInternalExternalStructure, type StructureClassificationInternal } from './structure-classifier'
+import { detectStructureBreaks } from './structure-breaks'
 import { detectConfirmedSwings } from './swing-detector'
-import type { SmcDetectionResult, SmcDetectorConfig } from './types'
+import type {
+  SmcDetectionDiagnostics,
+  SmcDetectionResult,
+  SmcDetectorConfig,
+  SmcModuleTiming,
+} from './types'
 import { SMC_DETECTOR_VERSION } from './types'
 import { validateSmcDetectorConfig } from './validation'
 
@@ -11,31 +22,92 @@ function emptyDiagnostics(
   candleCount: number,
   visibleThroughIndex: number | null,
   durationMs: number,
-): SmcDetectionResult['diagnostics'] {
+  status: SmcDetectionDiagnostics['detectionStatus'] = 'IDLE',
+): SmcDetectionDiagnostics {
   return {
     detectorVersion: SMC_DETECTOR_VERSION,
     candleCount,
     visibleThroughIndex,
     swingCandidatesConsidered: 0,
     confirmedSwings: 0,
+    internalSwings: 0,
+    externalSwings: 0,
     wickOnlyBreakCandidatesIgnored: 0,
     validBosEvents: 0,
+    validChochEvents: 0,
+    displacementEvents: 0,
+    fvgEvents: 0,
+    equalLevelEvents: 0,
+    liquiditySweepEvents: 0,
+    orderBlockEvents: 0,
     repeatedBreaksIgnored: 0,
     computationDurationMs: durationMs,
+    moduleTimings: [],
+    maxBlockingDurationMs: durationMs,
+    structureState: 'UNDETERMINED_STRUCTURE',
+    detectionStatus: status,
     invariants: {
       invalidBullishBosCount: 0,
       invalidBearishBosCount: 0,
       bosBeforeConfirmationCount: 0,
       repeatedSwingBreakCount: 0,
+      invalidBullishChochCount: 0,
+      invalidBearishChochCount: 0,
+      chochWithoutPriorStructureCount: 0,
+      duplicateBreakOfSameSwingCount: 0,
+      fvgInvalidGeometryCount: 0,
+      sweepWithoutPenetrationCount: 0,
+      sweepWithoutCloseReclaimCount: 0,
+      orderBlockAfterSourceBreakCount: 0,
+      orderBlockWithoutRequiredDisplacementCount: 0,
+      orderBlockWithoutRequiredFvgCount: 0,
+      dependencyReferenceMissingCount: 0,
       eventTimestampMismatchCount: 0,
       ok: true,
     },
   }
 }
 
+export function emptySmcDetectionResult(
+  status: SmcDetectionDiagnostics['detectionStatus'] = 'IDLE',
+): SmcDetectionResult {
+  return {
+    swings: [],
+    classifiedSwings: [],
+    bosEvents: [],
+    chochEvents: [],
+    displacementEvents: [],
+    fvgEvents: [],
+    equalLevelEvents: [],
+    liquiditySweepEvents: [],
+    orderBlockEvents: [],
+    structureState: 'UNDETERMINED_STRUCTURE',
+    diagnostics: emptyDiagnostics(0, null, 0, status),
+  }
+}
+
+function runTimed(
+  name: string,
+  enabled: boolean,
+  timings: SmcModuleTiming[],
+  fn: () => void,
+): number {
+  if (!enabled) {
+    timings.push({ module: name, durationMs: 0, status: 'skipped' })
+    return 0
+  }
+  const started = performance.now()
+  fn()
+  const durationMs = performance.now() - started
+  timings.push({ module: name, durationMs, status: 'complete' })
+  return durationMs
+}
+
 /**
  * Progressive detection API — only events knowable by `visibleIndex` (inclusive).
- * Results are sanitized through hard BOS invariants before being marked complete.
+ * Module order:
+ * 1 Swings → 2 Structure → 3 Equal levels → 4/5 BOS/CHoCH → 6 Displacement →
+ * 7 FVG → 8 Liquidity Sweep → 9 Order Block → 10 mitigation (inside detectors)
  */
 export function detectSmcUntil(
   candles: readonly Candle[],
@@ -44,47 +116,228 @@ export function detectSmcUntil(
 ): SmcDetectionResult {
   const started = performance.now()
   const { config: safe } = validateSmcDetectorConfig(config)
+  const timings: SmcModuleTiming[] = []
+  let maxBlock = 0
 
   if (candles.length === 0 || visibleIndex < 0) {
     return {
-      swings: [],
-      bosEvents: [],
-      diagnostics: emptyDiagnostics(candles.length, visibleIndex < 0 ? null : visibleIndex, 0),
+      ...emptySmcDetectionResult('COMPLETE'),
+      diagnostics: emptyDiagnostics(
+        candles.length,
+        visibleIndex < 0 ? null : visibleIndex,
+        0,
+        'COMPLETE',
+      ),
     }
   }
 
   const last = Math.min(visibleIndex, candles.length - 1)
-  const swingResult = detectConfirmedSwings(candles, safe.swing, last)
-  const bosResult = detectBreakOfStructure(candles, swingResult.swings, safe.bos, last)
+
+  let swingResult = { swings: [] as ReturnType<typeof detectConfirmedSwings>['swings'], candidatesConsidered: 0 }
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('swings', safe.swing.enabled, timings, () => {
+      swingResult = detectConfirmedSwings(candles, safe.swing, last)
+    }),
+  )
+  if (!safe.swing.enabled) {
+    swingResult = { swings: [], candidatesConsidered: 0 }
+  }
+
+  let classified: StructureClassificationInternal = {
+    classified: [],
+    internal: [],
+    external: [],
+    annotatedBaseSwings: swingResult.swings.map((s) => ({
+      ...s,
+      classification: 'UNCLASSIFIED' as const,
+    })),
+  }
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('structure', safe.structure.enabled, timings, () => {
+      classified = classifyInternalExternalStructure(
+        candles,
+        swingResult.swings,
+        safe.structure,
+        last,
+      )
+    }),
+  )
+
+  const annotatedSwings = classified.annotatedBaseSwings
+
+  let equalLevels = { events: [] as ReturnType<typeof detectEqualLevels>['events'] }
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('equalLevels', safe.equalLevels.enabled, timings, () => {
+      equalLevels = detectEqualLevels(
+        annotatedSwings,
+        classified.classified,
+        safe.equalLevels,
+        last,
+      )
+    }),
+  )
+
+  let breaks: ReturnType<typeof detectStructureBreaks> = {
+    bosEvents: [],
+    chochEvents: [],
+    structureState: 'UNDETERMINED_STRUCTURE',
+    wickOnlyIgnored: 0,
+    repeatedBreaksIgnored: 0,
+  }
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('bosChoch', safe.bos.enabled || safe.choch.enabled, timings, () => {
+      breaks = detectStructureBreaks(
+        candles,
+        annotatedSwings,
+        classified.classified,
+        safe.bos,
+        safe.choch,
+        last,
+        safe.displacement.enabled ? safe.displacement : null,
+      )
+    }),
+  )
+
+  const breakEvents = [...breaks.bosEvents, ...breaks.chochEvents]
+
+  let displacement = { events: [] as ReturnType<typeof detectDisplacement>['events'] }
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('displacement', safe.displacement.enabled, timings, () => {
+      displacement = detectDisplacement(candles, safe.displacement, last, breakEvents, [])
+    }),
+  )
+
+  let fvg = { events: [] as ReturnType<typeof detectFairValueGaps>['events'] }
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('fvg', safe.fvg.enabled, timings, () => {
+      fvg = detectFairValueGaps(candles, safe.fvg, last, displacement.events)
+    }),
+  )
+
+  if (safe.displacement.enabled && safe.displacement.requireFvgCreation) {
+    displacement = detectDisplacement(
+      candles,
+      safe.displacement,
+      last,
+      breakEvents,
+      fvg.events,
+    )
+  }
+
+  let sweeps = { events: [] as ReturnType<typeof detectLiquiditySweeps>['events'] }
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('liquiditySweep', safe.liquiditySweep.enabled, timings, () => {
+      sweeps = detectLiquiditySweeps(
+        candles,
+        annotatedSwings,
+        classified.classified,
+        equalLevels.events,
+        displacement.events,
+        safe.liquiditySweep,
+        last,
+      )
+    }),
+  )
+
+  let orderBlocks = { events: [] as ReturnType<typeof detectOrderBlocks>['events'] }
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('orderBlock', safe.orderBlock.enabled, timings, () => {
+      orderBlocks = detectOrderBlocks(
+        candles,
+        breaks.bosEvents,
+        breaks.chochEvents,
+        displacement.events,
+        fvg.events,
+        safe.orderBlock,
+        last,
+      )
+    }),
+  )
+
+  timings.push({ module: 'mitigation', durationMs: 0, status: 'complete' })
+
   const durationMs = performance.now() - started
 
   const raw: SmcDetectionResult = {
-    swings: swingResult.swings,
-    bosEvents: bosResult.bosEvents,
+    swings: annotatedSwings,
+    classifiedSwings: classified.classified,
+    bosEvents: breaks.bosEvents,
+    chochEvents: breaks.chochEvents,
+    displacementEvents: displacement.events,
+    fvgEvents: fvg.events,
+    equalLevelEvents: equalLevels.events,
+    liquiditySweepEvents: sweeps.events,
+    orderBlockEvents: orderBlocks.events,
+    structureState: breaks.structureState,
     diagnostics: {
       detectorVersion: SMC_DETECTOR_VERSION,
       candleCount: candles.length,
       visibleThroughIndex: last,
       swingCandidatesConsidered: swingResult.candidatesConsidered,
-      confirmedSwings: swingResult.swings.length,
-      wickOnlyBreakCandidatesIgnored: bosResult.wickOnlyIgnored,
-      validBosEvents: bosResult.bosEvents.length,
-      repeatedBreaksIgnored: bosResult.repeatedBreaksIgnored,
+      confirmedSwings: annotatedSwings.length,
+      internalSwings: classified.internal.length,
+      externalSwings: classified.external.length,
+      wickOnlyBreakCandidatesIgnored: breaks.wickOnlyIgnored,
+      validBosEvents: breaks.bosEvents.length,
+      validChochEvents: breaks.chochEvents.length,
+      displacementEvents: displacement.events.length,
+      fvgEvents: fvg.events.filter(
+        (e) => e.kind === 'BULLISH_FVG_CREATED' || e.kind === 'BEARISH_FVG_CREATED',
+      ).length,
+      equalLevelEvents: equalLevels.events.length,
+      liquiditySweepEvents: sweeps.events.length,
+      orderBlockEvents: orderBlocks.events.filter(
+        (e) =>
+          e.kind === 'BULLISH_ORDER_BLOCK_CREATED' ||
+          e.kind === 'BEARISH_ORDER_BLOCK_CREATED',
+      ).length,
+      repeatedBreaksIgnored: breaks.repeatedBreaksIgnored,
       computationDurationMs: durationMs,
+      moduleTimings: timings,
+      maxBlockingDurationMs: maxBlock,
+      structureState: breaks.structureState,
+      detectionStatus: 'COMPLETE',
     },
   }
 
   const { result, report } = sanitizeSmcDetectionResult(raw, safe)
+  const failed = !report.ok
+
   return {
     ...result,
     diagnostics: {
       ...result.diagnostics,
       computationDurationMs: durationMs,
+      moduleTimings: timings,
+      maxBlockingDurationMs: maxBlock,
+      structureState: result.structureState,
+      detectionStatus: failed ? 'FAILED' : 'COMPLETE',
+      invariantDetails: report.details,
       invariants: {
         invalidBullishBosCount: report.invalidBullishBosCount,
         invalidBearishBosCount: report.invalidBearishBosCount,
         bosBeforeConfirmationCount: report.bosBeforeConfirmationCount,
         repeatedSwingBreakCount: report.repeatedSwingBreakCount,
+        invalidBullishChochCount: report.invalidBullishChochCount,
+        invalidBearishChochCount: report.invalidBearishChochCount,
+        chochWithoutPriorStructureCount: report.chochWithoutPriorStructureCount,
+        duplicateBreakOfSameSwingCount: report.duplicateBreakOfSameSwingCount,
+        fvgInvalidGeometryCount: report.fvgInvalidGeometryCount,
+        sweepWithoutPenetrationCount: report.sweepWithoutPenetrationCount,
+        sweepWithoutCloseReclaimCount: report.sweepWithoutCloseReclaimCount,
+        orderBlockAfterSourceBreakCount: report.orderBlockAfterSourceBreakCount,
+        orderBlockWithoutRequiredDisplacementCount:
+          report.orderBlockWithoutRequiredDisplacementCount,
+        orderBlockWithoutRequiredFvgCount: report.orderBlockWithoutRequiredFvgCount,
+        dependencyReferenceMissingCount: report.dependencyReferenceMissingCount,
         eventTimestampMismatchCount: report.eventTimestampMismatchCount,
         ok: report.ok,
       },
@@ -98,11 +351,7 @@ export function detectSmc(
   config: SmcDetectorConfig = DEFAULT_SMC_DETECTOR_CONFIG,
 ): SmcDetectionResult {
   if (candles.length === 0) {
-    return {
-      swings: [],
-      bosEvents: [],
-      diagnostics: emptyDiagnostics(0, null, 0),
-    }
+    return emptySmcDetectionResult('COMPLETE')
   }
   return detectSmcUntil(candles, candles.length - 1, config)
 }
@@ -112,4 +361,25 @@ export function resolveSmcConfig(
 ): SmcDetectorConfig {
   if (!partial) return cloneSmcDetectorConfig()
   return validateSmcDetectorConfig(partial).config
+}
+
+/** Collect all events knowable at a candle for profile comparison. */
+export function eventsAtCandle(
+  result: SmcDetectionResult,
+  candleIndex: number,
+): Array<{ id: string; kind: string }> {
+  const all = [
+    ...result.swings,
+    ...result.classifiedSwings,
+    ...result.bosEvents,
+    ...result.chochEvents,
+    ...result.displacementEvents,
+    ...result.fvgEvents,
+    ...result.equalLevelEvents,
+    ...result.liquiditySweepEvents,
+    ...result.orderBlockEvents,
+  ]
+  return all
+    .filter((e) => e.candleIndex === candleIndex)
+    .map((e) => ({ id: e.id, kind: e.kind }))
 }

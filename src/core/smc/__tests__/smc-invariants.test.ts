@@ -6,11 +6,16 @@ import {
   detectSmc,
   isValidBearishBos,
   isValidBullishBos,
+  PHASE1_COMPAT_SMC_CONFIG,
   sanitizeSmcDetectionResult,
   type SmcBosEvent,
   type SmcDetectionResult,
   type SmcSwingEvent,
 } from '@/core/smc'
+
+function phase1Config() {
+  return cloneSmcDetectorConfig(PHASE1_COMPAT_SMC_CONFIG)
+}
 
 function candle(
   index: number,
@@ -70,20 +75,41 @@ describe('SMC BOS hard invariants', () => {
       wickLow: 64_400,
       wickOnlyIgnored: false,
       reason: 'injected invalid',
+      refs: [{ id: fakeSwing.id, kind: 'SWING_HIGH' }],
     }
     const raw: SmcDetectionResult = {
       swings: [fakeSwing],
+      classifiedSwings: [],
       bosEvents: [fakeBos],
+      chochEvents: [],
+      displacementEvents: [],
+      fvgEvents: [],
+      equalLevelEvents: [],
+      liquiditySweepEvents: [],
+      orderBlockEvents: [],
+      structureState: 'UNDETERMINED_STRUCTURE',
       diagnostics: {
         detectorVersion: 'test',
         candleCount: 30,
         visibleThroughIndex: 29,
         swingCandidatesConsidered: 1,
         confirmedSwings: 1,
+        internalSwings: 0,
+        externalSwings: 0,
         wickOnlyBreakCandidatesIgnored: 0,
         validBosEvents: 1,
+        validChochEvents: 0,
+        displacementEvents: 0,
+        fvgEvents: 0,
+        equalLevelEvents: 0,
+        liquiditySweepEvents: 0,
+        orderBlockEvents: 0,
         repeatedBreaksIgnored: 0,
         computationDurationMs: 0,
+        moduleTimings: [],
+        maxBlockingDurationMs: 0,
+        structureState: 'UNDETERMINED_STRUCTURE',
+        detectionStatus: 'FAILED',
       },
     }
     const config = cloneSmcDetectorConfig()
@@ -133,7 +159,7 @@ describe('SMC BOS hard invariants', () => {
       [15, 15.5, 14.5, 15],
     ]
     const candles = pattern.map(([o, h, l, c], i) => candle(i, o, h, l, c))
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     const result = detectSmc(candles, config)
@@ -161,7 +187,7 @@ describe('SMC BOS hard invariants', () => {
       [21, 21.5, 20.5, 21],
     ]
     const candles = pattern.map(([o, h, l, c], i) => candle(i, o, h, l, c))
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     config.bos.allowRepeatedBreaksOfSameSwing = false
@@ -186,7 +212,7 @@ describe('SMC BOS hard invariants', () => {
       [19.5, 21, 19, 20.5],
     ]
     const candles = pattern.map(([o, h, l, c], i) => candle(i, o, h, l, c))
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     const result = detectSmc(candles, config)
@@ -210,7 +236,7 @@ describe('SMC BOS hard invariants', () => {
       [19.5, 21, 19, 20.5],
     ]
     const candles = pattern.map(([o, h, l, c], i) => candle(i, o, h, l, c))
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     const result = detectSmc(candles, config)

@@ -211,7 +211,7 @@ export function validateSmcLabExport(payload: unknown): SmcLabExportPayload {
     throw new Error('Invalid SMC Lab export: expected object')
   }
   const data = payload as Partial<SmcLabExportPayload>
-  if (data.schemaVersion !== 1) {
+  if (data.schemaVersion !== 1 && data.schemaVersion !== 2) {
     throw new Error(`Unsupported SMC Lab export schema: ${String(data.schemaVersion)}`)
   }
   if (!data.detectorConfig || !Array.isArray(data.reviews) || !Array.isArray(data.annotations)) {

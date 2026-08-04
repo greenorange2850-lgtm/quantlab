@@ -4,6 +4,7 @@ import {
   cloneSmcDetectorConfig,
   DEFAULT_SMC_DETECTOR_CONFIG,
   detectSmc,
+  emptySmcDetectionResult,
 } from '@/core/smc'
 import {
   buildDatasetKey,
@@ -21,6 +22,8 @@ import {
 } from '@/features/smc-lab/persistence/smc-lab-store'
 import {
   clearSmcLabLocalStorageForTests,
+  DEFAULT_SMC_LAYER_TOGGLES,
+  deleteSmcNamedConfig,
   listSmcSavedConfigs,
   loadSmcLabPreferences,
   saveSmcNamedConfig,
@@ -55,14 +58,27 @@ describe('SMC Lab persistence + reviews', () => {
     await store.clear()
   })
 
-  it('persists prefs and named configs separately from research/strategy', () => {
+  it('persists schemaVersion 2 prefs and named configs separately from research/strategy', () => {
     const config = cloneSmcDetectorConfig()
     config.swing.pivotLeft = 3
     updateSmcDetectorPrefs(config)
-    expect(loadSmcLabPreferences().detectorConfig.swing.pivotLeft).toBe(3)
+    const prefs = loadSmcLabPreferences()
+    expect(prefs.schemaVersion).toBe(2)
+    expect(prefs.detectorConfig.swing.pivotLeft).toBe(3)
+    expect(prefs.layerToggles.connectorLines).toBe(DEFAULT_SMC_LAYER_TOGGLES.connectorLines)
+    expect(prefs.activeProfileId).toBeTruthy()
+    expect(prefs.densityPreset).toBeTruthy()
 
     saveSmcNamedConfig({ name: 'My 3/3', config })
     expect(listSmcSavedConfigs().some((c) => c.name === 'My 3/3')).toBe(true)
+  })
+
+  it('does not delete builtin named configs', () => {
+    const builtins = listSmcSavedConfigs().filter((c) => c.builtin)
+    expect(builtins.length).toBeGreaterThan(0)
+    const target = builtins[0]!
+    expect(deleteSmcNamedConfig(target.id)).toBe(false)
+    expect(listSmcSavedConfigs().some((c) => c.id === target.id)).toBe(true)
   })
 
   it('stores reviews with fingerprints and config hash distinction', async () => {
@@ -81,7 +97,7 @@ describe('SMC Lab persistence + reviews', () => {
     const reviewA: SmcReviewRecord = {
       id: createReviewId(fingerprint, hashSmcConfig(configA)),
       fingerprint,
-      detectorVersion: '1.0.0-phase1',
+      detectorVersion: '2.0.0-phase2',
       configSnapshot: configA,
       configHash: hashSmcConfig(configA),
       verdict: 'correct',
@@ -93,6 +109,7 @@ describe('SMC Lab persistence + reviews', () => {
     await store.putReview(reviewA)
 
     const detection = {
+      ...emptySmcDetectionResult('COMPLETE'),
       swings: [
         {
           id: 'sh-5-1',
@@ -107,16 +124,13 @@ describe('SMC Lab persistence + reviews', () => {
           reason: 'test',
         },
       ],
-      bosEvents: [],
       diagnostics: {
-        detectorVersion: '1.0.0-phase1',
+        ...emptySmcDetectionResult('COMPLETE').diagnostics,
+        detectorVersion: '2.0.0-phase2',
         candleCount: 20,
         visibleThroughIndex: 19,
         swingCandidatesConsidered: 1,
         confirmedSwings: 1,
-        wickOnlyBreakCandidatesIgnored: 0,
-        validBosEvents: 0,
-        repeatedBreaksIgnored: 0,
         computationDurationMs: 1,
       },
     }
@@ -128,6 +142,8 @@ describe('SMC Lab persistence + reviews', () => {
     })
     expect(summaryA.overall.correct).toBe(1)
     expect(summaryA.overall.reviewedAccuracy).toBe(1)
+    expect(summaryA.byModule.Swings.correct).toBe(1)
+    expect(summaryA.historicalReviews).toHaveLength(0)
 
     const summaryB = buildReviewSummary({
       detection,
@@ -136,9 +152,11 @@ describe('SMC Lab persistence + reviews', () => {
     })
     expect(summaryB.overall.reviewed).toBe(0)
     expect(summaryB.overall.unreviewed).toBe(1)
+    expect(summaryB.byModule.Swings.unreviewed).toBe(1)
+    expect(summaryB.historicalReviews).toHaveLength(1)
   })
 
-  it('scopes annotations by dataset key and supports export/import validation', async () => {
+  it('scopes annotations by dataset key and accepts export schema 1 and 2', async () => {
     const store = new MemorySmcLabStore()
     setSmcLabStoreForTests(store)
     const key = buildDatasetKey({
@@ -167,16 +185,15 @@ describe('SMC Lab persistence + reviews', () => {
       ),
     ).toHaveLength(0)
 
-    const payload: SmcLabExportPayload = {
-      schemaVersion: 1,
+    const base = {
       exportedAt: Date.now(),
-      detectorVersion: '1.0.0-phase1',
+      detectorVersion: '2.0.0-phase2',
       detectorConfig: DEFAULT_SMC_DETECTOR_CONFIG,
-      reviews: [],
+      reviews: [] as SmcReviewRecord[],
       annotations: [annotation],
       dataset: {
         datasetKey: key,
-        sourceKind: 'binance',
+        sourceKind: 'binance' as const,
         symbol: 'BTCUSDT',
         timeframe: '1h',
         startMs: 1,
@@ -184,7 +201,15 @@ describe('SMC Lab persistence + reviews', () => {
         candleCount: 10,
       },
     }
-    expect(validateSmcLabExport(payload).annotations).toHaveLength(1)
+
+    const payloadV1: SmcLabExportPayload = { ...base, schemaVersion: 1 }
+    const payloadV2: SmcLabExportPayload = {
+      ...base,
+      schemaVersion: 2,
+      profileId: 'quantlab-default',
+    }
+    expect(validateSmcLabExport(payloadV1).annotations).toHaveLength(1)
+    expect(validateSmcLabExport(payloadV2).schemaVersion).toBe(2)
     expect(() => validateSmcLabExport({ schemaVersion: 99 })).toThrow(/Unsupported/)
   })
 })
@@ -202,18 +227,25 @@ describe('SMC Lab detection job', () => {
     })
     expect(job.status).toBe('cancelled')
     expect(job.result).toBeNull()
+    expect(job.moduleProgress.length).toBeGreaterThan(0)
   })
 
-  it('completes small jobs with a full detection result', async () => {
+  it('completes small jobs with a full detection result and module progress', async () => {
     const candles = Array.from({ length: 40 }, (_, i) => candle(i, 100 + Math.sin(i) * 5))
+    const progress: Array<{ module: string; status: string }> = []
     const job = await runSmcDetectionJob({
       candles,
       visibleIndex: candles.length - 1,
       config: DEFAULT_SMC_DETECTOR_CONFIG,
+      onModuleProgress: (modules) => {
+        progress.splice(0, progress.length, ...modules)
+      },
     })
     expect(job.status).toBe('completed')
     expect(job.result).not.toBeNull()
-    // Consistency with sync API
+    expect(job.moduleProgress.some((m) => m.status === 'complete' || m.status === 'skipped')).toBe(
+      true,
+    )
     const sync = detectSmc(candles, DEFAULT_SMC_DETECTOR_CONFIG)
     expect(job.result!.swings.map((s) => s.id)).toEqual(sync.swings.map((s) => s.id))
   })

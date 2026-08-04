@@ -102,6 +102,7 @@ function tryEmitBullish(
       `Break amount ${breakAmount}, break ${breakPercent.toFixed(4)}%.`,
       `Invariant: close > swing AND breakIndex >= confirmIndex.`,
     ].join(' '),
+    refs: [{ id: swing.id, kind: 'SWING_HIGH' }],
   }
 }
 
@@ -165,6 +166,7 @@ function tryEmitBearish(
       `Break amount ${breakAmount}, break ${breakPercent.toFixed(4)}%.`,
       `Invariant: close < swing AND breakIndex >= confirmIndex.`,
     ].join(' '),
+    refs: [{ id: swing.id, kind: 'SWING_LOW' }],
   }
 }
 
