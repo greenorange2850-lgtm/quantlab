@@ -101,12 +101,18 @@ export {
   isEventVisibleByRanking,
   filterDetectionByRanking,
   relatedEventsByRank,
+  buildVisibilityPipelineDiagnostics,
+  withRenderedCounts,
+  visibilityModuleForKind,
   type SmcVisibilityMode,
   type SmcImportanceReason,
   type SmcRankedEventMeta,
   type SmcRankingDiagnostics,
   type SmcIntelligenceLayer,
   type SmcVisibilityPolicy,
+  type SmcVisibilityStageCounts,
+  type SmcVisibilityModuleBucket,
+  type SmcVisibilityPipelineDiagnostics,
 } from './ranking'
 
 export {

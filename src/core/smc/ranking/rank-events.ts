@@ -1,4 +1,5 @@
 import type { SmcDetectionResult, SmcEvent } from '../types'
+import { buildVisibilityPipelineDiagnostics } from './pipeline-diagnostics'
 import { eventFamilyKey, scoreSmcEvent } from './score-event'
 import {
   SMC_RANKING_VERSION,
@@ -129,6 +130,69 @@ function emptyDiagnostics(mode: SmcVisibilityMode): SmcRankingDiagnostics {
   }
 }
 
+function isStructureBreakKind(kind: string): boolean {
+  return (
+    ((kind.includes('BOS') && !kind.includes('ORDER')) || kind.includes('CHOCH')) &&
+    !kind.includes('ORDER')
+  )
+}
+
+function passesScoreFloor(
+  event: SmcEvent,
+  score: number,
+  policy: (typeof SMC_VISIBILITY_POLICIES)[SmcVisibilityMode],
+): boolean {
+  if (isStructureBreakKind(event.kind)) {
+    return score >= policy.structureMinScore
+  }
+  return score >= policy.minScore
+}
+
+/**
+ * Select visible ids for Focus/Balanced.
+ * Balanced protects BOS/CHoCH so sweeps cannot wipe the structure break set.
+ */
+function selectVisibleIds(
+  rankedPrimary: SmcEvent[],
+  byEventId: Record<string, SmcRankedEventMeta>,
+  policy: (typeof SMC_VISIBILITY_POLICIES)[SmcVisibilityMode],
+): Set<string> {
+  const visibleIds = new Set<string>()
+  const structure: SmcEvent[] = []
+  const other: SmcEvent[] = []
+
+  for (const event of rankedPrimary) {
+    const score = byEventId[event.id]?.importanceScore ?? 0
+    if (!passesScoreFloor(event, score, policy)) continue
+    if (isStructureBreakKind(event.kind)) structure.push(event)
+    else other.push(event)
+  }
+
+  if (!policy.protectStructureBreaks || !Number.isFinite(policy.maxVisible)) {
+    let count = 0
+    for (const event of [...structure, ...other]) {
+      if (count >= policy.maxVisible) break
+      visibleIds.add(event.id)
+      count += 1
+    }
+    return visibleIds
+  }
+
+  // Reserve room for structure breaks first (all that pass structure floor),
+  // then fill remaining slots with highest-scoring other events.
+  const structureBudget = Math.min(structure.length, policy.maxVisible)
+  for (let i = 0; i < structureBudget; i++) {
+    visibleIds.add(structure[i]!.id)
+  }
+  let remaining = policy.maxVisible - visibleIds.size
+  for (const event of other) {
+    if (remaining <= 0) break
+    visibleIds.add(event.id)
+    remaining -= 1
+  }
+  return visibleIds
+}
+
 /**
  * Rank all detector events and mark visibility for the given mode.
  * Never deletes or mutates detector event payloads.
@@ -166,20 +230,10 @@ export function rankSmcDetectionResult(
     return a.candleIndex - b.candleIndex
   })
 
-  const visibleIds = new Set<string>()
-  if (mode === 'debug') {
-    for (const event of events) visibleIds.add(event.id)
-  } else {
-    let count = 0
-    for (const event of rankedPrimary) {
-      const meta = byEventId[event.id]
-      if (!meta) continue
-      if (meta.importanceScore < policy.minScore) continue
-      if (count >= policy.maxVisible) break
-      visibleIds.add(event.id)
-      count += 1
-    }
-  }
+  const visibleIds =
+    mode === 'debug'
+      ? new Set(events.map((e) => e.id))
+      : selectVisibleIds(rankedPrimary, byEventId, policy)
 
   for (const id of Object.keys(byEventId)) {
     byEventId[id]!.visible = visibleIds.has(id)
@@ -197,26 +251,30 @@ export function rankSmcDetectionResult(
   const scores = Object.values(byEventId).map((m) => m.importanceScore)
   const detectedEvents = events.length
   const visibleEvents = visibleIds.size
-  const diagnostics: SmcRankingDiagnostics = {
-    ...emptyDiagnostics(mode),
-    detectedEvents,
-    visibleEvents,
-    hiddenByRanking: Math.max(0, detectedEvents - visibleEvents),
-    averageImportance:
-      scores.length === 0
-        ? 0
-        : Math.round((scores.reduce((s, n) => s + n, 0) / scores.length) * 10) / 10,
-    highestImportance: scores.length === 0 ? 0 : Math.max(...scores),
-    lowestImportance: scores.length === 0 ? 0 : Math.min(...scores),
-  }
 
-  return {
+  const layer: SmcIntelligenceLayer = {
     rankingVersion: SMC_RANKING_VERSION,
     mode,
     byEventId,
     rankedEventIds,
-    diagnostics,
+    diagnostics: {
+      ...emptyDiagnostics(mode),
+      detectedEvents,
+      visibleEvents,
+      hiddenByRanking: Math.max(0, detectedEvents - visibleEvents),
+      averageImportance:
+        scores.length === 0
+          ? 0
+          : Math.round((scores.reduce((s, n) => s + n, 0) / scores.length) * 10) / 10,
+      highestImportance: scores.length === 0 ? 0 : Math.max(...scores),
+      lowestImportance: scores.length === 0 ? 0 : Math.min(...scores),
+    },
   }
+
+  // Attach pipeline stage diagnostics (chart/list rendered filled later by UI).
+  const withIntel: SmcDetectionResult = { ...result, intelligence: layer }
+  layer.diagnostics.pipeline = buildVisibilityPipelineDiagnostics(withIntel)
+  return layer
 }
 
 /**
