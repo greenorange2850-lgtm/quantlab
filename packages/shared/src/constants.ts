@@ -37,15 +37,14 @@ export const DEFAULT_PAGINATION = {
 
 export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/' },
+  { id: 'optimizer', label: 'New Research', icon: 'SlidersHorizontal', path: '/optimizer' },
+  { id: 'strategy-library', label: 'Strategy Library', icon: 'Library', path: '/strategies' },
   { id: 'strategy-lab', label: 'Strategy Lab', icon: 'Layers', path: '/strategy-lab' },
   { id: 'backtest-lab', label: 'Backtest Lab', icon: 'FlaskConical', path: '/backtest-lab' },
   { id: 'dataset-library', label: 'Dataset Library', icon: 'Database', path: '/dataset-library' },
   { id: 'market-explorer', label: 'Market Explorer', icon: 'Globe', path: '/market-explorer' },
   { id: 'trade-replay', label: 'Backtest Replay', icon: 'Play', path: '/backtest-replay' },
-  { id: 'research-analysis', label: 'Research Analysis', icon: 'Brain', path: '/research-analysis' },
   { id: 'strategy-compare', label: 'Strategy Compare', icon: 'ArrowLeftRight', path: '/strategy-compare' },
-  { id: 'research-sessions', label: 'Research Sessions', icon: 'History', path: '/research-sessions' },
-  { id: 'optimizer', label: 'Optimizer', icon: 'SlidersHorizontal', path: '/optimizer' },
   { id: 'reports', label: 'Reports', icon: 'FileText', path: '/reports', planned: true },
   { id: 'settings', label: 'Settings', icon: 'Settings', path: '/settings', planned: true },
 ] as const

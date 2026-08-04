@@ -1,28 +1,28 @@
 import { Link } from 'react-router-dom'
-import { ArrowLeftRight, Eye, Loader2, MoreHorizontal, Trash2 } from 'lucide-react'
+import { Eye, Loader2, MoreHorizontal, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { OpenReplayButton, isReplayAvailableForBacktest } from '@/features/backtest-replay'
 
-interface SessionActionsProps {
-  sessionId: string
+interface StrategyActionsProps {
+  strategyId: string
   bestBacktestId?: string | null
   deleting?: boolean
-  onDelete: (sessionId: string) => void
+  onDelete: (strategyId: string) => void
 }
 
-export function SessionActions({
-  sessionId,
+export function StrategyActions({
+  strategyId,
   bestBacktestId,
   deleting,
   onDelete,
-}: SessionActionsProps) {
+}: StrategyActionsProps) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-      <Link to={`/strategies/${sessionId}`} className="w-full sm:w-auto">
+      <Link to={`/strategies/${strategyId}`} className="w-full sm:w-auto">
         <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">
           <Eye className="mr-2 h-4 w-4" />
           Open Strategy
@@ -34,12 +34,6 @@ export function SessionActions({
           available={isReplayAvailableForBacktest(bestBacktestId)}
         />
       ) : null}
-      <Link to={`/strategy-compare?session=${sessionId}`} className="w-full sm:w-auto">
-        <Button variant="outline" className="min-h-11 w-full sm:min-h-9 sm:w-auto">
-          <ArrowLeftRight className="mr-2 h-4 w-4" />
-          Compare
-        </Button>
-      </Link>
 
       <div className="relative w-full sm:w-auto">
         <Button
@@ -68,7 +62,7 @@ export function SessionActions({
               disabled={deleting}
               onClick={() => {
                 setMenuOpen(false)
-                onDelete(sessionId)
+                onDelete(strategyId)
               }}
             >
               {deleting ? (

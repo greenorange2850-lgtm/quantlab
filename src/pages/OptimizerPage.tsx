@@ -308,12 +308,12 @@ export function OptimizerPage() {
       },
     })
 
-    // Navigate after a completed or saved-partial session is persisted.
+    // After Random Search, focus on the resulting Strategy — not the search process.
     if (result?.persisted) {
       if (result.session.status === 'completed') {
-        navigate(`/research-analysis?session=${result.session.id}`)
+        navigate(`/strategies/${result.session.id}?tab=optimization`)
       } else if (result.session.partial) {
-        navigate(`/optimizer?session=${result.session.id}`)
+        navigate(`/strategies/${result.session.id}?tab=optimization`)
       }
     }
   }
@@ -343,9 +343,10 @@ export function OptimizerPage() {
             <Sparkles className="h-5 w-5 text-accent" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold tracking-tight">Adaptive Optimizer</h2>
+            <h2 className="text-lg font-semibold tracking-tight">New Research</h2>
             <p className="text-pretty text-xs text-muted-foreground">
-              Baseline → Exploration → Refinement → Stability. Transparent, deterministic research.
+              Configure Random Search, then focus on the resulting Strategy — not the search
+              process.
             </p>
           </div>
         </div>
@@ -721,8 +722,8 @@ export function OptimizerPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                You can keep searching, discard in-memory progress, or save a partial Research
-                Session from candidates evaluated so far. Partial adaptive results remain
+                You can keep searching, discard in-memory progress, or keep a partial Strategy
+                draft from candidates evaluated so far. Partial adaptive results remain
                 provisional when stability analysis is incomplete.
               </p>
               <div className="flex flex-col gap-2">
@@ -752,15 +753,16 @@ export function OptimizerPage() {
       {showLiveProgress && progress && (
         <Card>
           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-base">Live Research Progress</CardTitle>
+            <CardTitle className="text-base">Live Random Search Progress</CardTitle>
             <Badge variant="accent" className="w-fit text-[10px]">
               {formatLiveStatusLabel(progress.status)}
             </Badge>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             <p className="text-xs text-muted-foreground">
-              Ephemeral optimizer signal — the Research Session is persisted only when the run
-              completes successfully.
+              Temporary computation — results become a Strategy draft when the run completes or
+              you keep a partial result. Save Strategy from the workspace to add it to your
+              library.
             </p>
             <div className={KPI_SECONDARY_GRID}>
               <MetricTile
@@ -930,7 +932,7 @@ export function OptimizerPage() {
           <CardContent className="py-4 text-xs text-muted-foreground">
             Optimization cancelled after {progress?.candidatesTested ?? 0} /{' '}
             {progress?.totalCandidates ?? iterations} candidates. Progress was discarded and no
-            Research Session was persisted.
+            Strategy draft was kept.
           </CardContent>
         </Card>
       )}
@@ -1108,7 +1110,7 @@ export function OptimizerPage() {
                       variant="outline"
                       className="min-h-11 w-full sm:min-h-9 sm:w-auto"
                       onClick={() => {
-                        navigate(`/research-analysis?session=${report.sessionId}`)
+                        navigate(`/strategies/${report.sessionId}?tab=ai`)
                       }}
                     >
                       View Analysis
@@ -1127,13 +1129,13 @@ export function OptimizerPage() {
       {report && (
         <Card id="research-analysis">
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-base">Session summary</CardTitle>
+            <CardTitle className="text-base">Strategy draft</CardTitle>
             <Link
-              to={`/research-analysis?session=${report.sessionId}`}
+              to={`/strategies/${report.sessionId}?tab=optimization`}
               className="w-full sm:w-auto"
             >
               <Button className="min-h-11 w-full sm:min-h-9 sm:w-auto">
-                View Details
+                Open Strategy
               </Button>
             </Link>
           </CardHeader>
@@ -1149,7 +1151,7 @@ export function OptimizerPage() {
               <p className="text-danger">
                 {archivedSession.error instanceof Error
                   ? archivedSession.error.message
-                  : 'Failed to load research session'}
+                  : 'Failed to load strategy'}
               </p>
             )}
           </CardContent>

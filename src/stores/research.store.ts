@@ -22,6 +22,7 @@ import {
   type PersistedResearchSession,
 } from '@/research/session-archive'
 import { syncResearchSessionQueries } from '@/api/queries/research-sessions'
+import { registerStrategyDraftFromSession } from '@/api/queries/strategies'
 import { saveBacktestDetail } from '@/backtests/detail-archive'
 import { buildPersistedDetail } from '@/backtests/restore-dashboard'
 import { createBacktestSummaryFromReport } from '@/core/dashboard'
@@ -354,8 +355,11 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
         session.progress = markProgressCompleted(session.progress)
       }
 
-      saveResearchSession({ session, report, savedAt: Date.now() })
+      const persistedEntry = { session, report, savedAt: Date.now() }
+      saveResearchSession(persistedEntry)
       syncResearchSessionQueries()
+      // Draft Strategy shell — Random Search remains temporary until Save Strategy.
+      registerStrategyDraftFromSession(persistedEntry)
       persisted = true
       archiveCandidateDetails(session, config)
 
