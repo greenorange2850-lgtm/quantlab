@@ -242,6 +242,34 @@ function renderEventBody(
         {'classification' in swing && swing.classification ? (
           <Row label="Classification">{swing.classification}</Row>
         ) : null}
+        {'prominence' in swing && swing.prominence != null ? (
+          <Row label="Prominence">
+            <span className="font-mono">{swing.prominence.toFixed(4)}%</span>
+          </Row>
+        ) : null}
+        {'promotionReason' in swing && swing.promotionReason ? (
+          <Row label="External promotion reason">{swing.promotionReason}</Row>
+        ) : null}
+        {'nextBestExtreme' in swing && swing.nextBestExtreme != null ? (
+          <Row label="Next-best extreme">
+            <span className="font-mono">{swing.nextBestExtreme}</span>
+          </Row>
+        ) : null}
+        {'barsFromPreviousExternal' in swing && swing.barsFromPreviousExternal != null ? (
+          <Row label="Bars from previous external">{swing.barsFromPreviousExternal}</Row>
+        ) : null}
+        {'replacedExternalSwingId' in swing && swing.replacedExternalSwingId ? (
+          <Row label="Replaced external swing">
+            <span className="font-mono text-[10px]">{swing.replacedExternalSwingId}</span>
+          </Row>
+        ) : null}
+        {'surroundingRange' in swing && swing.surroundingRange ? (
+          <Row label="Surrounding range">
+            <span className="font-mono">
+              [{swing.surroundingRange.low}, {swing.surroundingRange.high}]
+            </span>
+          </Row>
+        ) : null}
         {candle ? (
           <p className="text-muted-foreground">
             OHLC {candle.open} / {candle.high} / {candle.low} / {candle.close}
@@ -408,6 +436,11 @@ function renderEventBody(
         <Row label="Swept level">
           <span className="font-mono">{s.sweptLevel}</span>
         </Row>
+        {'canonicalLevelId' in s && s.canonicalLevelId ? (
+          <Row label="Canonical level id">
+            <span className="font-mono text-[10px]">{s.canonicalLevelId}</span>
+          </Row>
+        ) : null}
         <Row label="Wick / Close">
           <span className="font-mono">
             {s.wickExtreme} / {s.close}

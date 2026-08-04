@@ -838,6 +838,35 @@ export function SmcLabPage() {
               </ul>
             </div>
           ) : null}
+          {(() => {
+            const b = detection.diagnostics.structureBreakCounts
+            const rows: Array<[string, number]> = [
+              ['Internal Bullish BOS', b.internalBullishBos],
+              ['Internal Bearish BOS', b.internalBearishBos],
+              ['External Bullish BOS', b.externalBullishBos],
+              ['External Bearish BOS', b.externalBearishBos],
+              ['Internal Bullish CHoCH', b.internalBullishChoch],
+              ['Internal Bearish CHoCH', b.internalBearishChoch],
+              ['External Bullish CHoCH', b.externalBullishChoch],
+              ['External Bearish CHoCH', b.externalBearishChoch],
+            ]
+            return (
+              <div className="space-y-1">
+                <p className="text-xs font-medium">Structure breaks (scope × direction)</p>
+                <ul className="grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
+                  {rows.map(([label, count]) => (
+                    <li
+                      key={label}
+                      className="flex items-center justify-between rounded-md border border-border/50 px-2 py-1"
+                    >
+                      <span>{label}</span>
+                      <span className="font-mono text-muted-foreground">{count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })()}
           {summary.historicalReviews.length > 0 ? (
             <div className="space-y-1">
               <p className="text-xs font-medium text-amber-200">
