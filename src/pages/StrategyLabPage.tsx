@@ -10,7 +10,7 @@ export function StrategyLabPage() {
     >
       <BacktestSetupForm
         title="Strategy Lab"
-        description="Select a live Binance pair and timeframe, then run the strategy → risk → analytics pipeline."
+        description="Choose Binance Live or a Local Dataset, then run the strategy → risk → analytics pipeline."
         variant="strategy"
       />
     </motion.div>
