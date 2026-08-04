@@ -55,6 +55,7 @@ import {
   OptimizerTransparencyPanel,
   ResearchHealthPanel,
   ResearchProgressPanel,
+  resolveOptimizationSummary,
 } from '@/features/research-intelligence'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
 import { Disclosure } from '@/components/ui/disclosure'
@@ -891,6 +892,10 @@ export function OptimizerPage() {
         </Card>
       )}
 
+      {report && resolveOptimizationSummary(report) && (
+        <OptimizationResultPanel report={report} />
+      )}
+
       {researchProgress && !isRunning && (
         <ResearchProgressPanel snapshot={researchProgress} />
       )}
@@ -906,53 +911,6 @@ export function OptimizerPage() {
             <NextRecommendationPanel recommendation={researchRecommendation} />
           )}
         </div>
-      )}
-
-      {report && (report.optimization || report.baseline) && (
-        <OptimizationResultPanel
-          report={report}
-          optimization={
-            report.optimization ?? {
-              baseline: report.baseline ?? null,
-              rawBestCandidateId: report.rawBestCandidate?.id ?? null,
-              recommendedCandidateId: report.recommendedCandidate?.id ?? report.bestCandidate?.id ?? null,
-              recommendation: {
-                rawBestCandidateId: report.rawBestCandidate?.id ?? null,
-                recommendedCandidateId:
-                  report.recommendedCandidate?.id ?? report.bestCandidate?.id ?? null,
-                ruleId: 'raw_best',
-                explanation: 'Legacy session without adaptive optimization metadata.',
-              },
-              stability: null,
-              plateau: null,
-              verdict: 'Insufficient Evidence',
-              verdictDetail:
-                'Adaptive baseline / stability data is unavailable for this legacy session.',
-              improvements: [],
-              metricChanges: [],
-              parameterChanges: [],
-              searchExplanation: {
-                stagesCompleted: [],
-                candidatesEvaluated: report.candidatesEvaluated,
-                uniqueCandidates: report.candidatesEvaluated,
-                duplicatesSkipped: 0,
-                generatedCandidates: report.candidatesEvaluated,
-                duplicateRate: 0,
-                improvementCount: 0,
-                lastImprovement: null,
-                plateauDetail: null,
-                stabilitySummary: null,
-                spaceExhausted: false,
-              },
-              rejectionReasonCounts: {},
-              datasetCandleCount: 0,
-              datasetStartMs: null,
-              datasetEndMs: null,
-              stabilityIncomplete: true,
-              schemaVersion: 0,
-            }
-          }
-        />
       )}
 
       {status === 'empty' && (

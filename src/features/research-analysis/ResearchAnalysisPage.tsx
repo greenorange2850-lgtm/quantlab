@@ -19,9 +19,11 @@ import {
   buildResearchProgressSnapshot,
   buildResearchRecommendation,
   NextRecommendationPanel,
+  OptimizationResultPanel,
   OptimizerTransparencyPanel,
   ResearchHealthPanel,
   ResearchProgressPanel,
+  resolveOptimizationSummary,
 } from '@/features/research-intelligence'
 import { recordPeriodUiSnapshot } from '@/research/period-diagnostics'
 import { shouldAwaitResearchArchive } from '@/research/ui-gates'
@@ -199,6 +201,10 @@ export function ResearchAnalysisPage() {
         sessionId={report.sessionId}
         status={report.status}
       />
+
+      {resolveOptimizationSummary(report) && (
+        <OptimizationResultPanel report={report} />
+      )}
 
       <ResearchOverview report={report} />
 
