@@ -15,6 +15,7 @@ import { PortfolioPanel } from '@/features/dashboard/PortfolioPanel'
 import { MarketContextPanel } from '@/features/dashboard/MarketContextPanel'
 import { WatchlistPanel } from '@/features/dashboard/WatchlistPanel'
 import { useDashboard } from '@/api/queries/dashboard'
+import { useBacktestHistory } from '@/api/queries/backtests'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { shouldAwaitDashboardSessionHydrate } from '@/research/ui-gates'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -38,6 +39,8 @@ function DashboardHydrateSkeleton() {
 
 export function DashboardPage() {
   const { data } = useDashboard()
+  // Hydrate Recent Backtests from GET /backtests (server history).
+  useBacktestHistory()
   const isRunning = useBacktestStore((state) => state.isRunning)
   const restoredId = useBacktestStore((state) => state.restoredId)
   const isRestoring = useBacktestStore((state) => state.isRestoring)

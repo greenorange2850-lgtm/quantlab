@@ -77,6 +77,30 @@ export interface CreateStrategyVersionRequest {
 export type GetBacktestsResponse = ApiResponse<BacktestSummary[]>
 export type GetBacktestResponse = ApiResponse<Backtest>
 export type GetBacktestTradesResponse = ApiResponse<Trade[]>
+export type CreateBacktestResponse = ApiResponse<BacktestSummary>
+
+/**
+ * Persist a completed BacktestSummary into the existing `backtests` table.
+ * Server resolves / upserts symbol, timeframe, and strategy-version FKs.
+ */
+export interface CreateBacktestRequest {
+  id: string
+  version: string
+  market: string
+  timeframe: string
+  trades: number
+  winRate: number
+  profitFactor: number
+  maxDrawdown: number
+  netProfit: number
+  status?: Backtest['status']
+  date?: string
+  strategyName?: string
+  startDate?: string
+  endDate?: string
+  initialCapital?: number
+  equityCurve?: Backtest['equityCurve']
+}
 
 export interface RunBacktestRequest {
   strategyVersionId: string

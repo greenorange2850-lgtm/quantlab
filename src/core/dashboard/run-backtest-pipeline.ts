@@ -1,3 +1,4 @@
+import type { BacktestSummary, CreateBacktestRequest } from '@trading-os/shared'
 import type { Candle } from '../../data/candles.js'
 import { BinanceProvider } from '../../data/providers/BinanceProvider.js'
 import { buildBacktestReport } from '../analytics/report-builder.js'
@@ -16,7 +17,6 @@ import {
   createBacktestSummaryFromReport,
   type DashboardViewModelContext,
 } from './dashboard-view-model.js'
-import type { BacktestSummary } from '@trading-os/shared'
 
 export interface RunBacktestPipelineParams {
   symbol: string
@@ -64,6 +64,10 @@ export const defaultBacktestPipelineParams: RunBacktestPipelineParams = {
 
 function createBacktestId(): string {
   return `bt-${Date.now()}`
+}
+
+function isoDate(time: number): string {
+  return new Date(time).toISOString().split('T')[0]
 }
 
 /**
@@ -135,6 +139,15 @@ export async function runBacktestPipeline(
   }
 }
 
+/** Prepend a summary and keep the dashboard history list capped. */
+export function mergeRecentBacktests(
+  next: BacktestSummary,
+  existing: BacktestSummary[] = [],
+  limit = 12,
+): BacktestSummary[] {
+  return [next, ...existing.filter((item) => item.id !== next.id)].slice(0, limit)
+}
+
 export function mapPipelineResultToDashboard(
   pipelineResult: RunBacktestPipelineResult,
   recentBacktests: BacktestSummary[] = [],
@@ -148,6 +161,37 @@ export function mapPipelineResultToDashboard(
   return buildDashboardViewModel(
     pipelineResult.report,
     pipelineResult.context,
-    [summary, ...recentBacktests.filter((item) => item.id !== summary.id)].slice(0, 12),
+    mergeRecentBacktests(summary, recentBacktests),
   )
+}
+
+/** Build the POST /backtests payload from a completed client pipeline run. */
+export function buildCreateBacktestRequest(
+  pipelineResult: RunBacktestPipelineResult,
+): CreateBacktestRequest {
+  const summary = createBacktestSummaryFromReport(
+    pipelineResult.report,
+    pipelineResult.context,
+    pipelineResult.backtestId,
+  )
+  const first = pipelineResult.report.equityCurve[0]?.time
+  const last = pipelineResult.report.equityCurve.at(-1)?.time
+
+  return {
+    id: summary.id,
+    version: summary.version,
+    market: summary.market,
+    timeframe: summary.timeframe,
+    trades: summary.trades,
+    winRate: summary.winRate,
+    profitFactor: summary.profitFactor,
+    maxDrawdown: summary.maxDrawdown,
+    netProfit: summary.netProfit,
+    status: summary.status,
+    date: summary.date,
+    strategyName: pipelineResult.context.strategyName,
+    startDate: first !== undefined ? isoDate(first) : summary.date,
+    endDate: last !== undefined ? isoDate(last) : summary.date,
+    initialCapital: pipelineResult.report.config.initialCapital,
+  }
 }

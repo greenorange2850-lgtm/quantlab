@@ -108,6 +108,67 @@ export class MarketDataRepository extends BaseRepository {
     return row.count
   }
 
+  findSymbolByName(name: string): TradingSymbol | null {
+    const row = this.db
+      .prepare('SELECT * FROM symbols WHERE name = ? COLLATE NOCASE')
+      .get(name) as SymbolRow | undefined
+    if (!row) return null
+    return {
+      id: row.id,
+      name: row.name,
+      displayName: row.display_name,
+      assetClass: row.asset_class as TradingSymbol['assetClass'],
+      pipSize: row.pip_size,
+      tickSize: row.tick_size,
+      createdAt: row.created_at,
+    }
+  }
+
+  /**
+   * Resolve a symbol id by name, inserting a minimal row when missing.
+   */
+  ensureSymbol(name: string): string {
+    const existing = this.findSymbolByName(name)
+    if (existing) return existing.id
+
+    const id = `sym-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+    const assetClass = /btc|eth|crypto/i.test(name) ? 'crypto' : /xau|xag|oil/i.test(name) ? 'commodities' : 'forex'
+    this.db
+      .prepare(
+        `INSERT INTO symbols (id, name, display_name, asset_class, pip_size, tick_size)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, name.toUpperCase(), name.toUpperCase(), assetClass, 0.0001, 0.00001)
+    return id
+  }
+
+  findTimeframeByCode(code: string): Timeframe | null {
+    const row = this.db
+      .prepare('SELECT * FROM timeframes WHERE code = ? COLLATE NOCASE')
+      .get(code) as TimeframeRow | undefined
+    if (!row) return null
+    return {
+      id: row.id,
+      code: row.code,
+      minutes: row.minutes,
+      label: row.label,
+    }
+  }
+
+  /**
+   * Resolve a timeframe id by canonical code, inserting when missing.
+   */
+  ensureTimeframe(code: string, minutes: number, label: string): string {
+    const existing = this.findTimeframeByCode(code)
+    if (existing) return existing.id
+
+    const id = `tf-${code.toLowerCase()}`
+    this.db
+      .prepare('INSERT INTO timeframes (id, code, minutes, label) VALUES (?, ?, ?, ?)')
+      .run(id, code.toUpperCase(), minutes, label)
+    return id
+  }
+
   insertCandles(symbolId: string, timeframeId: string, candles: ParsedCandle[]): { imported: number; skipped: number } {
     const stmt = this.db.prepare(`
       INSERT INTO candles (id, symbol_id, timeframe_id, timestamp, open, high, low, close, volume)

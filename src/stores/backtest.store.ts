@@ -1,7 +1,10 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import type { BacktestSummary, DashboardData } from '@trading-os/shared'
 import type { BacktestReport } from '@/core/analytics/types'
+import { api } from '@/api/client'
 import {
+  buildCreateBacktestRequest,
   createEmptyDashboard,
   defaultBacktestPipelineParams,
   mapPipelineResultToDashboard,
@@ -19,6 +22,12 @@ import {
   buildPersistedDetail,
   restoreDashboardFromDetail,
 } from '@/backtests/restore-dashboard'
+import {
+  BACKTEST_STORE_PERSIST_NAME,
+  STORE_PERSIST_VERSION,
+  getPersistStorage,
+  partializeBacktestState,
+} from './persistence'
 
 export type BacktestViewMode = 'live' | 'restored'
 
@@ -51,6 +60,8 @@ interface BacktestState {
   hasAttemptedSessionHydrate: boolean
 
   runBacktest: (params?: Partial<RunBacktestPipelineParams>) => Promise<void>
+  /** Replace server-owned history in the dashboard view model. */
+  hydrateRecentBacktests: (items: BacktestSummary[]) => void
   restoreBacktest: (id: string) => Promise<void>
   /** Apply a TanStack-fetched latest detail as the active session (no rerun). */
   applyStartupSession: (detail: PersistedBacktestDetail) => void
@@ -88,7 +99,9 @@ function lastParamsFromDetail(detail: PersistedBacktestDetail): RunBacktestPipel
   }
 }
 
-export const useBacktestStore = create<BacktestState>((set, get) => ({
+export const useBacktestStore = create<BacktestState>()(
+  persist(
+    (set, get) => ({
   dashboard: createEmptyDashboard(),
   report: null,
   isRunning: false,
@@ -107,6 +120,15 @@ export const useBacktestStore = create<BacktestState>((set, get) => ({
 
   clearError: () => set({ error: null }),
   clearRestoreError: () => set({ restoreError: null }),
+
+  hydrateRecentBacktests: (items) => {
+    set((state) => ({
+      dashboard: {
+        ...state.dashboard,
+        recentBacktests: items.slice(0, 12),
+      },
+    }))
+  },
   clearSessionHydrateError: () => set({ sessionHydrateError: null }),
   dismissAutoRestoredBadge: () => set({ autoRestored: false }),
 
@@ -262,9 +284,33 @@ export const useBacktestStore = create<BacktestState>((set, get) => ({
         restoredId: null,
         autoRestored: false,
       })
+
+      // Best-effort server persistence (PR #13). Keep local optimistic UI if API is down.
+      try {
+        const request = buildCreateBacktestRequest(pipelineResult)
+        await api.post<BacktestSummary>('/backtests', request)
+        const serverHistory = await api.get<BacktestSummary[]>('/backtests')
+        set((state) => ({
+          dashboard: {
+            ...state.dashboard,
+            recentBacktests: serverHistory.slice(0, 12),
+          },
+        }))
+      } catch {
+        // Local archive + optimistic history already applied.
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Backtest failed'
       set({ isRunning: false, error: message })
     }
   },
-}))
+}),
+    {
+      name: BACKTEST_STORE_PERSIST_NAME,
+      version: STORE_PERSIST_VERSION,
+      storage: createJSONStorage(getPersistStorage),
+      partialize: (state): ReturnType<typeof partializeBacktestState> =>
+        partializeBacktestState(state),
+    },
+  ),
+)
