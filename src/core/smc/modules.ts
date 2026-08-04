@@ -47,6 +47,15 @@ export const SMC_MODULES: readonly SmcModuleDescriptor[] = [
     requires: ['market-swings'],
   },
   {
+    id: 'dow-theory',
+    name: 'Dow Theory',
+    version: '1.0.0',
+    status: 'active',
+    description:
+      'HH/HL/LH/LL progression, trend inference, and strength from classified swings (derived layer)',
+    requires: ['internal-external-structure'],
+  },
+  {
     id: 'break-of-structure',
     name: 'Break of Structure',
     version: '2.0.0',
@@ -120,6 +129,7 @@ export function listPlannedSmcModules(): SmcModuleDescriptor[] {
 export const SMC_DETECTION_MODULE_ORDER = [
   'swings',
   'structure',
+  'dowTheory',
   'equalLevels',
   'structureState',
   'bosChoch',

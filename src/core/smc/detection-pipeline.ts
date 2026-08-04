@@ -6,6 +6,7 @@ import { detectFairValueGaps } from './fvg-detector'
 import { sanitizeSmcDetectionResult } from './invariants'
 import { detectLiquiditySweeps } from './liquidity-sweep-detector'
 import { detectOrderBlocks } from './order-block-detector'
+import { analyzeDowTheory, emptyDowTheoryLayer } from './dow-theory'
 import { classifyInternalExternalStructure, type StructureClassificationInternal } from './structure-classifier'
 import { detectStructureBreaks } from './structure-breaks'
 import { detectConfirmedSwings } from './swing-detector'
@@ -106,8 +107,8 @@ function runTimed(
 /**
  * Progressive detection API — only events knowable by `visibleIndex` (inclusive).
  * Module order:
- * 1 Swings → 2 Structure → 3 Equal levels → 4/5 BOS/CHoCH → 6 Displacement →
- * 7 FVG → 8 Liquidity Sweep → 9 Order Block → 10 mitigation (inside detectors)
+ * 1 Swings → 2 Structure → 3 Dow Theory → 4 Equal levels → 5/6 BOS/CHoCH →
+ * 7 Displacement → 8 FVG → 9 Liquidity Sweep → 10 Order Block → 11 mitigation
  */
 export function detectSmcUntil(
   candles: readonly Candle[],
@@ -166,6 +167,15 @@ export function detectSmcUntil(
   )
 
   const annotatedSwings = classified.annotatedBaseSwings
+
+  // Dow Theory — after swing classification, before BOS/CHoCH. Derived only.
+  let dowTheory = emptyDowTheoryLayer(last)
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('dowTheory', true, timings, () => {
+      dowTheory = analyzeDowTheory(classified.classified, last)
+    }),
+  )
 
   let equalLevels = { events: [] as ReturnType<typeof detectEqualLevels>['events'] }
   maxBlock = Math.max(
@@ -277,6 +287,7 @@ export function detectSmcUntil(
     liquiditySweepEvents: sweeps.events,
     orderBlockEvents: orderBlocks.events,
     structureState: breaks.structureState,
+    dowTheory,
     diagnostics: {
       detectorVersion: SMC_DETECTOR_VERSION,
       candleCount: candles.length,
@@ -305,6 +316,7 @@ export function detectSmcUntil(
       maxBlockingDurationMs: maxBlock,
       structureState: breaks.structureState,
       detectionStatus: 'COMPLETE',
+      dowTheory: dowTheory.diagnostics,
     },
   }
 
@@ -313,6 +325,7 @@ export function detectSmcUntil(
 
   return {
     ...result,
+    dowTheory: result.dowTheory ?? dowTheory,
     diagnostics: {
       ...result.diagnostics,
       computationDurationMs: durationMs,
@@ -320,6 +333,7 @@ export function detectSmcUntil(
       maxBlockingDurationMs: maxBlock,
       structureState: result.structureState,
       detectionStatus: failed ? 'FAILED' : 'COMPLETE',
+      dowTheory: (result.dowTheory ?? dowTheory).diagnostics,
       invariantDetails: report.details,
       invariants: {
         invalidBullishBosCount: report.invalidBullishBosCount,
