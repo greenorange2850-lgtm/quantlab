@@ -4,6 +4,7 @@ import {
   AlertCircle,
   FlaskConical,
   Loader2,
+  Pause,
   Play,
   RefreshCw,
   Square,
@@ -86,8 +87,18 @@ export function OptimizerPage() {
   const error = useResearchStore((state) => state.error)
   const validationErrors = useResearchStore((state) => state.validationErrors)
   const selectedCandidateId = useResearchStore((state) => state.selectedCandidateId)
+  const cancelDialogOpen = useResearchStore((state) => state.cancelDialogOpen)
+  const backgroundWarningVisible = useResearchStore((state) => state.backgroundWarningVisible)
   const startRandomSearch = useResearchStore((state) => state.startRandomSearch)
-  const cancelRandomSearch = useResearchStore((state) => state.cancelRandomSearch)
+  const pauseRandomSearch = useResearchStore((state) => state.pauseRandomSearch)
+  const resumeRandomSearch = useResearchStore((state) => state.resumeRandomSearch)
+  const openCancelDialog = useResearchStore((state) => state.openCancelDialog)
+  const dismissCancelDialog = useResearchStore((state) => state.dismissCancelDialog)
+  const confirmDiscardProgress = useResearchStore((state) => state.confirmDiscardProgress)
+  const confirmSavePartialResult = useResearchStore((state) => state.confirmSavePartialResult)
+  const setBackgroundWarningVisible = useResearchStore(
+    (state) => state.setBackgroundWarningVisible,
+  )
   const applyParameters = useResearchStore((state) => state.applyParameters)
   const selectCandidate = useResearchStore((state) => state.selectCandidate)
   const clearError = useResearchStore((state) => state.clearError)
@@ -102,7 +113,7 @@ export function OptimizerPage() {
       progress,
       report,
       session,
-      uiRunning: status === 'running',
+      uiRunning: status === 'running' || status === 'paused' || status === 'cancelling',
     }),
     [progress, report, session, status],
   )
@@ -172,10 +183,24 @@ export function OptimizerPage() {
       )
     : 0
   const isRunning = status === 'running'
+  const isPaused = status === 'paused'
+  const isCancelling = status === 'cancelling'
+  const isActive = isRunning || isPaused || isCancelling
   const selected =
     report?.topCandidates.find((candidate) => candidate.id === selectedCandidateId) ??
     report?.bestCandidate ??
     null
+
+  useEffect(() => {
+    if (!isActive) return
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        setBackgroundWarningVisible(true)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [isActive, setBackgroundWarningVisible])
 
   const periodDiagLive = useMemo(() => {
     const loaded = candlesQuery.data
@@ -256,20 +281,25 @@ export function OptimizerPage() {
       },
     })
 
-    // Navigate only after a completed session is safely persisted.
-    // Do not navigate on failure or cancellation.
-    if (result?.persisted && result.session.status === 'completed') {
+    // Navigate after a completed session or a user-saved partial session is persisted.
+    if (
+      result?.persisted &&
+      (result.session.status === 'completed' || result.session.partial === true)
+    ) {
       navigate(`/research-analysis?session=${result.session.id}`)
     }
   }
 
   const showLiveProgress =
-    isRunning ||
+    isActive ||
     (progress !== null &&
       (progress.status === 'CANCELLED' ||
         progress.status === 'FAILED' ||
         progress.status === 'FINALIZING' ||
-        progress.status === 'COMPLETED'))
+        progress.status === 'COMPLETED' ||
+        progress.status === 'PAUSED' ||
+        progress.status === 'PAUSING' ||
+        progress.status === 'CANCELLING'))
 
   const progressPercent =
     progress && progress.totalCandidates > 0
@@ -308,19 +338,19 @@ export function OptimizerPage() {
               <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Market pair
               </label>
-              <SymbolSelect value={symbol} onChange={setSymbol} disabled={isRunning} />
+              <SymbolSelect value={symbol} onChange={setSymbol} disabled={isActive} />
             </div>
             <div className="min-w-0 space-y-2">
               <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Timeframe
               </label>
-              <TimeframeSelect value={interval} onChange={setInterval} disabled={isRunning} />
+              <TimeframeSelect value={interval} onChange={setInterval} disabled={isActive} />
             </div>
             <div className="min-w-0 space-y-2 md:col-span-2">
               <ResearchPeriodSelect
                 selection={periodSelection}
                 onChange={setPeriodSelection}
-                disabled={isRunning}
+                disabled={isActive}
                 idPrefix="optimizer-period"
               />
             </div>
@@ -330,7 +360,7 @@ export function OptimizerPage() {
               </label>
               <Input
                 value={initialCapital}
-                disabled={isRunning}
+                disabled={isActive}
                 onChange={(event) => setInitialCapital(event.target.value)}
                 className="w-full bg-white/[0.03]"
               />
@@ -341,7 +371,7 @@ export function OptimizerPage() {
               </label>
               <Input
                 value={iterations}
-                disabled={isRunning}
+                disabled={isActive}
                 onChange={(event) => setIterations(event.target.value)}
                 className="w-full bg-white/[0.03]"
               />
@@ -352,7 +382,7 @@ export function OptimizerPage() {
               </label>
               <select
                 value={objective}
-                disabled={isRunning}
+                disabled={isActive}
                 onChange={(event) => setObjective(event.target.value as ScoringObjective)}
                 className="flex h-11 w-full rounded-lg border border-border bg-white/[0.03] px-3 text-sm"
               >
@@ -382,7 +412,7 @@ export function OptimizerPage() {
                           </label>
                           <Input
                             value={String(range[field])}
-                            disabled={isRunning}
+                            disabled={isActive}
                             onChange={(event) =>
                               updateRange(range.name, field, event.target.value)
                             }
@@ -404,7 +434,7 @@ export function OptimizerPage() {
                   </label>
                   <Input
                     value={maxDrawdownPercent}
-                    disabled={isRunning}
+                    disabled={isActive}
                     placeholder="e.g. 20"
                     onChange={(event) => setMaxDrawdownPercent(event.target.value)}
                     className="w-full bg-white/[0.03]"
@@ -416,7 +446,7 @@ export function OptimizerPage() {
                   </label>
                   <Input
                     value={minimumTrades}
-                    disabled={isRunning}
+                    disabled={isActive}
                     placeholder="e.g. 10"
                     onChange={(event) => setMinimumTrades(event.target.value)}
                     className="w-full bg-white/[0.03]"
@@ -428,7 +458,7 @@ export function OptimizerPage() {
                   </label>
                   <Input
                     value={minimumProfitFactor}
-                    disabled={isRunning}
+                    disabled={isActive}
                     placeholder="e.g. 1.2"
                     onChange={(event) => setMinimumProfitFactor(event.target.value)}
                     className="w-full bg-white/[0.03]"
@@ -494,17 +524,17 @@ export function OptimizerPage() {
             <Button
               className="min-h-11 w-full sm:min-h-9 sm:w-auto"
               disabled={
-                isRunning ||
+                isActive ||
                 !resolvedPeriod.period ||
                 !candlesReady ||
                 candlesQuery.isFetching
               }
               onClick={() => void handleStart()}
             >
-              {isRunning ? (
+              {isActive ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Searching…
+                  {isCancelling ? 'Cancelling…' : isPaused ? 'Paused' : 'Searching…'}
                 </>
               ) : (
                 <>
@@ -513,14 +543,46 @@ export function OptimizerPage() {
                 </>
               )}
             </Button>
-            {isRunning && (
+            {isRunning && !isCancelling && (
               <Button
                 variant="secondary"
                 className="min-h-11 w-full sm:min-h-9 sm:w-auto"
-                onClick={cancelRandomSearch}
+                disabled={isCancelling}
+                onClick={pauseRandomSearch}
+              >
+                <Pause className="mr-2 h-4 w-4" />
+                Pause
+              </Button>
+            )}
+            {isPaused && !isCancelling && (
+              <Button
+                className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                disabled={isCancelling}
+                onClick={resumeRandomSearch}
+              >
+                <Play className="mr-2 h-4 w-4" />
+                Continue
+              </Button>
+            )}
+            {(isRunning || isPaused) && !isCancelling && (
+              <Button
+                variant="secondary"
+                className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                disabled={isCancelling}
+                onClick={openCancelDialog}
               >
                 <Square className="mr-2 h-4 w-4" />
                 Cancel
+              </Button>
+            )}
+            {isCancelling && (
+              <Button
+                variant="secondary"
+                className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                disabled
+              >
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Cancelling…
               </Button>
             )}
             {status === 'failed' && (
@@ -539,6 +601,55 @@ export function OptimizerPage() {
           </div>
         </CardContent>
       </Card>
+
+      {backgroundWarningVisible && isActive && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+          Browser background execution is not guaranteed. Keep this tab open for reliable
+          progress.
+        </div>
+      )}
+
+      {cancelDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="stop-research-title"
+        >
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle id="stop-research-title" className="text-base">
+                Stop this research?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                You can keep searching, discard in-memory progress, or save a partial Research
+                Session from candidates evaluated so far.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button className="min-h-11 w-full" onClick={dismissCancelDialog}>
+                  Continue research
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="min-h-11 w-full"
+                  onClick={confirmDiscardProgress}
+                >
+                  Discard progress
+                </Button>
+                <Button
+                  variant="outline"
+                  className="min-h-11 w-full"
+                  onClick={confirmSavePartialResult}
+                >
+                  Save partial result
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {showLiveProgress && progress && (
         <Card>
@@ -595,12 +706,23 @@ export function OptimizerPage() {
               <MetricTile
                 label="Elapsed Time"
                 value={formatDurationMs(progress.elapsedMs)}
+                hint="Active research time (excludes pauses)"
+                size="secondary"
+                tone="muted"
+              />
+              <MetricTile
+                label="Paused"
+                value={formatDurationMs(progress.pausedMs)}
                 size="secondary"
                 tone="muted"
               />
               <MetricTile
                 label="Estimated Time Remaining"
-                value={formatDurationMs(progress.estimatedRemainingMs)}
+                value={
+                  progress.status === 'PAUSED' || progress.status === 'PAUSING'
+                    ? 'Paused'
+                    : formatDurationMs(progress.estimatedRemainingMs)
+                }
                 size="secondary"
                 tone="muted"
               />
@@ -631,7 +753,7 @@ export function OptimizerPage() {
         </Card>
       )}
 
-      {researchProgress && !isRunning && (
+      {researchProgress && !isActive && (
         <ResearchProgressPanel snapshot={researchProgress} />
       )}
 
@@ -662,8 +784,17 @@ export function OptimizerPage() {
       {status === 'cancelled' && (
         <Card>
           <CardContent className="py-4 text-xs text-muted-foreground">
-            Random Search cancelled after {progress?.candidatesTested ?? 0} candidates.
-            No Research Session was persisted for this cancelled run.
+            {liveSession?.partial || liveReport?.partial ? (
+              <>
+                Partial Research Result saved after {progress?.candidatesTested ?? 0} of{' '}
+                {progress?.totalCandidates ?? 0} candidates.
+              </>
+            ) : (
+              <>
+                Random Search cancelled after {progress?.candidatesTested ?? 0} candidates.
+                No Research Session was persisted for this discarded run.
+              </>
+            )}
           </CardContent>
         </Card>
       )}

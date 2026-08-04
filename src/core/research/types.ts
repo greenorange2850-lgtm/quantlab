@@ -2,6 +2,7 @@ import type { Candle } from '../../data/candles.js'
 import type { BacktestReport } from '../analytics/types.js'
 import type { MovingAverageCrossParams } from '../strategy/MovingAverageCrossStrategy.js'
 import type { RandomSearchPerfDiagnostics } from './cooperative-schedule.js'
+import type { RandomSearchRunControls } from './run-controls.js'
 
 export type ScoringObjective =
   | 'netProfit'
@@ -59,6 +60,9 @@ export type RandomSearchLiveStatus =
   | 'EXPLORING'
   | 'IMPROVING'
   | 'PLATEAUING'
+  | 'PAUSING'
+  | 'PAUSED'
+  | 'CANCELLING'
   | 'FINALIZING'
   | 'COMPLETED'
   | 'FAILED'
@@ -75,7 +79,7 @@ export interface RandomSearchCandidate {
 
 /**
  * Typed live progress payload for Random Search.
- * Ephemeral UI signal only — does not create or update Research Sessions.
+ * Ephemeral UI signal only — does not create or update Research Sessions mid-run.
  */
 export interface RandomSearchProgress {
   totalCandidates: number
@@ -89,7 +93,15 @@ export interface RandomSearchProgress {
   bestCandidateParameters: MovingAverageCrossParams | null
   improvementsCount: number
   candidatesSinceLastImprovement: number | null
+  /**
+   * Active research time excluding paused duration.
+   * Used for ETA so pauses do not inflate remaining estimates.
+   */
   elapsedMs: number
+  /** Wall-clock time since search start (includes pauses). */
+  wallElapsedMs: number
+  /** Cumulative time spent in PAUSED. */
+  pausedMs: number
   estimatedRemainingMs: number | null
   status: RandomSearchLiveStatus
 }
@@ -104,6 +116,11 @@ export interface ResearchSession {
   createdAt: number
   completedAt: number | null
   progress: RandomSearchProgress
+  /**
+   * True when this session was saved via "Save partial result" after Cancel.
+   * Completed successful runs leave this undefined/false.
+   */
+  partial?: boolean
 }
 
 export interface ResearchReport {
@@ -125,6 +142,8 @@ export interface ResearchReport {
    * Not a separate analytics engine — no new metric formulas.
    */
   analysis: ResearchAnalysisNarrative
+  /** Mirrors session.partial for UI labeling. */
+  partial?: boolean
 }
 
 export type ResearchRiskLevel = 'low' | 'moderate' | 'elevated' | 'high'
@@ -144,6 +163,8 @@ export interface RunRandomSearchOptions {
   candles: Candle[]
   onProgress?: (progress: RandomSearchProgress) => void
   signal?: AbortSignal
+  /** Pause / resume / cancel gates (optional — tests may omit). */
+  controls?: RandomSearchRunControls
   /**
    * Injectable browser yield (tests). Defaults to `yieldToBrowser`
    * (`scheduler.yield` or `setTimeout(0)` — not microtask-only).
@@ -155,4 +176,3 @@ export interface RunRandomSearchOptions {
   enablePerfDiagnostics?: boolean
   onPerfDiagnostics?: (diagnostics: RandomSearchPerfDiagnostics) => void
 }
-

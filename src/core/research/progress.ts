@@ -6,6 +6,9 @@ export const DEFAULT_PROGRESS_THROTTLE_MS = 150
 
 const IMMEDIATE_STATUSES: ReadonlySet<RandomSearchLiveStatus> = new Set([
   'INITIALIZING',
+  'PAUSING',
+  'PAUSED',
+  'CANCELLING',
   'FINALIZING',
   'COMPLETED',
   'FAILED',
@@ -25,6 +28,8 @@ export function createEmptyProgress(totalCandidates: number): RandomSearchProgre
     improvementsCount: 0,
     candidatesSinceLastImprovement: null,
     elapsedMs: 0,
+    wallElapsedMs: 0,
+    pausedMs: 0,
     estimatedRemainingMs: null,
     status: 'INITIALIZING',
   }
@@ -47,15 +52,20 @@ export function deriveLiveSearchStatus(input: {
   justImproved: boolean
 }): Exclude<
   RandomSearchLiveStatus,
-  'INITIALIZING' | 'FINALIZING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+  | 'INITIALIZING'
+  | 'PAUSING'
+  | 'PAUSED'
+  | 'CANCELLING'
+  | 'FINALIZING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
 > {
-  const { tested, total, bestScore, candidatesSinceLastImprovement, justImproved } = input
+  const { tested, bestScore, candidatesSinceLastImprovement, justImproved } = input
 
   if (tested === 0) return 'EXPLORING'
   if (justImproved) return 'IMPROVING'
-  if (bestScore === null) {
-    return total > 0 && tested / total >= 0.5 ? 'EXPLORING' : 'EXPLORING'
-  }
+  if (bestScore === null) return 'EXPLORING'
 
   const window = improvementWindow(tested)
   const recentlyImproved =
@@ -66,6 +76,7 @@ export function deriveLiveSearchStatus(input: {
 }
 
 export function estimateRemainingMs(input: {
+  /** Active research time (excludes pauses). */
   elapsedMs: number
   candidatesTested: number
   totalCandidates: number
@@ -78,20 +89,67 @@ export function estimateRemainingMs(input: {
   return Math.round(avg * remaining)
 }
 
+export interface TimingState {
+  startedAtMs: number
+  pausedTotalMs: number
+  pauseStartedAtMs: number | null
+}
+
+export function createTimingState(startedAtMs: number): TimingState {
+  return {
+    startedAtMs,
+    pausedTotalMs: 0,
+    pauseStartedAtMs: null,
+  }
+}
+
+export function markPauseStart(timing: TimingState, nowMs: number): void {
+  if (timing.pauseStartedAtMs !== null) return
+  timing.pauseStartedAtMs = nowMs
+}
+
+export function markPauseEnd(timing: TimingState, nowMs: number): void {
+  if (timing.pauseStartedAtMs === null) return
+  timing.pausedTotalMs += Math.max(0, nowMs - timing.pauseStartedAtMs)
+  timing.pauseStartedAtMs = null
+}
+
+export function readTiming(timing: TimingState, nowMs: number): {
+  wallElapsedMs: number
+  pausedMs: number
+  activeElapsedMs: number
+} {
+  const openPause =
+    timing.pauseStartedAtMs !== null
+      ? Math.max(0, nowMs - timing.pauseStartedAtMs)
+      : 0
+  const pausedMs = timing.pausedTotalMs + openPause
+  const wallElapsedMs = Math.max(0, nowMs - timing.startedAtMs)
+  const activeElapsedMs = Math.max(0, wallElapsedMs - pausedMs)
+  return { wallElapsedMs, pausedMs, activeElapsedMs }
+}
+
 export function withElapsed(
   progress: RandomSearchProgress,
-  startedAtMs: number,
+  timing: TimingState,
   nowMs: number,
 ): RandomSearchProgress {
-  const elapsedMs = Math.max(0, nowMs - startedAtMs)
+  const { wallElapsedMs, pausedMs, activeElapsedMs } = readTiming(timing, nowMs)
+  const estimatedRemainingMs =
+    progress.status === 'PAUSED' || progress.status === 'PAUSING'
+      ? progress.estimatedRemainingMs
+      : estimateRemainingMs({
+          elapsedMs: activeElapsedMs,
+          candidatesTested: progress.candidatesTested,
+          totalCandidates: progress.totalCandidates,
+        })
+
   return {
     ...progress,
-    elapsedMs,
-    estimatedRemainingMs: estimateRemainingMs({
-      elapsedMs,
-      candidatesTested: progress.candidatesTested,
-      totalCandidates: progress.totalCandidates,
-    }),
+    elapsedMs: activeElapsedMs,
+    wallElapsedMs,
+    pausedMs,
+    estimatedRemainingMs,
   }
 }
 
@@ -114,6 +172,12 @@ export function formatLiveStatusLabel(status: RandomSearchLiveStatus): string {
       return 'Improving'
     case 'PLATEAUING':
       return 'Plateauing'
+    case 'PAUSING':
+      return 'Pausing'
+    case 'PAUSED':
+      return 'Paused'
+    case 'CANCELLING':
+      return 'Cancelling'
     case 'FINALIZING':
       return 'Finalizing'
     case 'COMPLETED':
@@ -159,7 +223,7 @@ export type ProgressBuildState = {
 
 export function buildProgressPayload(
   state: ProgressBuildState,
-  startedAtMs: number,
+  timing: TimingState,
   nowMs: number,
 ): RandomSearchProgress {
   const base: RandomSearchProgress = {
@@ -176,8 +240,10 @@ export function buildProgressPayload(
     improvementsCount: state.improvementsCount,
     candidatesSinceLastImprovement: state.candidatesSinceLastImprovement,
     elapsedMs: 0,
+    wallElapsedMs: 0,
+    pausedMs: 0,
     estimatedRemainingMs: null,
     status: state.status,
   }
-  return withElapsed(base, startedAtMs, nowMs)
+  return withElapsed(base, timing, nowMs)
 }

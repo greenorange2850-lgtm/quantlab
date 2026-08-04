@@ -11,7 +11,10 @@ import {
 import {
   buildProgressPayload,
   createEmptyProgress,
+  createTimingState,
   deriveLiveSearchStatus,
+  markPauseEnd,
+  markPauseStart,
 } from './progress.js'
 import { sampleStrategyParams, validateRandomSearchConfig } from './sampling.js'
 import { passesConstraints, scoreFromReport } from './scoring.js'
@@ -44,39 +47,17 @@ type ProgressTracker = {
   justImproved: boolean
 }
 
-function snapshotProgress(
-  tracker: ProgressTracker,
-  status: RandomSearchProgress['status'],
-  startedAtMs: number,
-  nowMs: number = Date.now(),
-): RandomSearchProgress {
-  return buildProgressPayload(
-    {
-      ...tracker,
-      status,
-    },
-    startedAtMs,
-    nowMs,
-  )
-}
-
 /**
  * Random Search research engine.
  * Reuses `runBacktestPipeline` + existing `BacktestReport` metrics for scoring.
- * Does not implement a second backtest/analytics engine.
  *
- * Live progress is ephemeral: FINALIZING is emitted before return on success.
- * COMPLETED is reserved for the store after the Research Session is persisted.
- *
- * Cooperative scheduling: prefetched-candle backtests are CPU-synchronous.
- * Awaiting them only queues microtasks, which still starve paint/input on mobile.
- * Between candidate batches we yield via `scheduler.yield` / `setTimeout(0)` so
- * the browser can paint progress and process Cancel.
+ * Run controls (pause/resume/cancel) only gate scheduling between candidates —
+ * they do not change sampling, scoring, ranking, or strategy behavior.
  */
 export async function runRandomSearch(
   options: RunRandomSearchOptions,
 ): Promise<ResearchSession> {
-  const { config, candles, onProgress, signal } = options
+  const { config, candles, onProgress, signal, controls } = options
   const yieldFn = options.yieldFn ?? yieldToBrowser
   const issues = validateRandomSearchConfig({
     iterations: config.iterations,
@@ -84,6 +65,7 @@ export async function runRandomSearch(
   })
 
   const startedAtMs = Date.now()
+  const timing = createTimingState(startedAtMs)
   const tracker: ProgressTracker = {
     totalCandidates: config.iterations,
     candidatesTested: 0,
@@ -108,10 +90,15 @@ export async function runRandomSearch(
     createdAt: startedAtMs,
     completedAt: null,
     progress: createEmptyProgress(config.iterations),
+    partial: false,
   }
 
   const emit = (status: RandomSearchProgress['status']) => {
-    session.progress = snapshotProgress(tracker, status, startedAtMs)
+    session.progress = buildProgressPayload(
+      { ...tracker, status },
+      timing,
+      Date.now(),
+    )
     onProgress?.({ ...session.progress })
   }
 
@@ -144,16 +131,29 @@ export async function runRandomSearch(
     }
   }
 
-  // Initial progress before the first candidate.
-  emit('INITIALIZING')
-  // Let the browser paint INITIALIZING before heavy candidate work.
-  await yieldFn()
-  if (collectPerf) perf.noteYield()
-  if (signal?.aborted) {
+  function finishCancelled(partial: boolean) {
     session.status = 'cancelled'
+    session.partial = partial
     session.completedAt = Date.now()
     emit('CANCELLED')
     finishPerf()
+  }
+
+  function shouldCancel(): boolean {
+    return Boolean(signal?.aborted || controls?.getCancelIntent())
+  }
+
+  function cancelIsSavePartial(): boolean {
+    return controls?.getCancelIntent() === 'save-partial'
+  }
+
+  // Initial progress before the first candidate.
+  emit('INITIALIZING')
+  await yieldFn()
+  if (collectPerf) perf.noteYield()
+  if (shouldCancel()) {
+    if (controls?.getCancelIntent()) emit('CANCELLING')
+    finishCancelled(cancelIsSavePartial())
     return session
   }
 
@@ -177,27 +177,68 @@ export async function runRandomSearch(
 
   try {
     for (let i = 0; i < config.iterations; i++) {
-      if (signal?.aborted) {
+      if (shouldCancel()) {
         closeOpenBatch()
-        session.status = 'cancelled'
-        session.completedAt = Date.now()
-        emit('CANCELLED')
-        finishPerf()
+        emit('CANCELLING')
+        finishCancelled(cancelIsSavePartial())
         return session
+      }
+
+      if (controls) {
+        const gate = await controls.waitIfPaused({
+          onPausing: () => {
+            emit('PAUSING')
+          },
+          onPaused: () => {
+            markPauseStart(timing, Date.now())
+            emit('PAUSED')
+          },
+          onResume: () => {
+            markPauseEnd(timing, Date.now())
+          },
+        })
+        if (gate === 'cancel') {
+          closeOpenBatch()
+          emit('CANCELLING')
+          finishCancelled(cancelIsSavePartial())
+          return session
+        }
       }
 
       if (batcher.shouldYieldBefore(i, performance.now())) {
         closeOpenBatch()
         await yieldFn()
         if (collectPerf) perf.noteYield()
-        if (signal?.aborted) {
-          session.status = 'cancelled'
-          session.completedAt = Date.now()
-          emit('CANCELLED')
-          finishPerf()
+        if (shouldCancel()) {
+          emit('CANCELLING')
+          finishCancelled(cancelIsSavePartial())
           return session
         }
+        // Pause may have been requested during the yield.
+        if (controls) {
+          const gate = await controls.waitIfPaused({
+            onPausing: () => emit('PAUSING'),
+            onPaused: () => {
+              markPauseStart(timing, Date.now())
+              emit('PAUSED')
+            },
+            onResume: () => markPauseEnd(timing, Date.now()),
+          })
+          if (gate === 'cancel') {
+            emit('CANCELLING')
+            finishCancelled(cancelIsSavePartial())
+            return session
+          }
+        }
         batchStartedAt = performance.now()
+      }
+
+      // If cancel arrived while we were about to start, surface CANCELLING first.
+      if (shouldCancel()) {
+        closeOpenBatch()
+        emit('CANCELLING')
+        finishCancelled(cancelIsSavePartial())
+        return session
       }
 
       const parameters = sampleStrategyParams(config.parameterRanges, baseSeed + i)
@@ -255,6 +296,14 @@ export async function runRandomSearch(
           (tracker.candidatesSinceLastImprovement ?? 0) + 1
       }
 
+      // After current candidate: honour cancel (finish this candidate first).
+      if (shouldCancel()) {
+        closeOpenBatch()
+        emit('CANCELLING')
+        finishCancelled(cancelIsSavePartial())
+        return session
+      }
+
       const liveStatus = deriveLiveSearchStatus({
         tested: tracker.candidatesTested,
         total: tracker.totalCandidates,
@@ -266,23 +315,39 @@ export async function runRandomSearch(
 
       batcher.noteCandidate()
       openBatchCandidates += 1
+
+      // Pause only after the current candidate has fully finished.
+      if (controls) {
+        const pauseGate = await controls.waitIfPaused({
+          onPausing: () => emit('PAUSING'),
+          onPaused: () => {
+            markPauseStart(timing, Date.now())
+            emit('PAUSED')
+          },
+          onResume: () => markPauseEnd(timing, Date.now()),
+        })
+        if (pauseGate === 'cancel') {
+          closeOpenBatch()
+          emit('CANCELLING')
+          finishCancelled(cancelIsSavePartial())
+          return session
+        }
+      }
     }
 
     closeOpenBatch()
 
-    // Finalizing before report/session persistence (COMPLETED emitted by store after save).
     session.status = 'completed'
+    session.partial = false
     session.completedAt = Date.now()
     emit('FINALIZING')
     finishPerf()
     return session
   } catch (error: unknown) {
     closeOpenBatch()
-    if (signal?.aborted) {
-      session.status = 'cancelled'
-      session.completedAt = Date.now()
-      emit('CANCELLED')
-      finishPerf()
+    if (shouldCancel()) {
+      emit('CANCELLING')
+      finishCancelled(cancelIsSavePartial())
       return session
     }
 

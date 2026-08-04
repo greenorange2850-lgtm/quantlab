@@ -76,12 +76,21 @@ export function ResearchOverview({ report }: ResearchOverviewProps) {
     <Card hover={false}>
       <CardHeader className="gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
-          <CardTitle className="text-base">Research Snapshot</CardTitle>
+          <CardTitle className="text-base">
+            {report.partial ? 'Partial Research Result' : 'Research Snapshot'}
+          </CardTitle>
           <p className="text-pretty text-xs text-muted-foreground">
-            Quality, profit, and risk — from the archived report.
+            {report.partial
+              ? `Search stopped after ${report.candidatesEvaluated} of ${report.iterationsRequested} candidates.`
+              : 'Quality, profit, and risk — from the archived report.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {report.partial && (
+            <Badge variant="warning" className="text-[10px]">
+              Validation incomplete
+            </Badge>
+          )}
           <Badge variant="outline" className="text-[10px]">
             Validation Required
           </Badge>

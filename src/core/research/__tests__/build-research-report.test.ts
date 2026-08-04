@@ -116,6 +116,8 @@ describe('buildResearchReport', () => {
         improvementsCount: 1,
         candidatesSinceLastImprovement: 1,
         elapsedMs: 0,
+        wallElapsedMs: 0,
+        pausedMs: 0,
         estimatedRemainingMs: 0,
         status: 'COMPLETED',
       },

@@ -3,12 +3,14 @@ import type { Candle } from '@/data/candles'
 import {
   buildResearchReport,
   createEmptyProgress,
+  createRandomSearchRunControls,
   createThrottledProgressHandler,
   DEFAULT_MA_CROSS_RANGES,
   runRandomSearch,
   validateRandomSearchConfig,
   type RandomSearchConfig,
   type RandomSearchProgress,
+  type RandomSearchRunControls,
   type ResearchReport,
   type ResearchSession,
   type ScoringObjective,
@@ -27,6 +29,8 @@ import { createBacktestSummaryFromReport } from '@/core/dashboard'
 export type ResearchUiStatus =
   | 'idle'
   | 'running'
+  | 'paused'
+  | 'cancelling'
   | 'completed'
   | 'cancelled'
   | 'failed'
@@ -35,7 +39,7 @@ export type ResearchUiStatus =
 export type StartRandomSearchResult = {
   session: ResearchSession
   report: ResearchReport
-  /** True when a completed Research Session was persisted. */
+  /** True when a Research Session was persisted (completed or saved partial). */
   persisted: boolean
 }
 
@@ -50,12 +54,29 @@ interface ResearchState {
   appliedParameters: MovingAverageCrossParams | null
   selectedCandidateId: string | null
   abortController: AbortController | null
+  runControls: RandomSearchRunControls | null
+  /** Cancel confirmation dialog visibility (UI only). */
+  cancelDialogOpen: boolean
+  /** Non-blocking Page Visibility warning while research is active. */
+  backgroundWarningVisible: boolean
 
   startRandomSearch: (input: {
     config: RandomSearchConfig
     candles: Candle[]
   }) => Promise<StartRandomSearchResult | null>
+  pauseRandomSearch: () => void
+  resumeRandomSearch: () => void
+  /** Open cancel confirmation — does not abort yet. */
+  openCancelDialog: () => void
+  /** Close dialog and keep researching. */
+  dismissCancelDialog: () => void
+  /** Abort without persisting. */
+  confirmDiscardProgress: () => void
+  /** Stop after current candidate and persist a partial CANCELLED session. */
+  confirmSavePartialResult: () => void
+  /** @deprecated Prefer openCancelDialog — kept for older call sites. */
   cancelRandomSearch: () => void
+  setBackgroundWarningVisible: (visible: boolean) => void
   applyParameters: (params: MovingAverageCrossParams) => void
   clearAppliedParameters: () => void
   selectCandidate: (id: string | null) => void
@@ -72,6 +93,39 @@ function markProgressCompleted(progress: RandomSearchProgress): RandomSearchProg
   }
 }
 
+function archiveCandidateDetails(
+  session: ResearchSession,
+  config: RandomSearchConfig,
+): void {
+  for (const candidate of session.candidates) {
+    const summary = createBacktestSummaryFromReport(
+      candidate.report,
+      {
+        strategyName: 'Moving Average Cross',
+        strategyVersion: `rs-${candidate.parameters.fastPeriod}-${candidate.parameters.slowPeriod}-${candidate.parameters.rsiPeriod}`,
+        timeframe: config.interval.toUpperCase(),
+      },
+      candidate.backtestId,
+    )
+    saveBacktestDetail(
+      buildPersistedDetail({
+        id: candidate.backtestId,
+        report: candidate.report,
+        context: {
+          strategyName: 'Moving Average Cross',
+          strategyVersion: summary.version,
+          timeframe: summary.timeframe,
+        },
+        existingSummary: summary,
+      }),
+    )
+  }
+}
+
+function isBusyStatus(status: ResearchUiStatus): boolean {
+  return status === 'running' || status === 'paused' || status === 'cancelling'
+}
+
 export const useResearchStore = create<ResearchState>((set, get) => ({
   status: 'idle',
   progress: null,
@@ -82,11 +136,17 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   appliedParameters: null,
   selectedCandidateId: null,
   abortController: null,
+  runControls: null,
+  cancelDialogOpen: false,
+  backgroundWarningVisible: false,
 
   clearError: () => set({ error: null, validationErrors: [] }),
 
+  setBackgroundWarningVisible: (visible) => set({ backgroundWarningVisible: visible }),
+
   reset: () => {
     get().abortController?.abort()
+    get().runControls?.requestCancel('discard')
     set({
       status: 'idle',
       progress: null,
@@ -96,6 +156,9 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       validationErrors: [],
       selectedCandidateId: null,
       abortController: null,
+      runControls: null,
+      cancelDialogOpen: false,
+      backgroundWarningVisible: false,
     })
   },
 
@@ -108,7 +171,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   selectCandidate: (id) => set({ selectedCandidateId: id }),
 
   hydrateFromPersistedSession: (entry) => {
-    if (get().status === 'running') return
+    if (isBusyStatus(get().status)) return
     const status: ResearchUiStatus =
       entry.session.status === 'completed' && entry.report.topCandidates.length === 0
         ? 'empty'
@@ -116,25 +179,92 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
           ? 'idle'
           : entry.session.status
 
+    const progress =
+      entry.session.status === 'completed' && !entry.session.partial
+        ? markProgressCompleted(entry.session.progress)
+        : entry.session.progress
+
     set({
       status,
       session: entry.session,
       report: entry.report,
-      progress: markProgressCompleted(entry.session.progress),
+      progress,
       error: entry.session.error,
       selectedCandidateId: entry.report.bestCandidate?.id ?? null,
       validationErrors: [],
+      cancelDialogOpen: false,
+      backgroundWarningVisible: false,
     })
   },
 
+  pauseRandomSearch: () => {
+    const { status, runControls, progress } = get()
+    if (!runControls) return
+    if (status === 'cancelling') return
+    if (status !== 'running' && progress?.status !== 'PAUSING') return
+    if (progress?.status === 'PAUSED' || progress?.status === 'PAUSING') return
+    runControls.requestPause()
+  },
+
+  resumeRandomSearch: () => {
+    const { status, runControls } = get()
+    if (!runControls) return
+    if (status === 'cancelling') return
+    if (status !== 'paused' && get().progress?.status !== 'PAUSED') return
+    runControls.resume()
+    set({ status: 'running', cancelDialogOpen: false })
+  },
+
+  openCancelDialog: () => {
+    const { status } = get()
+    if (status === 'cancelling') return
+    if (status !== 'running' && status !== 'paused') return
+    set({ cancelDialogOpen: true })
+  },
+
+  dismissCancelDialog: () => {
+    if (get().status === 'cancelling') return
+    set({ cancelDialogOpen: false })
+  },
+
+  confirmDiscardProgress: () => {
+    const { status, runControls, abortController } = get()
+    if (status === 'cancelling') return
+    if (!runControls || (status !== 'running' && status !== 'paused')) return
+    set({
+      cancelDialogOpen: false,
+      status: 'cancelling',
+      progress: get().progress
+        ? { ...get().progress!, status: 'CANCELLING' }
+        : get().progress,
+    })
+    runControls.requestCancel('discard')
+    abortController?.abort()
+  },
+
+  confirmSavePartialResult: () => {
+    const { status, runControls, abortController } = get()
+    if (status === 'cancelling') return
+    if (!runControls || (status !== 'running' && status !== 'paused')) return
+    set({
+      cancelDialogOpen: false,
+      status: 'cancelling',
+      progress: get().progress
+        ? { ...get().progress!, status: 'CANCELLING' }
+        : get().progress,
+    })
+    runControls.requestCancel('save-partial')
+    // Do not abort via signal alone — controls drive save-partial path.
+    // Abort still wakes cooperative waits if needed.
+    abortController?.abort()
+  },
+
   cancelRandomSearch: () => {
-    const controller = get().abortController
-    if (!controller || get().status !== 'running') return
-    controller.abort()
+    get().openCancelDialog()
   },
 
   startRandomSearch: async ({ config, candles }) => {
-    if (get().status === 'running') {
+    if (isBusyStatus(get().status)) {
       set({
         error: 'A Random Search is already running',
         validationErrors: ['A Random Search is already running'],
@@ -160,8 +290,25 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
     }
 
     const controller = new AbortController()
+    const runControls = createRandomSearchRunControls()
     const throttled = createThrottledProgressHandler((progress) => {
-      set({ progress })
+      const nextStatus: ResearchUiStatus =
+        progress.status === 'PAUSED' || progress.status === 'PAUSING'
+          ? 'paused'
+          : progress.status === 'CANCELLING'
+            ? 'cancelling'
+            : get().status === 'cancelling'
+              ? 'cancelling'
+              : 'running'
+      set({
+        progress,
+        status:
+          get().status === 'cancelling' && progress.status !== 'CANCELLED'
+            ? 'cancelling'
+            : nextStatus === 'running' && get().status === 'paused'
+              ? 'running'
+              : nextStatus,
+      })
     })
 
     set({
@@ -173,12 +320,16 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       validationErrors: [],
       selectedCandidateId: null,
       abortController: controller,
+      runControls,
+      cancelDialogOpen: false,
+      backgroundWarningVisible: false,
     })
 
     const session = await runRandomSearch({
       config,
       candles,
       signal: controller.signal,
+      controls: runControls,
       onProgress: (progress) => {
         throttled.emit(progress)
       },
@@ -189,47 +340,24 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
 
     const report = buildResearchReport(session)
 
-    // Persist only the final completed Research Session — never mid-run progress,
-    // cancelled, or failed partial runs.
     let persisted = false
-    if (session.status === 'completed') {
-      const completedProgress = markProgressCompleted(session.progress)
-      session.progress = completedProgress
+    const shouldPersistCompleted = session.status === 'completed'
+    const shouldPersistPartial =
+      session.status === 'cancelled' && session.partial === true
+
+    if (shouldPersistCompleted || shouldPersistPartial) {
+      if (shouldPersistCompleted) {
+        session.progress = markProgressCompleted(session.progress)
+      }
 
       saveResearchSession({ session, report, savedAt: Date.now() })
       syncResearchSessionQueries()
       persisted = true
+      archiveCandidateDetails(session, config)
 
-      for (const candidate of session.candidates) {
-        const summary = createBacktestSummaryFromReport(
-          candidate.report,
-          {
-            strategyName: 'Moving Average Cross',
-            strategyVersion: `rs-${candidate.parameters.fastPeriod}-${candidate.parameters.slowPeriod}-${candidate.parameters.rsiPeriod}`,
-            timeframe: config.interval.toUpperCase(),
-          },
-          candidate.backtestId,
-        )
-        saveBacktestDetail(
-          buildPersistedDetail({
-            id: candidate.backtestId,
-            report: candidate.report,
-            context: {
-              strategyName: 'Moving Average Cross',
-              strategyVersion: summary.version,
-              timeframe: summary.timeframe,
-              // Omit candles — shared localStorage quota with research sessions.
-              // Report metrics are enough to restore dashboards without rerun.
-            },
-            existingSummary: summary,
-          }),
-        )
+      if (shouldPersistCompleted) {
+        set({ progress: session.progress })
       }
-
-      // COMPLETED only after the Research Session is safely stored.
-      set({
-        progress: completedProgress,
-      })
     }
 
     let status: ResearchUiStatus = session.status
@@ -244,6 +372,8 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       progress: session.progress,
       error: session.error,
       abortController: null,
+      runControls: null,
+      cancelDialogOpen: false,
       selectedCandidateId: report.bestCandidate?.id ?? null,
     })
 

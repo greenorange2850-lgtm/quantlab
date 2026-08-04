@@ -95,6 +95,8 @@ function baseSession(candidates: RandomSearchCandidate[]): ResearchSession {
       improvementsCount: candidates[0] ? 1 : 0,
       candidatesSinceLastImprovement: candidates[0] ? 0 : null,
       elapsedMs: 0,
+      wallElapsedMs: 0,
+      pausedMs: 0,
       estimatedRemainingMs: 0,
       status: 'COMPLETED',
     },

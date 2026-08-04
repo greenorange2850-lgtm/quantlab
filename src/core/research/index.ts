@@ -35,6 +35,7 @@ export {
   formatLiveStatusLabel,
   withElapsed,
   buildProgressPayload,
+  createTimingState,
   DEFAULT_PROGRESS_THROTTLE_MS,
 } from './progress.js'
 export {
@@ -49,6 +50,11 @@ export {
   type RandomSearchPerfDiagnostics,
   type AdaptiveBatchController,
 } from './cooperative-schedule.js'
+export {
+  createRandomSearchRunControls,
+  type RandomSearchRunControls,
+  type CancelIntent,
+} from './run-controls.js'
 
 import type { ParameterRange } from './types.js'
 

@@ -336,7 +336,7 @@ describe('research store random search workflow', () => {
     expect(useResearchStore.getState().report?.topCandidates).toEqual([])
   })
 
-  it('supports cancel state without persisting a partial session', async () => {
+  it('opens cancel dialog without aborting until discard is confirmed', async () => {
     let resolveIter!: () => void
     const gate = new Promise<void>((resolve) => {
       resolveIter = resolve
@@ -377,16 +377,173 @@ describe('research store random search workflow', () => {
     })
 
     await Promise.resolve()
-    useResearchStore.getState().cancelRandomSearch()
+    useResearchStore.getState().openCancelDialog()
+    expect(useResearchStore.getState().cancelDialogOpen).toBe(true)
+    expect(useResearchStore.getState().status).toBe('running')
+
+    useResearchStore.getState().confirmDiscardProgress()
+    expect(useResearchStore.getState().status).toBe('cancelling')
+    expect(useResearchStore.getState().cancelDialogOpen).toBe(false)
+
     resolveIter()
     const result = await run
 
     expect(useResearchStore.getState().status).toBe('cancelled')
     expect(useResearchStore.getState().progress?.status).toBe('CANCELLED')
+    expect(useResearchStore.getState().session?.partial).toBe(false)
     expect(result?.persisted).toBe(false)
     expect(listResearchSessionsBySavedAt()).toHaveLength(0)
-    // UI is not stuck in running.
     expect(useResearchStore.getState().abortController).toBeNull()
+  })
+
+  it('save partial result persists CANCELLED session and returns navigation id', async () => {
+    let resolveIter!: () => void
+    const gate = new Promise<void>((resolve) => {
+      resolveIter = resolve
+    })
+
+    vi.mocked(runBacktestPipeline).mockImplementation(async (params) => {
+      await gate
+      return {
+        report: stubReport(1.5),
+        candles: params?.candles ?? [],
+        context: {
+          strategyName: 'Moving Average Cross',
+          strategyVersion: 'rs',
+          timeframe: '1H',
+          candles: params?.candles ?? [],
+        },
+        backtestId: `bt-partial-${Date.now()}`,
+        strategyParams: {
+          fastPeriod: 12,
+          slowPeriod: 40,
+          rsiPeriod: 14,
+        },
+      }
+    })
+
+    const run = useResearchStore.getState().startRandomSearch({
+      candles: buildCandles(25),
+      config: {
+        iterations: 5,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 25,
+        initialCapital: 10_000,
+        seed: 12,
+      },
+    })
+
+    await Promise.resolve()
+    useResearchStore.getState().confirmSavePartialResult()
+    expect(useResearchStore.getState().status).toBe('cancelling')
+    resolveIter()
+    const result = await run
+
+    expect(result?.persisted).toBe(true)
+    expect(result?.session.status).toBe('cancelled')
+    expect(result?.session.partial).toBe(true)
+    expect(result?.report.partial).toBe(true)
+    expect(getResearchSession(result!.session.id)).not.toBeNull()
+    expect(listResearchSessionsBySavedAt()).toHaveLength(1)
+  })
+
+  it('pause and resume update UI status and block duplicate starts', async () => {
+    const pending: Array<() => void> = []
+    let started = 0
+
+    vi.mocked(runBacktestPipeline).mockImplementation(async (params) => {
+      started += 1
+      await new Promise<void>((resolve) => pending.push(resolve))
+      return {
+        report: stubReport(1.4),
+        candles: params?.candles ?? [],
+        context: {
+          strategyName: 'Moving Average Cross',
+          strategyVersion: 'rs',
+          timeframe: '1H',
+          candles: params?.candles ?? [],
+        },
+        backtestId: `bt-pause-${started}`,
+        strategyParams: {
+          fastPeriod: 10,
+          slowPeriod: 40,
+          rsiPeriod: 14,
+        },
+      }
+    })
+
+    const run = useResearchStore.getState().startRandomSearch({
+      candles: buildCandles(25),
+      config: {
+        iterations: 3,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 25,
+        initialCapital: 10_000,
+        seed: 13,
+      },
+    })
+
+    await vi.waitFor(() => expect(started).toBe(1))
+    expect(useResearchStore.getState().status).toBe('running')
+
+    await useResearchStore.getState().startRandomSearch({
+      candles: buildCandles(10),
+      config: {
+        iterations: 2,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 10,
+        initialCapital: 10_000,
+        seed: 1,
+      },
+    })
+    expect(useResearchStore.getState().error).toMatch(/already running/i)
+
+    useResearchStore.getState().pauseRandomSearch()
+    pending.shift()?.()
+    await vi.waitFor(() => {
+      expect(useResearchStore.getState().status).toBe('paused')
+    })
+
+    await useResearchStore.getState().startRandomSearch({
+      candles: buildCandles(10),
+      config: {
+        iterations: 2,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 10,
+        initialCapital: 10_000,
+        seed: 2,
+      },
+    })
+    expect(useResearchStore.getState().error).toMatch(/already running/i)
+
+    useResearchStore.getState().resumeRandomSearch()
+    expect(useResearchStore.getState().status).toBe('running')
+
+    for (let n = started + 1; n <= 3; n++) {
+      await vi.waitFor(() => expect(started).toBeGreaterThanOrEqual(n))
+      pending.shift()?.()
+    }
+    await run
+    expect(useResearchStore.getState().status).toBe('completed')
+  })
+
+  it('supports Page Visibility warning flag', () => {
+    useResearchStore.getState().setBackgroundWarningVisible(true)
+    expect(useResearchStore.getState().backgroundWarningVisible).toBe(true)
+    useResearchStore.getState().setBackgroundWarningVisible(false)
+    expect(useResearchStore.getState().backgroundWarningVisible).toBe(false)
   })
 
   it('failure does not persist a session and leaves a FAILED progress state', async () => {
