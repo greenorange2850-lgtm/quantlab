@@ -2,12 +2,17 @@ import { describe, expect, it } from 'vitest'
 import type { Candle } from '@/data/candles'
 import {
   DEFAULT_SMC_DETECTOR_CONFIG,
+  PHASE1_COMPAT_SMC_CONFIG,
   detectConfirmedSwings,
   detectSmc,
   detectSmcUntil,
   validateSmcDetectorConfig,
   cloneSmcDetectorConfig,
 } from '@/core/smc'
+
+function phase1Config() {
+  return cloneSmcDetectorConfig(PHASE1_COMPAT_SMC_CONFIG)
+}
 
 function candle(
   index: number,
@@ -150,7 +155,7 @@ describe('BOS detection', () => {
 
   it('emits bullish BOS on close break of confirmed swing high', () => {
     const candles = seriesWithBullishBos()
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     const result = detectSmc(candles, config)
@@ -175,7 +180,7 @@ describe('BOS detection', () => {
       [15, 15.5, 14.5, 15],
     ]
     const candles = pattern.map(([o, h, l, c], i) => candle(i, o, h, l, c))
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     const result = detectSmc(candles, config)
@@ -185,7 +190,7 @@ describe('BOS detection', () => {
 
   it('ignores unconfirmed swings for BOS', () => {
     const candles = seriesWithBullishBos()
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     // Stop before swing confirmation — no BOS possible
@@ -195,7 +200,7 @@ describe('BOS detection', () => {
 
   it('respects minimum break percent', () => {
     const candles = seriesWithBullishBos()
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     config.bos.minimumBreakPercent = 50 // impossibly high
@@ -218,7 +223,7 @@ describe('BOS detection', () => {
       [21, 21.5, 20.5, 21],
     ]
     const candles = pattern.map(([o, h, l, c], i) => candle(i, o, h, l, c))
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     config.bos.allowRepeatedBreaksOfSameSwing = false
@@ -241,7 +246,7 @@ describe('BOS detection', () => {
       [11, 11.5, 9, 9.5], // close below 10
     ]
     const candles = pattern.map(([o, h, l, c], i) => candle(i, o, h, l, c))
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     const result = detectSmc(candles, config)
@@ -250,7 +255,7 @@ describe('BOS detection', () => {
 
   it('produces deterministic event ids', () => {
     const candles = seriesWithBullishBos()
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
     const a = detectSmc(candles, config)
@@ -276,7 +281,7 @@ describe('no-look-ahead progressive detection', () => {
       [19.5, 21, 19, 20.5],
     ]
     const candles = pattern.map(([o, h, l, c], i) => candle(i, o, h, l, c))
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2
 
@@ -300,6 +305,8 @@ describe('no-look-ahead progressive detection', () => {
     const progressive = detectSmcUntil(candles, candles.length - 1, config)
     expect(progressive.swings.map((s) => s.id)).toEqual(full.swings.map((s) => s.id))
     expect(progressive.bosEvents.map((e) => e.id)).toEqual(full.bosEvents.map((e) => e.id))
+    expect(progressive.chochEvents.map((e) => e.id)).toEqual(full.chochEvents.map((e) => e.id))
+    expect(progressive.fvgEvents.map((e) => e.id)).toEqual(full.fvgEvents.map((e) => e.id))
   })
 })
 
@@ -308,6 +315,8 @@ describe('SMC config validation', () => {
     const result = validateSmcDetectorConfig(null)
     expect(result.config.swing.pivotLeft).toBe(5)
     expect(result.config.bos.breakMode).toBe('CLOSE')
+    expect(result.config.structure.enabled).toBe(true)
+    expect(result.config.choch.enabled).toBe(true)
   })
 
   it('clamps out-of-bounds pivots', () => {
@@ -319,6 +328,8 @@ describe('SMC config validation', () => {
         minimumBreakPercent: 99,
         requireLatestConfirmedSwing: true,
         allowRepeatedBreaksOfSameSwing: false,
+        preferExternalSwings: false,
+        structureScope: 'BOTH',
       },
     })
     expect(result.config.swing.pivotLeft).toBeLessThanOrEqual(50)
@@ -328,7 +339,7 @@ describe('SMC config validation', () => {
 
   it('disabling swing module yields no swings', () => {
     const candles = makeSwingHighSeries()
-    const config = cloneSmcDetectorConfig()
+    const config = phase1Config()
     config.swing.enabled = false
     config.swing.pivotLeft = 2
     config.swing.pivotRight = 2

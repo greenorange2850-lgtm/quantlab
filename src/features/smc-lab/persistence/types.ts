@@ -1,8 +1,8 @@
 import type { SmcDetectionKind, SmcDetectorConfig } from '@/core/smc'
 import { SMC_DETECTOR_VERSION } from '@/core/smc'
 
-export const SMC_LAB_PREFS_STORAGE_KEY = 'quantlab.smc-lab.prefs.v1'
-export const SMC_LAB_CONFIGS_STORAGE_KEY = 'quantlab.smc-lab.configs.v1'
+export const SMC_LAB_PREFS_STORAGE_KEY = 'quantlab.smc-lab.prefs.v2'
+export const SMC_LAB_CONFIGS_STORAGE_KEY = 'quantlab.smc-lab.configs.v2'
 export const SMC_LAB_DB = {
   name: 'quantlab-smc-lab',
   version: 1,
@@ -27,7 +27,17 @@ export type SmcBosWrongTag =
   | 'structure_differs'
   | 'other'
 
-export type SmcWrongTag = SmcSwingWrongTag | SmcBosWrongTag
+export type SmcPhase2WrongTag =
+  | 'wrong_classification'
+  | 'wrong_choch'
+  | 'false_displacement'
+  | 'bad_fvg_geometry'
+  | 'false_sweep'
+  | 'bad_order_block'
+  | 'dependency_wrong'
+  | 'other'
+
+export type SmcWrongTag = SmcSwingWrongTag | SmcBosWrongTag | SmcPhase2WrongTag
 
 export interface SmcEventFingerprint {
   eventId: string
@@ -35,8 +45,9 @@ export interface SmcEventFingerprint {
   candleIndex: number
   timestamp: number
   price: number
-  /** Extra identity for BOS. */
+  /** Extra identity for BOS/CHoCH. */
   brokenSwingId?: string
+  profileId?: string
 }
 
 export interface SmcReviewRecord {
@@ -45,6 +56,8 @@ export interface SmcReviewRecord {
   detectorVersion: string
   configSnapshot: SmcDetectorConfig
   configHash: string
+  profileId?: string
+  module?: string
   verdict: Exclude<SmcReviewVerdict, 'unreviewed'>
   reasonTags: SmcWrongTag[]
   note: string
@@ -57,6 +70,8 @@ export type SmcManualAnnotationKind =
   | 'MANUAL_SWING_LOW'
   | 'MANUAL_BULLISH_BOS'
   | 'MANUAL_BEARISH_BOS'
+  | 'MANUAL_BULLISH_CHOCH'
+  | 'MANUAL_BEARISH_CHOCH'
   | 'NOTE'
 
 export interface SmcManualAnnotation {
@@ -77,29 +92,49 @@ export interface SmcSavedLabConfig {
   id: string
   name: string
   config: SmcDetectorConfig
+  profileId?: string
   createdAt: number
   updatedAt: number
+  builtin?: boolean
 }
 
+export type SmcDensityPreset = 'minimal' | 'structure' | 'liquidity' | 'full-debug'
+
 export interface SmcLabPreferences {
-  schemaVersion: 1
+  schemaVersion: 2
   activeConfigId: string | null
+  activeProfileId: string
   detectorConfig: SmcDetectorConfig
   layerToggles: {
-    swings: boolean
+    externalSwings: boolean
+    internalSwings: boolean
     bosLabels: boolean
+    chochLabels: boolean
     bosLines: boolean
+    activeFvg: boolean
+    mitigatedFvg: boolean
+    activeOrderBlocks: boolean
+    invalidatedOrderBlocks: boolean
+    equalLevels: boolean
+    liquiditySweeps: boolean
+    displacement: boolean
     manualMarks: boolean
     validationMarks: boolean
+    connectorLines: boolean
+    diagnosticsLabels: boolean
   }
+  densityPreset: SmcDensityPreset
   playSpeed: 0.5 | 1 | 2 | 5
+  compareProfileId: string | null
 }
 
 export interface SmcLabExportPayload {
-  schemaVersion: 1
+  /** Phase 1 exports used 1; Phase 2 writes 2. Import accepts both. */
+  schemaVersion: 1 | 2
   exportedAt: number
   detectorVersion: string
   detectorConfig: SmcDetectorConfig
+  profileId?: string
   reviews: SmcReviewRecord[]
   annotations: SmcManualAnnotation[]
   dataset: {
@@ -125,6 +160,7 @@ export function buildEventFingerprint(input: {
   timestamp: number
   price: number
   brokenSwingId?: string
+  profileId?: string
 }): SmcEventFingerprint {
   return {
     eventId: input.eventId,
@@ -133,6 +169,7 @@ export function buildEventFingerprint(input: {
     timestamp: input.timestamp,
     price: input.price,
     brokenSwingId: input.brokenSwingId,
+    profileId: input.profileId,
   }
 }
 

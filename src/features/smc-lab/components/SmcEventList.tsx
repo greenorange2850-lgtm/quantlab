@@ -1,18 +1,27 @@
-import type { SmcBosEvent, SmcDetectionKind, SmcSwingEvent } from '@/core/smc'
+import type { SmcDetectionKind, SmcDetectionResult, SmcEvent } from '@/core/smc'
 import type { SmcReviewRecord } from '../persistence/types'
+import { flattenDetectionEvents } from '../review-summary'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 export type SmcEventFilter =
   | 'ALL'
+  | 'SWINGS'
+  | 'STRUCTURE'
+  | 'BOS'
+  | 'CHOCH'
+  | 'DISPLACEMENT'
+  | 'FVG'
+  | 'EQUAL'
+  | 'SWEEP'
+  | 'OB'
   | SmcDetectionKind
   | 'UNREVIEWED'
   | 'CORRECT'
   | 'WRONG'
 
 interface SmcEventListProps {
-  swings: SmcSwingEvent[]
-  bosEvents: SmcBosEvent[]
+  detection: SmcDetectionResult
   reviewsByEventId: Map<string, SmcReviewRecord>
   filter: SmcEventFilter
   selectedEventId: string | null
@@ -22,38 +31,75 @@ interface SmcEventListProps {
 
 const FILTERS: { id: SmcEventFilter; label: string }[] = [
   { id: 'ALL', label: 'All' },
-  { id: 'SWING_HIGH', label: 'SH' },
-  { id: 'SWING_LOW', label: 'SL' },
-  { id: 'BULLISH_BOS', label: 'Bull BOS' },
-  { id: 'BEARISH_BOS', label: 'Bear BOS' },
+  { id: 'SWINGS', label: 'Swings' },
+  { id: 'STRUCTURE', label: 'i/e Structure' },
+  { id: 'BOS', label: 'BOS' },
+  { id: 'CHOCH', label: 'CHoCH' },
+  { id: 'DISPLACEMENT', label: 'Disp' },
+  { id: 'FVG', label: 'FVG' },
+  { id: 'EQUAL', label: 'EQH/EQL' },
+  { id: 'SWEEP', label: 'Sweep' },
+  { id: 'OB', label: 'OB' },
   { id: 'UNREVIEWED', label: 'Unreviewed' },
   { id: 'CORRECT', label: 'Correct' },
   { id: 'WRONG', label: 'Wrong' },
 ]
 
 function kindLabel(kind: SmcDetectionKind): string {
-  switch (kind) {
-    case 'SWING_HIGH':
-      return 'Swing High'
-    case 'SWING_LOW':
-      return 'Swing Low'
-    case 'BULLISH_BOS':
-      return 'Bullish BOS'
-    case 'BEARISH_BOS':
-      return 'Bearish BOS'
+  return kind.replaceAll('_', ' ')
+}
+
+function matchesModuleFilter(kind: SmcDetectionKind, filter: SmcEventFilter): boolean {
+  switch (filter) {
+    case 'SWINGS':
+      return kind === 'SWING_HIGH' || kind === 'SWING_LOW'
+    case 'STRUCTURE':
+      return (
+        kind === 'INTERNAL_SWING_HIGH' ||
+        kind === 'INTERNAL_SWING_LOW' ||
+        kind === 'EXTERNAL_SWING_HIGH' ||
+        kind === 'EXTERNAL_SWING_LOW'
+      )
+    case 'BOS':
+      return kind === 'BULLISH_BOS' || kind === 'BEARISH_BOS'
+    case 'CHOCH':
+      return kind === 'BULLISH_CHOCH' || kind === 'BEARISH_CHOCH'
+    case 'DISPLACEMENT':
+      return kind.includes('DISPLACEMENT')
+    case 'FVG':
+      return kind.includes('FVG')
+    case 'EQUAL':
+      return kind === 'EQUAL_HIGHS' || kind === 'EQUAL_LOWS'
+    case 'SWEEP':
+      return kind.includes('LIQUIDITY_SWEEP')
+    case 'OB':
+      return kind.includes('ORDER_BLOCK')
+    default:
+      return kind === filter
   }
 }
 
+function eventPrice(event: SmcEvent): number {
+  if ('price' in event && typeof event.price === 'number') return event.price
+  if ('closePrice' in event && typeof event.closePrice === 'number') return event.closePrice
+  if ('close' in event && typeof event.close === 'number') return event.close
+  if ('level' in event && typeof event.level === 'number') return event.level
+  if ('midpoint' in event && typeof event.midpoint === 'number') return event.midpoint
+  if ('zoneHigh' in event && typeof event.zoneHigh === 'number') return event.zoneHigh
+  return 0
+}
+
 export function SmcEventList({
-  swings,
-  bosEvents,
+  detection,
   reviewsByEventId,
   filter,
   selectedEventId,
   onFilterChange,
   onSelect,
 }: SmcEventListProps) {
-  const events = [...swings, ...bosEvents].sort((a, b) => a.candleIndex - b.candleIndex)
+  const events = flattenDetectionEvents(detection).sort(
+    (a, b) => a.candleIndex - b.candleIndex,
+  )
 
   const filtered = events.filter((event) => {
     const review = reviewsByEventId.get(event.id)
@@ -61,7 +107,7 @@ export function SmcEventList({
     if (filter === 'UNREVIEWED') return !review
     if (filter === 'CORRECT') return review?.verdict === 'correct'
     if (filter === 'WRONG') return review?.verdict === 'wrong'
-    return event.kind === filter
+    return matchesModuleFilter(event.kind, filter)
   })
 
   return (
@@ -92,8 +138,7 @@ export function SmcEventList({
         ) : (
           filtered.map((event) => {
             const review = reviewsByEventId.get(event.id)
-            const price =
-              'price' in event ? event.price : (event as SmcBosEvent).closePrice
+            const price = eventPrice(event)
             return (
               <li key={event.id}>
                 <button

@@ -1,6 +1,12 @@
 export { SmcLabPage } from './SmcLabPage'
-export { buildReviewSummary, formatReviewedAccuracy } from './review-summary'
+export {
+  buildReviewSummary,
+  flattenDetectionEvents,
+  formatReviewedAccuracy,
+  moduleForKind,
+} from './review-summary'
 export { runSmcDetectionJob } from './run-detection-job'
+export type { SmcModuleProgress, SmcDetectionJobResult } from './run-detection-job'
 export {
   getSmcLabStore,
   setSmcLabStoreForTests,
@@ -12,9 +18,20 @@ export {
   saveSmcLabPreferences,
   listSmcSavedConfigs,
   clearSmcLabLocalStorageForTests,
+  layersForDensityPreset,
+  DEFAULT_SMC_LAYER_TOGGLES,
+  saveSmcNamedConfig,
+  deleteSmcNamedConfig,
+  renameSmcNamedConfig,
+  updateSmcDetectorPrefs,
 } from './persistence/prefs-archive'
 export type {
   SmcReviewRecord,
   SmcManualAnnotation,
   SmcLabExportPayload,
+  SmcLabPreferences,
+  SmcDensityPreset,
+  SmcSavedLabConfig,
 } from './persistence/types'
+export type { SmcChartLayerToggles } from './components/SmcCandlestickChart'
+export type { SmcEventFilter } from './components/SmcEventList'
