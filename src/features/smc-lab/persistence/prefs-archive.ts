@@ -44,6 +44,7 @@ export function layersForDensityPreset(
     case 'minimal':
       return {
         ...DEFAULT_SMC_LAYER_TOGGLES,
+        dowTheoryLabels: true,
         externalSwings: true,
         internalSwings: false,
         bosLabels: true,
@@ -61,6 +62,7 @@ export function layersForDensityPreset(
     case 'structure':
       return {
         ...DEFAULT_SMC_LAYER_TOGGLES,
+        dowTheoryLabels: true,
         externalSwings: true,
         internalSwings: true,
         bosLabels: true,
@@ -75,6 +77,7 @@ export function layersForDensityPreset(
     case 'liquidity':
       return {
         ...DEFAULT_SMC_LAYER_TOGGLES,
+        dowTheoryLabels: true,
         externalSwings: true,
         internalSwings: false,
         bosLabels: false,

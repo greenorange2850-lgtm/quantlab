@@ -5,6 +5,7 @@ import type {
   SmcChochEvent,
   SmcClassifiedSwingEvent,
   SmcDisplacementEvent,
+  SmcDowSwingMeta,
   SmcEqualLevelEvent,
   SmcFvgEvent,
   SmcLiquiditySweepEvent,
@@ -17,6 +18,7 @@ import type { SmcLabPreferences, SmcManualAnnotation } from '../persistence/type
 import type { SmcRankedEventMeta } from '@/core/smc'
 import {
   formatSwingChartLabel,
+  resolveDowSwingLabel,
   structureSwingShortLabel,
   swingLabelChipWidth,
 } from '../dow-label'
@@ -49,8 +51,10 @@ interface SmcCandlestickChartProps {
   densityWarning?: string | null
   /** Importance metadata for overlap collapse (higher score kept). */
   importanceById?: Record<string, SmcRankedEventMeta>
-  /** Dow Theory swingId → HH/HL/LH/LL (null = seed). */
+  /** Dow Theory swingId → HH/HL/LH/LL (null = seed). From result.dowTheory.swingClassification. */
   dowSwingClassification?: Record<string, DowSwingLabel | null>
+  /** Optional bySwingId map for robust label lookup (result.dowTheory.bySwingId). */
+  dowBySwingId?: Record<string, SmcDowSwingMeta>
 }
 
 const WIDTH = 720
@@ -248,6 +252,7 @@ export function SmcCandlestickChart({
   densityWarning = null,
   importanceById,
   dowSwingClassification = {},
+  dowBySwingId = {},
 }: SmcCandlestickChartProps) {
   if (candles.length === 0) {
     return (
@@ -318,14 +323,12 @@ export function SmcCandlestickChart({
 
   const labels: ChartLabel[] = []
 
-  const showDow = layers.dowTheoryLabels !== false
+  // Default ON when the pref key is absent (older saved layer objects).
+  const showDow = layers.dowTheoryLabels ?? true
   for (const swing of visibleClassified) {
     const isHigh = swing.kind.includes('HIGH')
-    const text = formatSwingChartLabel(
-      swing.kind,
-      dowSwingClassification[swing.id],
-      showDow,
-    )
+    const dowLabel = resolveDowSwingLabel(swing, dowSwingClassification, dowBySwingId)
+    const text = formatSwingChartLabel(swing.kind, dowLabel, showDow)
     labels.push({
       id: swing.id,
       localIndex: swing.candleIndex - windowStartIndex,

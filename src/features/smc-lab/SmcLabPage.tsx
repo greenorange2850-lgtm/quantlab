@@ -171,7 +171,11 @@ export function SmcLabPage() {
   )
 
   const [config, setConfig] = useState<SmcDetectorConfig>(initialPrefs.detectorConfig)
-  const [layers, setLayers] = useState<SmcChartLayerToggles>(initialPrefs.layerToggles)
+  const [layers, setLayers] = useState<SmcChartLayerToggles>(() => ({
+    ...initialPrefs.layerToggles,
+    // Ensure Dow labels default ON even if an older prefs blob omitted the key.
+    dowTheoryLabels: initialPrefs.layerToggles.dowTheoryLabels ?? true,
+  }))
   const [densityPreset, setDensityPreset] = useState<SmcDensityPreset>(
     initialPrefs.densityPreset,
   )
@@ -280,11 +284,30 @@ export function SmcLabPage() {
     [progressive, visibleIndex, smartVisibilityPreset, zoneLifecycle, setupContext],
   )
 
-  /** Progressive Dow Theory view — derived from knowable classified swings only. */
-  const dowTheoryView = useMemo(
-    () => analyzeDowTheory(progressive.classifiedSwings, visibleIndex),
-    [progressive.classifiedSwings, visibleIndex],
-  )
+  /**
+   * Progressive Dow Theory view — derived from knowable classified swings only.
+   * Prefer live projection at the cursor; fall back to result.dowTheory at the
+   * final candle so the chart always consumes the pipeline map.
+   */
+  const dowTheoryView = useMemo(() => {
+    const live = analyzeDowTheory(progressive.classifiedSwings, visibleIndex)
+    const fromResult = detection.dowTheory
+    if (
+      fromResult &&
+      detection.diagnostics.visibleThroughIndex != null &&
+      visibleIndex >= detection.diagnostics.visibleThroughIndex &&
+      progressive.classifiedSwings.length === detection.classifiedSwings.length
+    ) {
+      return fromResult
+    }
+    return live
+  }, [
+    progressive.classifiedSwings,
+    visibleIndex,
+    detection.dowTheory,
+    detection.diagnostics.visibleThroughIndex,
+    detection.classifiedSwings.length,
+  ])
 
   const selectedZone: SmcZoneProjection | null = useMemo(() => {
     if (!selectedZoneId) return null
@@ -1136,7 +1159,10 @@ export function SmcLabPage() {
         layers={layers}
         windowStartIndex={windowStart}
         importanceById={detection.intelligence?.byEventId}
-        dowSwingClassification={dowTheoryView.swingClassification}
+        dowSwingClassification={
+          dowTheoryView.swingClassification ?? detection.dowTheory?.swingClassification ?? {}
+        }
+        dowBySwingId={dowTheoryView.bySwingId ?? detection.dowTheory?.bySwingId ?? {}}
       />
 
       <Card hover={false}>
@@ -1147,7 +1173,7 @@ export function SmcLabPage() {
           <label className="flex min-h-11 items-center gap-2">
             <input
               type="checkbox"
-              checked={layers.dowTheoryLabels !== false}
+              checked={layers.dowTheoryLabels ?? true}
               onChange={(e) =>
                 setLayers((prev) => ({ ...prev, dowTheoryLabels: e.target.checked }))
               }

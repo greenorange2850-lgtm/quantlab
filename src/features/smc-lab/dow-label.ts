@@ -1,4 +1,4 @@
-import type { DowSwingLabel } from '@/core/smc'
+import type { DowSwingLabel, SmcClassifiedSwingEvent, SmcDowSwingMeta } from '@/core/smc'
 
 /** Short structure marker for classified / base swings. */
 export function structureSwingShortLabel(kind: string): string {
@@ -21,8 +21,43 @@ export function structureSwingShortLabel(kind: string): string {
 }
 
 /**
+ * Resolve Dow HH/HL/LH/LL for a classified swing from the projection maps.
+ * Prefers swing.id (e-/i- prefixed), then bySwingId, then originalSwingId variants.
+ */
+export function resolveDowSwingLabel(
+  swing: Pick<SmcClassifiedSwingEvent, 'id' | 'originalSwingId' | 'classification'>,
+  swingClassification?: Record<string, DowSwingLabel | null>,
+  bySwingId?: Record<string, SmcDowSwingMeta>,
+): DowSwingLabel | null | undefined {
+  if (bySwingId?.[swing.id]) {
+    return bySwingId[swing.id]!.label
+  }
+  if (swingClassification && Object.prototype.hasOwnProperty.call(swingClassification, swing.id)) {
+    return swingClassification[swing.id]
+  }
+  const prefixed =
+    swing.classification === 'EXTERNAL'
+      ? `e-${swing.originalSwingId}`
+      : `i-${swing.originalSwingId}`
+  if (bySwingId?.[prefixed]) return bySwingId[prefixed]!.label
+  if (swingClassification && Object.prototype.hasOwnProperty.call(swingClassification, prefixed)) {
+    return swingClassification[prefixed]
+  }
+  if (swing.originalSwingId) {
+    if (bySwingId?.[swing.originalSwingId]) return bySwingId[swing.originalSwingId]!.label
+    if (
+      swingClassification &&
+      Object.prototype.hasOwnProperty.call(swingClassification, swing.originalSwingId)
+    ) {
+      return swingClassification[swing.originalSwingId]
+    }
+  }
+  return undefined
+}
+
+/**
  * Combine structure marker with Dow HH/HL/LH/LL without overlapping text.
- * Example: eSH·HH, iSL·HL. Seed swings (null label) keep structure-only text.
+ * Example: "eSH HH", "iSL HL". Seed swings (null label) keep structure-only text.
  */
 export function formatSwingChartLabel(
   kind: string,
@@ -30,12 +65,13 @@ export function formatSwingChartLabel(
   showDowTheoryLabels: boolean,
 ): string {
   const structure = structureSwingShortLabel(kind)
-  if (!showDowTheoryLabels || dowLabel == null) return structure
-  return `${structure}·${dowLabel}`
+  if (!showDowTheoryLabels) return structure
+  if (dowLabel == null) return structure
+  return `${structure} ${dowLabel}`
 }
 
 /** Approximate label chip width for the combined text. */
 export function swingLabelChipWidth(text: string): number {
-  if (text.includes('·')) return Math.max(40, 8 + text.length * 6)
-  return text.length >= 4 ? 36 : 28
+  // Generous width so "eSH HH" / "iSL LL" never clips in the SVG chip.
+  return Math.max(36, 12 + text.length * 7)
 }
