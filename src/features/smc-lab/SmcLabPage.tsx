@@ -15,6 +15,7 @@ import {
   cloneSmcDetectorConfig,
   countProfileEvents,
   createGoldenDatasetId,
+  analyzeDowTheory,
   createMockSetupVisualContext,
   DEFAULT_SMC_DETECTOR_CONFIG,
   describeCandleEventDifference,
@@ -277,6 +278,12 @@ export function SmcLabPage() {
         setup: setupContext,
       }),
     [progressive, visibleIndex, smartVisibilityPreset, zoneLifecycle, setupContext],
+  )
+
+  /** Progressive Dow Theory view — derived from knowable classified swings only. */
+  const dowTheoryView = useMemo(
+    () => analyzeDowTheory(progressive.classifiedSwings, visibleIndex),
+    [progressive.classifiedSwings, visibleIndex],
   )
 
   const selectedZone: SmcZoneProjection | null = useMemo(() => {
@@ -1129,7 +1136,34 @@ export function SmcLabPage() {
         layers={layers}
         windowStartIndex={windowStart}
         importanceById={detection.intelligence?.byEventId}
+        dowSwingClassification={dowTheoryView.swingClassification}
       />
+
+      <Card hover={false}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Dow Theory</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3 text-[11px]">
+          <label className="flex min-h-11 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={layers.dowTheoryLabels !== false}
+              onChange={(e) =>
+                setLayers((prev) => ({ ...prev, dowTheoryLabels: e.target.checked }))
+              }
+            />
+            Show Dow Theory labels
+          </label>
+          <Badge variant="outline">{dowTheoryView.trend}</Badge>
+          <span className="font-mono text-muted-foreground">
+            Strength {dowTheoryView.strength} · {dowTheoryView.structurePhase}
+          </span>
+          <span className="font-mono text-muted-foreground">
+            HH {dowTheoryView.diagnostics.hhCount} · HL {dowTheoryView.diagnostics.hlCount} · LH{' '}
+            {dowTheoryView.diagnostics.lhCount} · LL {dowTheoryView.diagnostics.llCount}
+          </span>
+        </CardContent>
+      </Card>
 
       <Card hover={false}>
         <CardHeader className="pb-2">
@@ -1289,6 +1323,7 @@ export function SmcLabPage() {
             setTags(review?.reasonTags ?? [])
           }
         }}
+        dowTheory={dowTheoryView}
       />
 
       {/* 6. Event List */}
@@ -1641,6 +1676,23 @@ export function SmcLabPage() {
                       <p>Visibility mode: {detection.diagnostics.ranking.mode}</p>
                     </>
                   ) : null}
+                  <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
+                    <p className="font-medium">Dow Theory</p>
+                    <p>
+                      result.dowTheory:{' '}
+                      {detection.dowTheory ? 'populated' : 'missing'} · progressive labels{' '}
+                      {Object.keys(dowTheoryView.swingClassification).length}
+                    </p>
+                    <p>
+                      Trend {dowTheoryView.trend} · strength {dowTheoryView.strength} · phase{' '}
+                      {dowTheoryView.structurePhase}
+                    </p>
+                    <p>
+                      HH {dowTheoryView.diagnostics.hhCount} · HL {dowTheoryView.diagnostics.hlCount}{' '}
+                      · LH {dowTheoryView.diagnostics.lhCount} · LL{' '}
+                      {dowTheoryView.diagnostics.llCount}
+                    </p>
+                  </div>
                   <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
                     <p className="font-medium">Zone lifecycle projection</p>
                     <p>Status: {lifecycleProjection.diagnostics.status}</p>

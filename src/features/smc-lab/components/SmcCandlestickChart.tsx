@@ -1,5 +1,6 @@
 import type { Candle } from '@/data/candles'
 import type {
+  DowSwingLabel,
   SmcBosEvent,
   SmcChochEvent,
   SmcClassifiedSwingEvent,
@@ -14,6 +15,11 @@ import type {
 } from '@/core/smc'
 import type { SmcLabPreferences, SmcManualAnnotation } from '../persistence/types'
 import type { SmcRankedEventMeta } from '@/core/smc'
+import {
+  formatSwingChartLabel,
+  structureSwingShortLabel,
+  swingLabelChipWidth,
+} from '../dow-label'
 
 /** Chart layer toggles — mirrors SmcLabPreferences['layerToggles']. */
 export type SmcChartLayerToggles = SmcLabPreferences['layerToggles']
@@ -43,6 +49,8 @@ interface SmcCandlestickChartProps {
   densityWarning?: string | null
   /** Importance metadata for overlap collapse (higher score kept). */
   importanceById?: Record<string, SmcRankedEventMeta>
+  /** Dow Theory swingId → HH/HL/LH/LL (null = seed). */
+  dowSwingClassification?: Record<string, DowSwingLabel | null>
 }
 
 const WIDTH = 720
@@ -89,25 +97,6 @@ function stackOffsets(
     offsets.set(item.id, lane * 12)
   }
   return offsets
-}
-
-function swingLabel(kind: string): string {
-  switch (kind) {
-    case 'EXTERNAL_SWING_HIGH':
-      return 'eSH'
-    case 'EXTERNAL_SWING_LOW':
-      return 'eSL'
-    case 'INTERNAL_SWING_HIGH':
-      return 'iSH'
-    case 'INTERNAL_SWING_LOW':
-      return 'iSL'
-    case 'SWING_HIGH':
-      return 'SH'
-    case 'SWING_LOW':
-      return 'SL'
-    default:
-      return kind.slice(0, 3)
-  }
 }
 
 function zoneOpacity(state: string, setupHighlighted: boolean): number {
@@ -258,6 +247,7 @@ export function SmcCandlestickChart({
   windowStartIndex,
   densityWarning = null,
   importanceById,
+  dowSwingClassification = {},
 }: SmcCandlestickChartProps) {
   if (candles.length === 0) {
     return (
@@ -328,29 +318,36 @@ export function SmcCandlestickChart({
 
   const labels: ChartLabel[] = []
 
+  const showDow = layers.dowTheoryLabels !== false
   for (const swing of visibleClassified) {
     const isHigh = swing.kind.includes('HIGH')
+    const text = formatSwingChartLabel(
+      swing.kind,
+      dowSwingClassification[swing.id],
+      showDow,
+    )
     labels.push({
       id: swing.id,
       localIndex: swing.candleIndex - windowStartIndex,
       preferAbove: isHigh,
-      text: swingLabel(swing.kind),
+      text,
       fill: isHigh ? '#e9d5ff' : '#99f6e4',
       bg: isHigh ? '#7e22ce' : '#0f766e',
-      width: 28,
+      width: swingLabelChipWidth(text),
       price: swing.price,
     })
   }
   for (const swing of visibleBaseSwings) {
     const isHigh = swing.kind === 'SWING_HIGH'
+    const text = structureSwingShortLabel(swing.kind)
     labels.push({
       id: swing.id,
       localIndex: swing.candleIndex - windowStartIndex,
       preferAbove: isHigh,
-      text: swingLabel(swing.kind),
+      text,
       fill: '#fff',
       bg: isHigh ? '#7e22ce' : '#0f766e',
-      width: 24,
+      width: swingLabelChipWidth(text),
       price: swing.price,
     })
   }

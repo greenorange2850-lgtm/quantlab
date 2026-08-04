@@ -5,6 +5,7 @@ import type {
   SmcChochEvent,
   SmcClassifiedSwingEvent,
   SmcDisplacementEvent,
+  SmcDowTheoryLayer,
   SmcEqualLevelEvent,
   SmcEvent,
   SmcEventRef,
@@ -63,6 +64,8 @@ interface SmcEventInspectorProps {
   importance?: SmcRankedEventMeta | null
   related?: { higher: SmcRankedEventMeta[]; nearbyLower: SmcRankedEventMeta[] }
   onSelectRelated?: (eventId: string) => void
+  /** Progressive Dow Theory layer for inspector fields (UI only). */
+  dowTheory?: SmcDowTheoryLayer | null
 }
 
 function isSwingKind(kind: string): boolean {
@@ -117,11 +120,15 @@ export function SmcEventInspector({
   importance = null,
   related = { higher: [], nearbyLower: [] },
   onSelectRelated,
+  dowTheory = null,
 }: SmcEventInspectorProps) {
   if (!event) {
     return (
-      <div className="rounded-xl border border-dashed border-border/70 p-4 text-xs text-muted-foreground">
-        Select an event to inspect detection reasons and mark Correct / Wrong / Unsure.
+      <div className="space-y-3">
+        <div className="rounded-xl border border-dashed border-border/70 p-4 text-xs text-muted-foreground">
+          Select an event to inspect detection reasons and mark Correct / Wrong / Unsure.
+        </div>
+        {dowTheory ? <DowTheorySummaryCard dowTheory={dowTheory} /> : null}
       </div>
     )
   }
@@ -129,6 +136,10 @@ export function SmcEventInspector({
   const candle = candles[event.candleIndex]
   const wrongTags = tagsForEvent(event.kind)
   const chain = eventChainFrom(event)
+  const dowMeta = dowTheory?.bySwingId[event.id] ?? null
+  const dowLabel =
+    dowMeta?.label ??
+    (dowTheory ? dowTheory.swingClassification[event.id] : undefined)
 
   return (
     <div className="space-y-3 rounded-xl border border-border/70 bg-card p-4">
@@ -137,6 +148,11 @@ export function SmcEventInspector({
         <Badge variant="outline" className="text-[10px]">
           {event.kind}
         </Badge>
+        {dowLabel ? (
+          <Badge variant="outline" className="text-[10px] font-mono">
+            {dowLabel}
+          </Badge>
+        ) : null}
         {importance ? (
           <Badge variant="accent" className="text-[10px] font-mono">
             Importance {importance.importanceScore}
@@ -220,6 +236,27 @@ export function SmcEventInspector({
       ) : null}
 
       <div className="space-y-1 text-xs">{renderEventBody(event, candle, swings)}</div>
+
+      {dowTheory ? (
+        <div className="space-y-1 rounded-lg border border-sky-500/30 bg-sky-500/10 p-2 text-xs">
+          <p className="font-medium">Dow Theory</p>
+          {isSwingKind(event.kind) ? (
+            <Row label="Swing classification">
+              <span className="font-mono">
+                {dowLabel ?? (dowMeta ? 'Seed (no prior compare)' : '—')}
+              </span>
+            </Row>
+          ) : null}
+          {dowMeta?.reason ? (
+            <p className="text-[10px] text-muted-foreground">{dowMeta.reason}</p>
+          ) : null}
+          <Row label="Current trend">{dowTheory.trend}</Row>
+          <Row label="Trend strength">
+            <span className="font-mono">{dowTheory.strength}</span>
+          </Row>
+          <Row label="Structure phase">{dowTheory.structurePhase}</Row>
+        </div>
+      ) : null}
 
       {chain.length > 0 ? (
         <div className="space-y-1 rounded-lg border border-border/60 bg-white/[0.02] p-2 text-xs">
@@ -576,4 +613,21 @@ function renderEventBody(
   }
 
   return <p className="text-muted-foreground">Unsupported event kind: {event.kind}</p>
+}
+
+function DowTheorySummaryCard({ dowTheory }: { dowTheory: SmcDowTheoryLayer }) {
+  const d = dowTheory.diagnostics
+  return (
+    <div className="space-y-1 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs">
+      <p className="font-medium">Dow Theory</p>
+      <Row label="Current trend">{dowTheory.trend}</Row>
+      <Row label="Trend strength">
+        <span className="font-mono">{dowTheory.strength}</span>
+      </Row>
+      <Row label="Structure phase">{dowTheory.structurePhase}</Row>
+      <p className="font-mono text-[10px] text-muted-foreground">
+        HH {d.hhCount} · HL {d.hlCount} · LH {d.lhCount} · LL {d.llCount}
+      </p>
+    </div>
+  )
 }
