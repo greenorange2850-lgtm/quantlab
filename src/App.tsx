@@ -5,6 +5,7 @@ import { MarketExplorerPage } from '@/pages/MarketExplorerPage'
 import { DatasetLibraryPage } from '@/pages/DatasetLibraryPage'
 import { StrategyLabPage } from '@/pages/StrategyLabPage'
 import { BacktestLabPage } from '@/pages/BacktestLabPage'
+import { BacktestReplayPage } from '@/pages/BacktestReplayPage'
 import { OptimizerPage } from '@/pages/OptimizerPage'
 import { ResearchAnalysisPage } from '@/features/research-analysis'
 import { StrategyComparePage } from '@/features/strategy-compare'
@@ -39,6 +40,7 @@ export function App() {
           <Route path="/market-explorer" element={<MarketExplorerPage />} />
           <Route path="/strategy-lab" element={<StrategyLabPage />} />
           <Route path="/backtest-lab" element={<BacktestLabPage />} />
+          <Route path="/backtest-replay" element={<BacktestReplayPage />} />
           <Route path="/optimizer" element={<OptimizerPage />} />
           <Route path="/research-analysis" element={<ResearchAnalysisPage />} />
           <Route path="/strategy-compare" element={<StrategyComparePage />} />
