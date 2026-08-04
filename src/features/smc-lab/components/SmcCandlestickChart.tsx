@@ -8,7 +8,9 @@ import type {
   SmcFvgEvent,
   SmcLiquiditySweepEvent,
   SmcOrderBlockEvent,
+  SmcSetupVisualContext,
   SmcSwingEvent,
+  SmcZoneProjection,
 } from '@/core/smc'
 import type { SmcLabPreferences, SmcManualAnnotation } from '../persistence/types'
 import type { SmcRankedEventMeta } from '@/core/smc'
@@ -27,8 +29,13 @@ interface SmcCandlestickChartProps {
   equalLevelEvents?: SmcEqualLevelEvent[]
   liquiditySweepEvents?: SmcLiquiditySweepEvent[]
   orderBlockEvents?: SmcOrderBlockEvent[]
+  /** Lifecycle zone projections — preferred over raw FVG/OB geometry when provided. */
+  zoneProjections?: SmcZoneProjection[]
+  setupContext?: SmcSetupVisualContext | null
   annotations?: SmcManualAnnotation[]
   selectedEventId: string | null
+  selectedZoneId?: string | null
+  onSelectZone?: (zoneId: string) => void
   /** When a break is selected, highlight its broken swing. */
   highlightSwingId?: string | null
   layers: SmcChartLayerToggles
@@ -101,6 +108,62 @@ function swingLabel(kind: string): string {
     default:
       return kind.slice(0, 3)
   }
+}
+
+function zoneOpacity(state: string, setupHighlighted: boolean): number {
+  if (setupHighlighted) return 0.32
+  switch (state) {
+    case 'ACTIVE':
+      return 0.2
+    case 'TOUCHED':
+    case 'PARTIALLY_MITIGATED':
+      return 0.14
+    case 'FILLED':
+    case 'MITIGATED':
+    case 'SWEPT':
+    case 'INVALIDATED':
+    case 'BROKEN':
+    case 'EXPIRED':
+      return 0.07
+    default:
+      return 0.1
+  }
+}
+
+function zoneStrokeDash(state: string): string | undefined {
+  if (state === 'TOUCHED' || state === 'PARTIALLY_MITIGATED') return '4 2'
+  if (
+    state === 'FILLED' ||
+    state === 'MITIGATED' ||
+    state === 'INVALIDATED' ||
+    state === 'SWEPT' ||
+    state === 'BROKEN'
+  ) {
+    return '3 2'
+  }
+  return undefined
+}
+
+function layerAllowsZone(zone: SmcZoneProjection, layers: SmcChartLayerToggles): boolean {
+  const finished =
+    zone.state === 'FILLED' ||
+    zone.state === 'MITIGATED' ||
+    zone.state === 'INVALIDATED' ||
+    zone.state === 'SWEPT' ||
+    zone.state === 'BROKEN' ||
+    zone.state === 'EXPIRED'
+  if (zone.zoneKind === 'FVG') {
+    if (finished) return layers.mitigatedFvg
+    return layers.activeFvg
+  }
+  if (zone.zoneKind === 'ORDER_BLOCK') {
+    if (finished) return layers.invalidatedOrderBlocks
+    return layers.activeOrderBlocks
+  }
+  if (zone.zoneKind === 'LIQUIDITY_LEVEL' || zone.zoneKind === 'EQUAL_LEVEL') {
+    return layers.equalLevels || layers.liquiditySweeps
+  }
+  return true
 }
 
 function isActiveZoneState(state: string): boolean {
@@ -184,8 +247,12 @@ export function SmcCandlestickChart({
   equalLevelEvents = [],
   liquiditySweepEvents = [],
   orderBlockEvents = [],
+  zoneProjections,
+  setupContext = null,
   annotations = [],
   selectedEventId,
+  selectedZoneId = null,
+  onSelectZone,
   highlightSwingId = null,
   layers,
   windowStartIndex,
@@ -437,8 +504,78 @@ export function SmcCandlestickChart({
             )
           })}
 
-          {/* FVG zones */}
-          {fvgCreated.map((zone) => {
+          {/* Lifecycle zone projections (preferred) */}
+          {(zoneProjections ?? []).map((zone) => {
+            if (!layerAllowsZone(zone, layers) && !zone.setupRefs.length) return null
+            const setupHighlighted =
+              Boolean(setupContext?.zoneIds.includes(zone.zoneId)) ||
+              selectedZoneId === zone.zoneId
+            const startLocal = zone.startIndex - windowStartIndex
+            const endLocal = zone.endIndex - windowStartIndex
+            if (endLocal < 0 || startLocal >= candles.length) return null
+            const x1 = xForLocal(clamp(startLocal, 0, candles.length - 1))
+            const x2 = xForLocal(clamp(endLocal, 0, candles.length - 1))
+            const yTop = yForPrice(zone.high)
+            const yBot = yForPrice(zone.low)
+            const bull = zone.direction === 'BULLISH'
+            const fill =
+              zone.zoneKind === 'ORDER_BLOCK'
+                ? bull
+                  ? '#3b82f6'
+                  : '#a855f7'
+                : zone.zoneKind === 'LIQUIDITY_LEVEL'
+                  ? '#f59e0b'
+                  : bull
+                    ? '#22c55e'
+                    : '#ef4444'
+            const stroke = setupHighlighted ? '#fde68a' : fill
+            const midY = (Math.min(yTop, yBot) + Math.max(yTop, yBot)) / 2
+            return (
+              <g
+                key={`zone-${zone.zoneId}`}
+                className={onSelectZone ? 'cursor-pointer' : undefined}
+                onClick={() => onSelectZone?.(zone.zoneId)}
+              >
+                <rect
+                  x={Math.min(x1, x2)}
+                  y={Math.min(yTop, yBot)}
+                  width={Math.max(2, Math.abs(x2 - x1))}
+                  height={Math.max(2, Math.abs(yBot - yTop))}
+                  fill={fill}
+                  opacity={zoneOpacity(zone.state, setupHighlighted)}
+                  stroke={stroke}
+                  strokeWidth={setupHighlighted ? 1.5 : 0.75}
+                  strokeDasharray={zoneStrokeDash(zone.state)}
+                />
+                <text
+                  x={Math.min(x1, x2) + 2}
+                  y={midY}
+                  className="fill-white"
+                  fontSize={8}
+                  opacity={0.85}
+                >
+                  {zone.shortLabel}
+                  {zone.state === 'ACTIVE'
+                    ? ''
+                    : zone.state === 'TOUCHED'
+                      ? '·T'
+                      : zone.state === 'PARTIALLY_MITIGATED'
+                        ? '·P'
+                        : zone.state === 'FILLED' || zone.state === 'MITIGATED'
+                          ? '·M'
+                          : zone.state === 'INVALIDATED'
+                            ? '·X'
+                            : zone.state === 'SWEPT'
+                              ? '·S'
+                              : ''}
+                </text>
+              </g>
+            )
+          })}
+
+          {/* Legacy FVG/OB bands when projections not provided */}
+          {!zoneProjections
+            ? fvgCreated.map((zone) => {
             const active = isActiveZoneState(zone.state)
             const mitigated = isMitigatedZoneState(zone.state)
             if (active && !layers.activeFvg) return null
@@ -469,10 +606,11 @@ export function SmcCandlestickChart({
                 strokeDasharray={mitigated ? '3 2' : undefined}
               />
             )
-          })}
+          })
+            : null}
 
-          {/* Order Block zones */}
-          {obCreated.map((zone) => {
+          {!zoneProjections
+            ? obCreated.map((zone) => {
             const active = isActiveZoneState(zone.mitigationStatus)
             const invalid = zone.invalidationStatus || zone.mitigationStatus === 'INVALIDATED'
             const mitigated = isMitigatedZoneState(zone.mitigationStatus)
@@ -504,7 +642,50 @@ export function SmcCandlestickChart({
                 strokeDasharray={invalid || mitigated ? '3 2' : undefined}
               />
             )
-          })}
+          })
+            : null}
+
+          {/* Setup entry / stop / targets */}
+          {setupContext?.entryZone ? (
+            <rect
+              x={PLOT.left}
+              y={yForPrice(setupContext.entryZone.high)}
+              width={plotWidth}
+              height={Math.max(
+                2,
+                Math.abs(
+                  yForPrice(setupContext.entryZone.low) - yForPrice(setupContext.entryZone.high),
+                ),
+              )}
+              fill="#fde68a"
+              opacity={0.12}
+              stroke="#fbbf24"
+              strokeWidth={1}
+            />
+          ) : null}
+          {setupContext?.stopLevel != null ? (
+            <line
+              x1={PLOT.left}
+              x2={PLOT.left + plotWidth}
+              y1={yForPrice(setupContext.stopLevel)}
+              y2={yForPrice(setupContext.stopLevel)}
+              stroke="#f87171"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+            />
+          ) : null}
+          {(setupContext?.targetLevels ?? []).map((level, i) => (
+            <line
+              key={`tgt-${i}`}
+              x1={PLOT.left}
+              x2={PLOT.left + plotWidth}
+              y1={yForPrice(level)}
+              y2={yForPrice(level)}
+              stroke="#34d399"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+            />
+          ))}
 
           {candles.map((c, i) => {
             const x = xForLocal(i)

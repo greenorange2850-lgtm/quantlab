@@ -15,6 +15,7 @@ import {
   cloneSmcDetectorConfig,
   countProfileEvents,
   createGoldenDatasetId,
+  createMockSetupVisualContext,
   DEFAULT_SMC_DETECTOR_CONFIG,
   describeCandleEventDifference,
   emptySmcDetectionResult,
@@ -24,6 +25,7 @@ import {
   getBuiltinSmcProfile,
   getEventImportance,
   goldenLabelFromProbe,
+  projectSmcLifecycle,
   QUANTLAB_DEFAULT_PROFILE,
   relatedEventsByRank,
   SMC_DETECTOR_VERSION,
@@ -37,8 +39,12 @@ import {
   type SmcEvent,
   type SmcGoldenDataset,
   type SmcProfileCompareCounts,
+  type SmcSetupVisualContext,
+  type SmcSmartVisibilityPreset,
   type SmcValidationReport,
   type SmcVisibilityMode,
+  type SmcZoneLifecycleSettings,
+  type SmcZoneProjection,
 } from '@/core/smc'
 import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
 import { resolveResearchPeriod, type ResearchPeriodSelection } from '@/data/research-period'
@@ -66,6 +72,7 @@ import {
   type SmcLabExportPayload,
   type SmcManualAnnotation,
   type SmcReviewRecord,
+  type SmcSmartVisibilityPresetPref,
   type SmcVisibilityModePref,
   type SmcWrongTag,
 } from './persistence/types'
@@ -79,6 +86,7 @@ import {
   type SmcModuleProgress,
 } from './run-detection-job'
 import { SmcGoldenChartCompare, SmcValidationDashboard } from './validation'
+import { buildLabVisibilityPipelineDiagnostics } from './visibility-pipeline'
 import type { SmcSavedLabConfig } from './persistence/types'
 
 const CHART_WINDOW = 72
@@ -169,6 +177,24 @@ export function SmcLabPage() {
   const [visibilityMode, setVisibilityMode] = useState<SmcVisibilityModePref>(
     initialPrefs.visibilityMode ?? 'balanced',
   )
+  const [smartVisibilityPreset, setSmartVisibilityPreset] =
+    useState<SmcSmartVisibilityPresetPref>(
+      initialPrefs.smartVisibilityPreset ?? 'balanced',
+    )
+  const [zoneLifecycle, setZoneLifecycle] = useState<SmcZoneLifecycleSettings>(
+    initialPrefs.zoneLifecycle ?? {
+      showActive: true,
+      showTouched: true,
+      showMitigatedFilled: false,
+      showInvalidated: false,
+      extendActiveZonesRight: true,
+      fadeOldActiveZones: true,
+    },
+  )
+  const [setupContext, setSetupContext] = useState<SmcSetupVisualContext | null>(null)
+  const [priorSmartPreset, setPriorSmartPreset] =
+    useState<SmcSmartVisibilityPresetPref>('balanced')
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
   const [activeProfileId, setActiveProfileId] = useState(initialPrefs.activeProfileId)
   const [speed, setSpeed] = useState<SmcPlaySpeed>(initialPrefs.playSpeed)
 
@@ -241,6 +267,53 @@ export function SmcLabPage() {
     [progressive],
   )
 
+  const lifecycleProjection = useMemo(
+    () =>
+      projectSmcLifecycle({
+        detection: progressive,
+        visibleIndex,
+        preset: smartVisibilityPreset as SmcSmartVisibilityPreset,
+        settings: zoneLifecycle,
+        setup: setupContext,
+      }),
+    [progressive, visibleIndex, smartVisibilityPreset, zoneLifecycle, setupContext],
+  )
+
+  const selectedZone: SmcZoneProjection | null = useMemo(() => {
+    if (!selectedZoneId) return null
+    return (
+      lifecycleProjection.zones.find((z) => z.zoneId === selectedZoneId) ??
+      lifecycleProjection.visibleZones.find((z) => z.zoneId === selectedZoneId) ??
+      null
+    )
+  }, [selectedZoneId, lifecycleProjection])
+
+  /** Structure events filtered by smart visibility relevance (chart only). */
+  const chartStructure = useMemo(() => {
+    if (smartVisibilityPreset === 'debug') {
+      return {
+        swings: progressiveVisible.swings,
+        classifiedSwings: progressiveVisible.classifiedSwings,
+        bosEvents: progressiveVisible.bosEvents,
+        chochEvents: progressiveVisible.chochEvents,
+        displacementEvents: progressiveVisible.displacementEvents,
+      }
+    }
+    const visibleIds = new Set(
+      lifecycleProjection.structureEvents.filter((s) => s.visible).map((s) => s.eventId),
+    )
+    // Setup focus / active-only may hide recent context — keep layer toggles as secondary.
+    const keep = <T extends { id: string }>(events: T[]) =>
+      events.filter((e) => visibleIds.has(e.id))
+    return {
+      swings: keep(progressiveVisible.swings),
+      classifiedSwings: keep(progressiveVisible.classifiedSwings),
+      bosEvents: keep(progressiveVisible.bosEvents),
+      chochEvents: keep(progressiveVisible.chochEvents),
+      displacementEvents: keep(progressiveVisible.displacementEvents),
+    }
+  }, [progressiveVisible, lifecycleProjection.structureEvents, smartVisibilityPreset])
+
   const { windowStart, windowCandles, highlightSwingId } = useMemo(() => {
     const maxVisible = Math.min(candles.length - 1, visibleIndex)
     if (maxVisible < 0 || candles.length === 0) {
@@ -278,6 +351,25 @@ export function SmcLabPage() {
           spanStart = Math.max(0, spanEnd - CHART_WINDOW)
         }
       }
+    } else if (setupContext) {
+      const idxs = setupContext.eventIds
+        .map((id) => findEvent(progressive, id)?.candleIndex)
+        .filter((n): n is number => typeof n === 'number')
+      if (idxs.length > 0) {
+        const left = Math.min(...idxs)
+        const right = Math.max(...idxs)
+        spanStart = Math.max(0, left - FOCUS_PAD)
+        spanEnd = Math.min(maxVisible + 1, right + FOCUS_PAD + 1)
+        if (spanEnd - spanStart > CHART_WINDOW) {
+          center = Math.round((left + right) / 2)
+          spanStart = Math.max(0, center - Math.floor(CHART_WINDOW * 0.65))
+          spanEnd = Math.min(maxVisible + 1, spanStart + CHART_WINDOW)
+          spanStart = Math.max(0, spanEnd - CHART_WINDOW)
+        }
+      } else {
+        spanEnd = maxVisible + 1
+        spanStart = Math.max(0, spanEnd - CHART_WINDOW)
+      }
     } else {
       spanEnd = maxVisible + 1
       spanStart = Math.max(0, spanEnd - CHART_WINDOW)
@@ -288,7 +380,29 @@ export function SmcLabPage() {
       windowCandles: candles.slice(spanStart, spanEnd),
       highlightSwingId: brokenId,
     }
-  }, [candles, visibleIndex, selectedEventId, progressive])
+  }, [candles, visibleIndex, selectedEventId, progressive, setupContext])
+
+  const visibilityPipeline = useMemo(
+    () =>
+      buildLabVisibilityPipelineDiagnostics({
+        fullDetection: progressive,
+        chartDetection: progressiveVisible,
+        layers,
+        windowStart,
+        windowLength: windowCandles.length,
+        listFilter: eventFilter,
+        rankingVisibleOnly: visibilityMode !== 'debug',
+      }),
+    [
+      progressive,
+      progressiveVisible,
+      layers,
+      windowStart,
+      windowCandles.length,
+      eventFilter,
+      visibilityMode,
+    ],
+  )
 
   const reviewsByEventId = useMemo(() => {
     const map = new Map<string, SmcReviewRecord>()
@@ -332,11 +446,23 @@ export function SmcLabPage() {
       layerToggles: layers,
       densityPreset,
       visibilityMode,
+      smartVisibilityPreset,
+      zoneLifecycle,
       activeProfileId,
       playSpeed: speed,
       compareProfileId,
     })
-  }, [config, layers, densityPreset, visibilityMode, activeProfileId, speed, compareProfileId])
+  }, [
+    config,
+    layers,
+    densityPreset,
+    visibilityMode,
+    smartVisibilityPreset,
+    zoneLifecycle,
+    activeProfileId,
+    speed,
+    compareProfileId,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -363,6 +489,8 @@ export function SmcLabPage() {
     setPlaying(false)
     setDetection(emptyDetection())
     setSelectedEventId(null)
+    setSelectedZoneId(null)
+    setSetupContext(null)
   }, [candles])
 
   useEffect(() => {
@@ -430,9 +558,34 @@ export function SmcLabPage() {
     })
   }, [])
 
+  const handleSmartVisibilityPreset = useCallback(
+    (preset: SmcSmartVisibilityPresetPref) => {
+      if (preset !== 'setup-focus') {
+        setSmartVisibilityPreset(preset)
+        setSetupContext(null)
+        return
+      }
+      const mock = createMockSetupVisualContext(progressive, visibleIndex)
+      if (!mock) return
+      setPriorSmartPreset(
+        smartVisibilityPreset === 'setup-focus' ? priorSmartPreset : smartVisibilityPreset,
+      )
+      setSetupContext(mock)
+      setSmartVisibilityPreset('setup-focus')
+    },
+    [progressive, visibleIndex, smartVisibilityPreset, priorSmartPreset],
+  )
+
+  const exitSetupFocus = useCallback(() => {
+    setSetupContext(null)
+    setSmartVisibilityPreset(priorSmartPreset === 'setup-focus' ? 'balanced' : priorSmartPreset)
+  }, [priorSmartPreset])
+
   const clearMarkers = () => {
     setDetection(emptyDetection())
     setSelectedEventId(null)
+    setSelectedZoneId(null)
+    setSetupContext(null)
   }
 
   const handleApplyProfile = (profile: SmcDetectionProfile) => {
@@ -861,28 +1014,152 @@ export function SmcLabPage() {
         </CardContent>
       </Card>
 
+      <Card hover={false}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Smart chart visibility</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-[11px] text-muted-foreground">
+            Zone lifecycle projection only — detector events stay intact. Orthogonal to ranking
+            Focus / Balanced / Debug.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ['active-only', 'Active Only', 'Untouched zones + current structure'],
+                ['setup-focus', 'Setup Focus', 'Selected setup event chain'],
+                ['balanced', 'Balanced', 'Active + recent (default)'],
+                ['history', 'History', 'Finished zones faded & clipped'],
+                ['debug', 'Debug', 'All lifecycle projections'],
+              ] as const
+            ).map(([id, label, hint]) => (
+              <button
+                key={id}
+                type="button"
+                className={`min-h-11 rounded-lg border px-3 text-left text-sm ${
+                  smartVisibilityPreset === id
+                    ? 'border-sky-500/50 bg-sky-500/15'
+                    : 'border-border bg-white/[0.03]'
+                }`}
+                onClick={() => handleSmartVisibilityPreset(id)}
+              >
+                <span className="font-medium">{label}</span>
+                <span className="mt-0.5 block text-[10px] text-muted-foreground">{hint}</span>
+              </button>
+            ))}
+          </div>
+          {setupContext ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px]">
+              <span>
+                Setup focus · {setupContext.setupId} · {setupContext.direction} ·{' '}
+                {setupContext.status}
+              </span>
+              <Button type="button" size="sm" variant="outline" onClick={exitSetupFocus}>
+                Exit setup focus
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => handleSmartVisibilityPreset('setup-focus')}
+            >
+              Enter mock setup focus
+            </Button>
+          )}
+          <Disclosure title="Zone lifecycle settings">
+            <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+              {(
+                [
+                  ['showActive', 'Show active'],
+                  ['showTouched', 'Show touched'],
+                  ['showMitigatedFilled', 'Show mitigated/filled'],
+                  ['showInvalidated', 'Show invalidated'],
+                  ['extendActiveZonesRight', 'Extend active zones right'],
+                  ['fadeOldActiveZones', 'Fade old active zones'],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="flex min-h-11 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={zoneLifecycle[key]}
+                    onChange={(e) =>
+                      setZoneLifecycle((prev) => ({ ...prev, [key]: e.target.checked }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </Disclosure>
+          <p className="font-mono text-[11px] text-muted-foreground">
+            Zones {lifecycleProjection.visibleZones.length}/{lifecycleProjection.zones.length} ·
+            projection {lifecycleProjection.diagnostics.status}
+          </p>
+        </CardContent>
+      </Card>
+
       {/* 3. Apply Detection */}
       <SmcControlsPanel {...sharedControls} sections={['modules', 'actions']} />
 
       {/* 4. Chart */}
       <SmcCandlestickChart
         candles={windowCandles}
-        swings={progressiveVisible.swings}
-        classifiedSwings={progressiveVisible.classifiedSwings}
-        bosEvents={progressiveVisible.bosEvents}
-        chochEvents={progressiveVisible.chochEvents}
-        displacementEvents={progressiveVisible.displacementEvents}
+        swings={chartStructure.swings}
+        classifiedSwings={chartStructure.classifiedSwings}
+        bosEvents={chartStructure.bosEvents}
+        chochEvents={chartStructure.chochEvents}
+        displacementEvents={chartStructure.displacementEvents}
         fvgEvents={progressiveVisible.fvgEvents}
         equalLevelEvents={progressiveVisible.equalLevelEvents}
         liquiditySweepEvents={progressiveVisible.liquiditySweepEvents}
         orderBlockEvents={progressiveVisible.orderBlockEvents}
+        zoneProjections={lifecycleProjection.visibleZones}
+        setupContext={setupContext}
         annotations={annotations}
         selectedEventId={selectedEventId}
+        selectedZoneId={selectedZoneId}
+        onSelectZone={(id) => {
+          setSelectedZoneId(id)
+          setSelectedEventId(null)
+        }}
         highlightSwingId={highlightSwingId}
         layers={layers}
         windowStartIndex={windowStart}
         importanceById={detection.intelligence?.byEventId}
       />
+
+      <Card hover={false}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Zone legend</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
+          <p>
+            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-emerald-500/70" />
+            Bullish FVG
+          </p>
+          <p>
+            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-red-500/70" />
+            Bearish FVG
+          </p>
+          <p>
+            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-blue-500/70" />
+            Bullish OB
+          </p>
+          <p>
+            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-purple-500/70" />
+            Bearish OB
+          </p>
+          <p>
+            <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-amber-500/70" />
+            BSL / SSL
+          </p>
+          <p>Solid = Active/Fresh · Dotted = Touched/Partial · Faded = Finished</p>
+          <p>Labels: FVG · OB · BSL · SSL (+ ·T/·P/·M/·X/·S)</p>
+        </CardContent>
+      </Card>
 
       <SmcCursorControls
         visibleIndex={visibleIndex}
@@ -899,6 +1176,90 @@ export function SmcLabPage() {
       />
 
       {/* 5. Inspector */}
+      {selectedZone ? (
+        <Card hover={false}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">{selectedZone.fullLabel}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-xs">
+            <p>
+              <span className="text-muted-foreground">Kind: </span>
+              {selectedZone.zoneKind} · {selectedZone.direction}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Source event: </span>
+              <button
+                type="button"
+                className="font-mono text-sky-300 underline"
+                onClick={() => {
+                  setSelectedEventId(selectedZone.sourceEventId)
+                  setSelectedZoneId(null)
+                }}
+              >
+                {selectedZone.sourceEventId}
+              </button>
+            </p>
+            <p>
+              <span className="text-muted-foreground">State: </span>
+              {selectedZone.state}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Still active: </span>
+              {selectedZone.activeAtVisibleIndex ? 'yes' : 'no'}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Chart extent: </span>
+              {selectedZone.startIndex} → {selectedZone.endIndex}
+              {selectedZone.extendsToVisibleEdge ? ' (extends to visible)' : ' (clipped)'}
+            </p>
+            {selectedZone.firstTouchIndex != null ? (
+              <p>
+                <span className="text-muted-foreground">First touch: </span>
+                candle {selectedZone.firstTouchIndex}
+                {candles[selectedZone.firstTouchIndex]
+                  ? ` · ${new Date(candles[selectedZone.firstTouchIndex]!.time).toLocaleString()}`
+                  : ''}
+              </p>
+            ) : null}
+            {selectedZone.mitigationIndex != null ? (
+              <p>
+                <span className="text-muted-foreground">Mitigation / fill: </span>
+                candle {selectedZone.mitigationIndex}
+                {candles[selectedZone.mitigationIndex]
+                  ? ` · ${new Date(candles[selectedZone.mitigationIndex]!.time).toLocaleString()}`
+                  : ''}
+              </p>
+            ) : null}
+            {selectedZone.invalidationIndex != null ? (
+              <p>
+                <span className="text-muted-foreground">Invalidation: </span>
+                candle {selectedZone.invalidationIndex}
+              </p>
+            ) : null}
+            <p>
+              <span className="text-muted-foreground">Why visible: </span>
+              {selectedZone.visibilityReason}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Why extent: </span>
+              {selectedZone.lifecycleReason}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Setup refs: </span>
+              {selectedZone.setupRefs.length ? selectedZone.setupRefs.join(', ') : '—'}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedZoneId(null)}
+            >
+              Clear zone selection
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <SmcEventInspector
         event={selectedEvent}
         candles={candles}
@@ -919,6 +1280,7 @@ export function SmcLabPage() {
         }
         onSelectRelated={(id) => {
           setSelectedEventId(id)
+          setSelectedZoneId(null)
           const event = findEvent(progressive, id) ?? findEvent(detection, id)
           if (event) {
             setVisibleIndex((v) => Math.max(v, event.candleIndex))
@@ -939,6 +1301,7 @@ export function SmcLabPage() {
         onFilterChange={setEventFilter}
         onSelect={(id) => {
           setSelectedEventId(id)
+          setSelectedZoneId(null)
           const event = findEvent(progressive, id)
           if (event) {
             setVisibleIndex((v) => Math.max(v, event.candleIndex))
@@ -1278,6 +1641,95 @@ export function SmcLabPage() {
                       <p>Visibility mode: {detection.diagnostics.ranking.mode}</p>
                     </>
                   ) : null}
+                  <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
+                    <p className="font-medium">Zone lifecycle projection</p>
+                    <p>Status: {lifecycleProjection.diagnostics.status}</p>
+                    <p>
+                      FVG active {lifecycleProjection.diagnostics.fvgActiveUntouched} · touched{' '}
+                      {lifecycleProjection.diagnostics.fvgTouched} · partial{' '}
+                      {lifecycleProjection.diagnostics.fvgPartiallyMitigated} · filled{' '}
+                      {lifecycleProjection.diagnostics.fvgFilled} · invalidated{' '}
+                      {lifecycleProjection.diagnostics.fvgInvalidated} · hidden{' '}
+                      {lifecycleProjection.diagnostics.fvgHiddenByVisibility}
+                    </p>
+                    <p>
+                      OB fresh {lifecycleProjection.diagnostics.obFresh} · touched{' '}
+                      {lifecycleProjection.diagnostics.obTouched} · partial{' '}
+                      {lifecycleProjection.diagnostics.obPartial} · mitigated{' '}
+                      {lifecycleProjection.diagnostics.obMitigated} · invalidated{' '}
+                      {lifecycleProjection.diagnostics.obInvalidated} · hidden{' '}
+                      {lifecycleProjection.diagnostics.obHiddenByVisibility}
+                    </p>
+                    <p>
+                      Liquidity unswept {lifecycleProjection.diagnostics.liquidityActiveUnswept} ·
+                      swept {lifecycleProjection.diagnostics.liquiditySwept} · broken{' '}
+                      {lifecycleProjection.diagnostics.liquidityBroken} · superseded{' '}
+                      {lifecycleProjection.diagnostics.liquiditySuperseded}
+                    </p>
+                    <p>
+                      Extending {lifecycleProjection.diagnostics.zonesExtendingToVisibleIndex} ·
+                      clipped {lifecycleProjection.diagnostics.zonesClippedAtTerminal} · setup-forced{' '}
+                      {lifecycleProjection.diagnostics.setupForcedVisible} · hidden by lifecycle{' '}
+                      {lifecycleProjection.diagnostics.hiddenByLifecycle}
+                    </p>
+                    <p>
+                      Invariants: filledFvgPastFill=
+                      {lifecycleProjection.diagnostics.invariants.filledFvgExtendingPastFill} ·
+                      invFvgPast=
+                      {lifecycleProjection.diagnostics.invariants.invalidatedFvgExtendingPastInvalidation}{' '}
+                      · mitigatedObActive=
+                      {lifecycleProjection.diagnostics.invariants.mitigatedObRenderedActive} ·
+                      invObRight=
+                      {lifecycleProjection.diagnostics.invariants.invalidatedObExtendingRight} ·
+                      sweptPast=
+                      {lifecycleProjection.diagnostics.invariants.sweptLiquidityExtendingPastSweep} ·
+                      brokenActive=
+                      {lifecycleProjection.diagnostics.invariants.brokenLiquidityRenderedActive} ·
+                      setupHidden=
+                      {lifecycleProjection.diagnostics.invariants.setupReferencedHidden}
+                    </p>
+                    {lifecycleProjection.diagnostics.invariantDetails.slice(0, 8).map((d) => (
+                      <p key={d} className="text-danger">
+                        {d}
+                      </p>
+                    ))}
+                  </div>
+                  <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
+                    <p className="font-medium">Visibility pipeline</p>
+                    <p>
+                      Overall detector {visibilityPipeline.overall.detectorCount} · ranked{' '}
+                      {visibilityPipeline.overall.rankedCount} · visible{' '}
+                      {visibilityPipeline.overall.visibleCount} · chartRendered{' '}
+                      {visibilityPipeline.overall.chartRenderedCount} · listRendered{' '}
+                      {visibilityPipeline.overall.listRenderedCount}
+                    </p>
+                    {(
+                      [
+                        'BOS',
+                        'CHoCH',
+                        'LiquiditySweep',
+                        'Swing',
+                        'Displacement',
+                        'FVG',
+                        'OrderBlock',
+                      ] as const
+                    ).map((module) => {
+                      const row = visibilityPipeline.byModule[module]
+                      if (row.detectorCount === 0 && row.visibleCount === 0) return null
+                      return (
+                        <p key={module}>
+                          {module}: detector {row.detectorCount} · ranked {row.rankedCount} ·
+                          visible {row.visibleCount} · chart {row.chartRenderedCount} · list{' '}
+                          {row.listRenderedCount}
+                        </p>
+                      )
+                    })}
+                    {visibilityPipeline.notes.map((note) => (
+                      <p key={note} className="text-amber-200">
+                        {note}
+                      </p>
+                    ))}
+                  </div>
                   <p className="mt-2">External swings: {s.externalSwings}</p>
                   <p>Internal swings: {s.internalSwings}</p>
                   <p className="mt-2">External BOS: {s.externalBos}</p>
