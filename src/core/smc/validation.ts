@@ -1,3 +1,4 @@
+import { resolveQmlConfig } from './qml/qml-config'
 import type { SmcDetectorConfig } from './types'
 import { cloneSmcDetectorConfig, DEFAULT_SMC_DETECTOR_CONFIG } from './defaults'
 
@@ -62,6 +63,12 @@ function dependencyWarnings(config: SmcDetectorConfig): string[] {
       'CHoCH requires displacement but Displacement is disabled — CHoCH shifts needing displacement will not emit.',
     )
   }
+  if (config.qml.enabled && !config.choch.enabled) {
+    warnings.push('QML requires CHoCH — Quasimodo Level detection will be inactive.')
+  }
+  if (config.qml.enabled && !config.structure.enabled) {
+    warnings.push('QML requires Structure classification — results may be limited.')
+  }
   return warnings
 }
 
@@ -81,6 +88,7 @@ export function validateSmcDetectorConfig(
   const eqIn = input?.equalLevels
   const sweepIn = input?.liquiditySweep
   const obIn = input?.orderBlock
+  const qmlIn = input?.qml
 
   const pivotLeft = clampInt(swingIn?.pivotLeft ?? base.swing.pivotLeft, PIVOT_MIN, PIVOT_MAX)
   const pivotRight = clampInt(swingIn?.pivotRight ?? base.swing.pivotRight, PIVOT_MIN, PIVOT_MAX)
@@ -292,6 +300,11 @@ export function validateSmcDetectorConfig(
       trackMitigation: obIn?.trackMitigation ?? base.orderBlock.trackMitigation,
       mitigationMode: obIn?.mitigationMode ?? base.orderBlock.mitigationMode,
     },
+    qml: resolveQmlConfig({
+      ...base.qml,
+      ...qmlIn,
+      enabled: qmlIn?.enabled ?? base.qml.enabled,
+    }),
   }
 
   // Enforce dependency disablement without silently enabling hidden deps.
@@ -318,6 +331,9 @@ export function validateSmcDetectorConfig(
   }
   if (config.orderBlock.enabled && config.orderBlock.requireFvg && !config.fvg.enabled) {
     config.orderBlock.enabled = false
+  }
+  if (config.qml.enabled && !config.choch.enabled) {
+    config.qml.enabled = false
   }
 
   const warnings = dependencyWarnings(config)
@@ -359,6 +375,10 @@ export function moduleDependencyReason(
       if (config.orderBlock.requireFvg && !config.fvg.enabled) {
         return 'Requires Fair Value Gap (per config)'
       }
+      return null
+    case 'qml':
+      if (!config.choch.enabled) return 'Requires CHoCH'
+      if (!config.structure.enabled) return 'Requires Internal / External Structure'
       return null
     default:
       return null

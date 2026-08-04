@@ -101,4 +101,5 @@ export const SMC_VALIDATION_MODULES: SmcValidationModule[] = [
   'FVG',
   'Liquidity Sweep',
   'Order Block',
+  'QML',
 ]

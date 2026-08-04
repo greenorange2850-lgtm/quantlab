@@ -1,4 +1,5 @@
 import type { SmcDetectionResult } from '../types'
+import { projectQmlZones } from '../qml'
 import { auditLifecycleProjectionInvariants } from './invariants'
 import {
   DEFAULT_ZONE_LIFECYCLE_SETTINGS,
@@ -127,11 +128,22 @@ export function projectSmcLifecycle(
   })
   const lifecycleReport = buildZoneLifecycleReport(managed.zones)
 
-  const zones = managed.zones.map((meta) => {
+  const managedZones = managed.zones.map((meta) => {
     const setupRefs =
       setupZoneIds?.has(meta.id) && setup ? [setup.setupId] : ([] as string[])
     return managedZoneToProjection(meta, setupRefs)
   })
+
+  // QML zones are projected separately (derived layer, not zone-lifecycle manager).
+  const qmlZones = projectQmlZones(detection.qml?.patterns ?? [], visibleIndex, {
+    extendActiveRight: settings.extendActiveZonesRight,
+  }).map((z) =>
+    setupZoneIds?.has(z.zoneId) && setup
+      ? { ...z, setupRefs: [...new Set([...z.setupRefs, setup.setupId])] }
+      : z,
+  )
+
+  const zones = [...managedZones, ...qmlZones]
 
   const visibleZones = filterZonesBySmartVisibility(
     zones,

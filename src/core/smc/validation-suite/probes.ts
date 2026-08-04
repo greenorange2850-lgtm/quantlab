@@ -1,4 +1,5 @@
-import type { SmcDetectionResult, SmcEvent } from '../types'
+import type { QmlPattern } from '../qml/qml-types'
+import type { SmcDetectionKind, SmcDetectionResult, SmcEvent } from '../types'
 import { validationModuleForKind } from './matching'
 import type { SmcDetectedEventProbe, SmcValidationModule } from './types'
 
@@ -56,7 +57,7 @@ export function toDetectedProbes(result: SmcDetectionResult): SmcDetectedEventPr
     ),
   ]
 
-  return events.map((event) => ({
+  const base = events.map((event) => ({
     id: event.id,
     kind: event.kind,
     candleIndex: event.candleIndex,
@@ -65,6 +66,31 @@ export function toDetectedProbes(result: SmcDetectionResult): SmcDetectedEventPr
     sourceStructureId: sourceStructureIdOf(event),
     knowableAtIndex: knowableAt(event),
   }))
+
+  const qmlProbes = (result.qml?.patterns ?? [])
+    .filter((p) => p.status !== 'CANDIDATE')
+    .map(qmlPatternToProbe)
+
+  return [...base, ...qmlProbes]
+}
+
+/** Map a confirmed QML pattern to a golden-matching probe. */
+export function qmlPatternToProbe(pattern: QmlPattern): SmcDetectedEventProbe {
+  const kind: SmcDetectionKind =
+    pattern.direction === 'BULLISH' ? 'BULLISH_QML' : 'BEARISH_QML'
+  return {
+    id: pattern.id,
+    kind,
+    candleIndex: pattern.createdIndex,
+    timestamp: pattern.sourceCandleTime ?? pattern.createdIndex,
+    price: (pattern.zoneLow + pattern.zoneHigh) / 2,
+    sourceStructureId: [
+      pattern.sourceSwingId,
+      pattern.extremeSwingId,
+      pattern.structureShiftEventId,
+    ].join('|'),
+    knowableAtIndex: pattern.confirmedIndex ?? pattern.createdIndex,
+  }
 }
 
 export function filterProbesByModule(

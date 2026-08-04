@@ -15,6 +15,7 @@ export type SmcModuleConfigKey =
   | 'equalLevels'
   | 'liquiditySweep'
   | 'orderBlock'
+  | 'qml'
 
 export interface SmcModuleDescriptor {
   id: string
@@ -115,6 +116,16 @@ export const SMC_MODULES: readonly SmcModuleDescriptor[] = [
     configKey: 'orderBlock',
     requires: ['break-of-structure'],
   },
+  {
+    id: 'qml',
+    name: 'Quasimodo Level (QML)',
+    version: '1.0.0-experimental',
+    status: 'active',
+    description:
+      'Experimental Quasimodo Level patterns from Dow progression + CHoCH (disabled by default)',
+    configKey: 'qml',
+    requires: ['choch', 'dow-theory', 'internal-external-structure'],
+  },
 ] as const
 
 export function listActiveSmcModules(): SmcModuleDescriptor[] {
@@ -137,6 +148,7 @@ export const SMC_DETECTION_MODULE_ORDER = [
   'fvg',
   'liquiditySweep',
   'orderBlock',
+  'qml',
   'mitigation',
 ] as const
 

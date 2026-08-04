@@ -283,6 +283,62 @@ export function SmcDiagnosticsWorkspace() {
         </div>
       </Disclosure>
 
+      {/* QML diagnostics */}
+      <Disclosure title="QML diagnostics">
+        <div className="space-y-1 font-mono text-[11px]">
+          {detection.qml ? (
+            <>
+              <p>
+                status {detection.qml.status} · experimental {String(detection.qml.experimental)} ·
+                enabled {String(detection.qml.enabled)}
+              </p>
+              <p>
+                candidates {detection.qml.diagnostics.structuralCandidates} · bull{' '}
+                {detection.qml.diagnostics.confirmedBullish} · bear{' '}
+                {detection.qml.diagnostics.confirmedBearish} · active{' '}
+                {detection.qml.diagnostics.activeZones} · retested{' '}
+                {detection.qml.diagnostics.retested} · ready {detection.qml.diagnostics.entryReady}{' '}
+                · invalid {detection.qml.diagnostics.invalidated} · expired{' '}
+                {detection.qml.diagnostics.expired}
+              </p>
+              <p>
+                duplicates suppressed {detection.qml.diagnostics.duplicatePatternsSuppressed} ·
+                avg strength {detection.qml.diagnostics.averageStrength.toFixed(1)} · avg bars to
+                retest{' '}
+                {detection.qml.diagnostics.averageBarsFromChochToRetest?.toFixed(1) ?? '—'}
+              </p>
+              <p>
+                internal sources {detection.qml.diagnostics.internalSourceCount} · external{' '}
+                {detection.qml.diagnostics.externalSourceCount} · duration{' '}
+                {detection.qml.diagnostics.durationMs.toFixed(1)}ms
+              </p>
+              <p>
+                invariants ok={String(detection.qml.invariants.ok)} · withoutPrior=
+                {detection.qml.invariants.qmlWithoutPriorTrend} · srcAfterExt=
+                {detection.qml.invariants.sourceSwingAfterExtreme} · extAfterChoch=
+                {detection.qml.invariants.extremeAfterChoch} · retestBefore=
+                {detection.qml.invariants.retestBeforeZoneCreation} · entryBefore=
+                {detection.qml.invariants.entryReadyBeforeRetestClose} · dup=
+                {detection.qml.invariants.duplicateCanonicalQml} · future=
+                {detection.qml.invariants.futureEventUsed}
+              </p>
+              {detection.qml.invariantDetails.slice(0, 8).map((d) => (
+                <p key={d} className="text-danger">
+                  {d}
+                </p>
+              ))}
+              {detection.qml.diagnostics.candidatesRejectedByReason.slice(0, 8).map((r) => (
+                <p key={r.reason}>
+                  rejected {r.reason}: {r.count}
+                </p>
+              ))}
+            </>
+          ) : (
+            <p>QML layer not present (module disabled or not run).</p>
+          )}
+        </div>
+      </Disclosure>
+
       {/* Dow diagnostics */}
       <Disclosure title="Dow diagnostics">
         <div className="space-y-1 font-mono text-[11px]">

@@ -48,7 +48,9 @@ const MODULE_LABELS: Record<string, string> = {
   fvg: 'FVG',
   liquiditySweep: 'Liquidity',
   orderBlock: 'Order Blocks',
+  qml: 'QML',
   mitigation: 'Mitigation',
+  dowTheory: 'Dow Theory',
 }
 
 /**

@@ -128,6 +128,9 @@ export {
   SMC_VALIDATION_MODULES,
   toDetectedProbes,
   filterProbesByModule,
+  qmlPatternToProbe,
+  matchQmlGoldenLabels,
+  DEFAULT_QML_MATCH_TOLERANCE,
   validateProgressiveConsistency,
   earliestAppearanceIndex,
   eventsEqualByIdentity,
@@ -150,6 +153,8 @@ export {
   type SmcAcceptanceGate,
   type SmcReviewSample,
   type EvaluateValidationInput,
+  type QmlMatchTolerance,
+  type QmlGoldenLabel,
 } from './validation-suite'
 
 export {
@@ -220,6 +225,37 @@ export {
   type SmcDowTheoryLayer,
   type DowTheoryClassifiedSwing,
 } from './dow-theory'
+
+export {
+  SMC_QML_VERSION,
+  DEFAULT_QML_CONFIG,
+  cloneQmlConfig,
+  resolveQmlConfig,
+  detectQmlPatterns,
+  emptyQmlLayer,
+  selectQmlSource,
+  advanceQmlLifecycle,
+  projectQmlZones,
+  scoreQmlPattern,
+  buildQmlDiagnostics,
+  auditQmlInvariants,
+  emptyQmlInvariantCounts,
+  compareQmlProgressiveFull,
+  type QmlConfig,
+  type QmlDirection,
+  type QmlStatus,
+  type QmlZoneMode,
+  type QmlRetestMode,
+  type QmlConfirmationMode,
+  type QmlInvalidationMode,
+  type QmlStructureScope,
+  type QmlCheck,
+  type QmlPattern,
+  type QmlDiagnostics,
+  type QmlInvariantCounts,
+  type SmcQmlLayer,
+  type DetectQmlInput,
+} from './qml'
 
 export {
   BUILTIN_SMC_PROFILES,

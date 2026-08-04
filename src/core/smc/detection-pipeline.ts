@@ -13,6 +13,7 @@ import { sanitizeSmcDetectionResult } from './invariants'
 import { detectLiquiditySweeps } from './liquidity-sweep-detector'
 import { detectOrderBlocks } from './order-block-detector'
 import { analyzeDowTheory, emptyDowTheoryLayer } from './dow-theory'
+import { detectQmlPatterns, emptyQmlLayer } from './qml'
 import { applySmcIntelligence } from './ranking'
 import {
   classifyInternalExternalStructure,
@@ -165,7 +166,8 @@ function runTimed(
  * Progressive detection API — only events knowable by `visibleIndex` (inclusive).
  * Module order:
  * 1 Swings → 2 Structure → 3 Dow Theory → 4 Equal levels → 5/6 BOS/CHoCH →
- * 7 Displacement → 8 FVG → 9 Liquidity Sweep → 10 Order Block → 11 mitigation
+ * 7 Displacement → 8 FVG → 9 Liquidity Sweep → 10 Order Block →
+ * 11 QML (experimental) → 12 mitigation
  */
 export function detectSmcUntil(
   candles: readonly Candle[],
@@ -338,6 +340,28 @@ export function detectSmcUntil(
     }),
   )
 
+  // QML — derived layer after structure breaks + optional OB/FVG/sweep context.
+  let qml = emptyQmlLayer(last, safe.qml.enabled ? 'SKIPPED' : 'DISABLED')
+  maxBlock = Math.max(
+    maxBlock,
+    runTimed('qml', safe.qml.enabled, timings, () => {
+      qml = detectQmlPatterns({
+        candles,
+        visibleIndex: last,
+        config: safe.qml,
+        dowTheory,
+        swings: annotatedSwings,
+        classifiedSwings: classified.classified,
+        chochEvents: breaks.chochEvents,
+        bosEvents: breaks.bosEvents,
+        displacementEvents: displacement.events,
+        fvgEvents: fvg.events,
+        liquiditySweepEvents: sweeps.events,
+        orderBlockEvents: orderBlocks.events,
+      })
+    }),
+  )
+
   timings.push({ module: 'mitigation', durationMs: 0, status: 'complete' })
 
   const durationMs = performance.now() - started
@@ -354,6 +378,7 @@ export function detectSmcUntil(
     orderBlockEvents: orderBlocks.events,
     structureState: breaks.structureState,
     dowTheory,
+    qml,
     diagnostics: {
       ...emptyDiagnostics(candles.length, last, durationMs, 'COMPLETE'),
       swingCandidatesConsidered: swingResult.candidatesConsidered,
@@ -382,6 +407,7 @@ export function detectSmcUntil(
       liquiditySweepDiagnostics: sweeps.diagnostics,
       detectionStatus: 'COMPLETE',
       dowTheory: dowTheory.diagnostics,
+      qml: qml.diagnostics,
     },
   }
 
@@ -392,6 +418,7 @@ export function detectSmcUntil(
   const withCounts: SmcDetectionResult = {
     ...result,
     dowTheory: result.dowTheory ?? dowTheory,
+    qml: result.qml ?? qml,
     diagnostics: {
       ...result.diagnostics,
       computationDurationMs: durationMs,
@@ -403,6 +430,7 @@ export function detectSmcUntil(
       eventCountBreakdown,
       detectionStatus: failed ? 'FAILED' : 'COMPLETE',
       dowTheory: (result.dowTheory ?? dowTheory).diagnostics,
+      qml: (result.qml ?? qml).diagnostics,
       invariantDetails: report.details,
       invariants: {
         invalidBullishBosCount: report.invalidBullishBosCount,

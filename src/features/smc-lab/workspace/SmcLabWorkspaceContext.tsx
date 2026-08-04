@@ -16,6 +16,7 @@ import type {
   SmcZoneProjection,
   SmcEvent,
   SmcRankedEventMeta,
+  QmlPattern,
 } from '@/core/smc'
 import type { SmcChartLayerToggles } from '../components/SmcCandlestickChart'
 import type { SmcPlaySpeed } from '../components/SmcCursorControls'
@@ -130,6 +131,8 @@ export interface SmcLabWorkspaceModel {
   setSelectedEventId: (v: string | null) => void
   selectedZoneId: string | null
   setSelectedZoneId: (v: string | null) => void
+  selectedQmlId: string | null
+  selectQmlPattern: (pattern: QmlPattern) => void
   selectedEvent: SmcEvent | null
   selectedZone: SmcZoneProjection | null
   eventFilter: SmcEventFilter
