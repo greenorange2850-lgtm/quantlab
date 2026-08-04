@@ -22,3 +22,14 @@ export type { SmcAppliedConfigSummaryProps } from './SmcAppliedConfigSummary'
 
 export { SmcQuickViewControls } from './SmcQuickViewControls'
 export type { SmcQuickViewControlsProps } from './SmcQuickViewControls'
+
+export {
+  SmcLabWorkspaceProvider,
+  useSmcLabWorkspace,
+} from './SmcLabWorkspaceContext'
+export type { SmcLabWorkspaceModel } from './SmcLabWorkspaceContext'
+
+export { SmcAnalyzeWorkspace } from './SmcAnalyzeWorkspace'
+export { SmcConfigureWorkspace } from './SmcConfigureWorkspace'
+export { SmcValidateWorkspace } from './SmcValidateWorkspace'
+export { SmcDiagnosticsWorkspace } from './SmcDiagnosticsWorkspace'
