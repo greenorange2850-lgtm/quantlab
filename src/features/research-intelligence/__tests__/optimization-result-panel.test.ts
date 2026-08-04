@@ -291,10 +291,27 @@ describe('OptimizationResultPanel', () => {
 
     expect(html).toContain('Optimization Result')
     expect(html).toContain('Meaningfully Improved')
+    expect(html).toContain('Baseline Score')
+    expect(html).toContain('Raw Best Score')
+    expect(html).toContain('Recommended Score')
+    expect(html).toContain('Improvement')
+    expect(html).toContain('Next recommendation')
+    expect(html).toContain('Highest eligible score.')
+    expect(html).toContain('Plateau / convergence')
     expect(html).toContain('Validation')
     expect(html).toContain('EMA Fast')
     expect(html).toContain('Net Profit improved')
     expect(html).toContain('MEDIUM')
+  })
+
+  it('resolves persisted optimization from report when prop omitted', () => {
+    const session = makeAdaptiveSession()
+    const report = buildResearchReport(session)
+    const html = renderToStaticMarkup(
+      createElement(OptimizationResultPanel, { report }),
+    )
+    expect(html).toContain('Meaningfully Improved')
+    expect(html).toContain('Raw Best Score')
   })
 
   it('renders zero-pass / constraints not met state', () => {

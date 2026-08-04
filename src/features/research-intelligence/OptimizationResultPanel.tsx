@@ -6,9 +6,9 @@ import { KPI_SECONDARY_GRID } from '@/layouts/layout-classes'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
 import type {
   OptimizationResultSummary,
-  RandomSearchCandidate,
   ResearchReport,
 } from '@/core/research'
+import { resolveOptimizationSummary } from './resolve-optimization-summary'
 
 function verdictTone(verdict: OptimizationResultSummary['verdict']): string {
   switch (verdict) {
@@ -31,20 +31,47 @@ function stabilityTone(level: string): string {
   return 'text-muted-foreground'
 }
 
+/** Presentation-only score delta from persisted baseline / recommended scores. */
+function formatScoreImprovement(
+  baselineScore: number | null | undefined,
+  recommendedScore: number | null | undefined,
+): string {
+  if (
+    baselineScore === null ||
+    baselineScore === undefined ||
+    recommendedScore === null ||
+    recommendedScore === undefined ||
+    !Number.isFinite(baselineScore) ||
+    !Number.isFinite(recommendedScore)
+  ) {
+    return '—'
+  }
+  const delta = recommendedScore - baselineScore
+  const sign = delta > 0 ? '+' : ''
+  if (Math.abs(baselineScore) < 1e-9) {
+    return `${sign}${delta.toFixed(2)}`
+  }
+  const pct = (delta / Math.abs(baselineScore)) * 100
+  return `${sign}${delta.toFixed(2)} (${sign}${pct.toFixed(1)}%)`
+}
+
 interface OptimizationResultPanelProps {
   report: ResearchReport
-  optimization: OptimizationResultSummary
+  /** When omitted, resolved from persisted report.optimization / baseline. */
+  optimization?: OptimizationResultSummary
 }
 
 export function OptimizationResultPanel({
   report,
-  optimization,
+  optimization: optimizationProp,
 }: OptimizationResultPanelProps) {
+  const optimization = optimizationProp ?? resolveOptimizationSummary(report)
+  if (!optimization) return null
+
   const baseline = optimization.baseline
   const recommended = report.recommendedCandidate ?? report.bestCandidate
   const rawBest = report.rawBestCandidate
-  const legacy =
-    (optimization.schemaVersion ?? 0) < 1 && !baseline
+  const legacy = (optimization.schemaVersion ?? 0) < 1 && !baseline
 
   if (legacy) {
     return (
@@ -60,8 +87,9 @@ export function OptimizationResultPanel({
     )
   }
 
-  const scoreBefore = baseline?.score ?? null
-  const scoreAfter = recommended?.score ?? null
+  const baselineScore = baseline?.score ?? null
+  const recommendedScore = recommended?.score ?? null
+  const rawBestScore = rawBest?.score ?? null
 
   return (
     <Card className="border-accent/20">
@@ -83,38 +111,31 @@ export function OptimizationResultPanel({
       <CardContent className="space-y-5">
         <div className={KPI_SECONDARY_GRID}>
           <MetricTile
-            label="Baseline → Recommended"
-            value={
-              scoreBefore === null || scoreAfter === null
-                ? '—'
-                : `${scoreBefore.toFixed(2)} → ${scoreAfter.toFixed(2)}`
-            }
+            label="Baseline Score"
+            value={baselineScore === null ? '—' : baselineScore.toFixed(2)}
             size="secondary"
           />
           <MetricTile
-            label="Net Profit Δ"
-            value={
-              baseline && recommended
-                ? formatCurrency(recommended.report.summary.netProfit - baseline.netProfit)
-                : '—'
-            }
+            label="Raw Best Score"
+            value={rawBestScore === null ? '—' : rawBestScore.toFixed(2)}
+            size="secondary"
+          />
+          <MetricTile
+            label="Recommended Score"
+            value={recommendedScore === null ? '—' : recommendedScore.toFixed(2)}
+            size="secondary"
+          />
+          <MetricTile
+            label="Improvement"
+            value={formatScoreImprovement(baselineScore, recommendedScore)}
             size="secondary"
             tone={
-              baseline && recommended && recommended.report.summary.netProfit > baseline.netProfit
+              baselineScore !== null &&
+              recommendedScore !== null &&
+              recommendedScore > baselineScore
                 ? 'positive'
                 : 'muted'
             }
-          />
-          <MetricTile
-            label="Drawdown Δ"
-            value={
-              baseline && recommended
-                ? formatPercent(
-                    (recommended.report.summary.maxDrawdown - baseline.maxDrawdown) * 100,
-                  )
-                : '—'
-            }
-            size="secondary"
           />
           <MetricTile
             label="Stability"
@@ -122,18 +143,27 @@ export function OptimizationResultPanel({
             size="secondary"
           />
           <MetricTile label="Validation" value="Required" size="secondary" tone="warning" />
-          <MetricTile
-            label="Improvements"
-            value={String(optimization.improvements.length)}
-            size="secondary"
-          />
+        </div>
+
+        <div className="rounded-lg border border-border/60 bg-white/[0.02] px-3 py-3 text-xs">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Next recommendation
+          </p>
+          <p className="mt-1 text-pretty text-muted-foreground">
+            {optimization.recommendation.explanation || optimization.verdictDetail}
+          </p>
         </div>
 
         <BestScoreTimeline optimization={optimization} />
 
         {baseline && recommended && (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <CandidateCompareCard title="Baseline" params={baseline.parameters} summary={baseline} score={baseline.score} />
+            <CandidateCompareCard
+              title="Baseline"
+              params={baseline.parameters}
+              summary={baseline}
+              score={baseline.score}
+            />
             <CandidateCompareCard
               title="Recommended"
               params={recommended.parameters}
@@ -146,32 +176,44 @@ export function OptimizationResultPanel({
 
         {rawBest && recommended && rawBest.id !== recommended.id && (
           <p className="text-xs text-muted-foreground">
-            {optimization.recommendation.explanation}
+            Raw best ({rawBest.score.toFixed(2)}) differs from recommended (
+            {recommended.score.toFixed(2)}): {optimization.recommendation.explanation}
           </p>
         )}
 
         <Disclosure title="What improved">
           <ul className="space-y-1 text-xs text-muted-foreground">
-            {optimization.metricChanges.map((change) => (
-              <li key={change.key} className={change.improved === false ? 'text-warning' : undefined}>
-                {change.text}
-              </li>
-            ))}
+            {optimization.metricChanges.length === 0 ? (
+              <li>No persisted metric comparison available.</li>
+            ) : (
+              optimization.metricChanges.map((change) => (
+                <li
+                  key={change.key}
+                  className={change.improved === false ? 'text-warning' : undefined}
+                >
+                  {change.text}
+                </li>
+              ))
+            )}
           </ul>
         </Disclosure>
 
         <Disclosure title="Parameter changes">
           <ul className="space-y-1 font-mono text-xs">
-            {optimization.parameterChanges.map((change) => (
-              <li key={change.name}>
-                {change.label}: {change.before} → {change.after}
-              </li>
-            ))}
+            {optimization.parameterChanges.length === 0 ? (
+              <li className="font-sans text-muted-foreground">No parameter changes recorded.</li>
+            ) : (
+              optimization.parameterChanges.map((change) => (
+                <li key={change.name}>
+                  {change.label}: {change.before} → {change.after}
+                </li>
+              ))
+            )}
           </ul>
         </Disclosure>
 
-        <Disclosure title="Search explanation">
-          <div className="space-y-1 text-xs text-muted-foreground">
+        <Disclosure title="Stability & search explanation" defaultOpen>
+          <div className="space-y-2 text-xs text-muted-foreground">
             <p>
               Stages: {optimization.searchExplanation.stagesCompleted.join(' → ') || '—'}
             </p>
@@ -182,10 +224,17 @@ export function OptimizationResultPanel({
               {(optimization.searchExplanation.duplicateRate * 100).toFixed(0)}%)
             </p>
             <p>Improvements: {optimization.searchExplanation.improvementCount}</p>
-            {optimization.searchExplanation.plateauDetail && (
+            {optimization.plateau?.detected ? (
+              <p>
+                Plateau / convergence: {optimization.plateau.detail}
+                {optimization.plateau.continued ? ' Search continued after detection.' : ''}
+              </p>
+            ) : optimization.searchExplanation.plateauDetail ? (
               <p>Plateau: {optimization.searchExplanation.plateauDetail}</p>
+            ) : (
+              <p>Plateau / convergence: none detected (or not recorded).</p>
             )}
-            {optimization.stability && (
+            {optimization.stability ? (
               <div className="space-y-1 pt-2">
                 <p className={stabilityTone(optimization.stability.overall)}>
                   Parameter Stability: {optimization.stability.overall}
@@ -206,6 +255,8 @@ export function OptimizationResultPanel({
                   </p>
                 )}
               </div>
+            ) : (
+              <p>Stability: Unavailable</p>
             )}
             {Object.keys(optimization.rejectionReasonCounts).length > 0 && (
               <p>
@@ -262,6 +313,9 @@ function CandidateCompareCard({
         <span>DD {formatPercent(-summary.maxDrawdown * 100)}</span>
         <span>WR {formatPercent(summary.winRate * 100)}</span>
         <span>Trades {trades}</span>
+        {summary.expectancy !== undefined && (
+          <span>Exp {summary.expectancy.toFixed(2)}</span>
+        )}
       </div>
     </div>
   )
@@ -314,5 +368,3 @@ function BestScoreTimeline({ optimization }: { optimization: OptimizationResultS
     </div>
   )
 }
-
-export type { RandomSearchCandidate }

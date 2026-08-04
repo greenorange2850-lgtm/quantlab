@@ -27,3 +27,4 @@ export {
 } from './components/ResearchIntelligencePanels'
 
 export { OptimizationResultPanel } from './OptimizationResultPanel'
+export { resolveOptimizationSummary } from './resolve-optimization-summary'
