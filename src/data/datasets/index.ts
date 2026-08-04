@@ -5,6 +5,8 @@ export type {
   DatasetMetadata,
   DatasetMetadataExport,
   DatasetCandleSlice,
+  CsvColumnMapping,
+  CsvDelimiter,
   CsvImportFilePreview,
   CsvImportPreview,
   ImportDatasetInput,
@@ -17,15 +19,22 @@ export {
 
 export {
   CsvValidationError,
+  detectDelimiter,
+  delimiterLabel,
   detectTimeframeFromFilename,
   detectSymbolFromFilename,
   inferMarketType,
+  normalizeHeader,
+  parseDelimitedLine,
   parseTimestamp,
+  resolveColumnMap,
   parseOhlcvCsv,
   parseCsvFile,
   buildImportPreview,
   validateOhlc,
   KNOWN_TIMEFRAMES,
+  type ParseOhlcvCsvOptions,
+  type ParseOhlcvCsvResult,
 } from './csv.js'
 
 export type { DatasetStore } from './store.js'

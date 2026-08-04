@@ -239,15 +239,46 @@ export function DatasetImportWizard({ onImported }: DatasetImportWizardProps) {
               {preview.files.map((file) => (
                 <div
                   key={file.fileName}
-                  className="rounded-lg border border-border/50 px-3 py-2 text-xs"
+                  className="rounded-lg border border-border/50 px-3 py-2 text-xs space-y-2"
                 >
-                  <p className="font-mono text-foreground">{file.fileName}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {file.symbol} · {file.timeframe} · {file.rowCount.toLocaleString()} rows ·{' '}
-                    {formatFileSize(file.fileSize)}
-                  </p>
+                  <div>
+                    <p className="font-mono text-foreground">{file.fileName}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {file.symbol} · {file.timeframe} · {file.rowCount.toLocaleString()} rows ·{' '}
+                      {formatFileSize(file.fileSize)}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Detected delimiter
+                      </p>
+                      <p className="font-mono text-foreground">
+                        {file.delimiterLabel}
+                        <span className="text-muted-foreground">
+                          {' '}
+                          ({file.delimiter === '\t' ? '\\t' : file.delimiter})
+                        </span>
+                      </p>
+                    </div>
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Column mapping
+                      </p>
+                      <p className="font-mono text-[11px] text-foreground break-words">
+                        timestamp←{file.columnMapping.timestamp}
+                        {' · '}open←{file.columnMapping.open}
+                        {' · '}high←{file.columnMapping.high}
+                        {' · '}low←{file.columnMapping.low}
+                        {' · '}close←{file.columnMapping.close}
+                        {file.columnMapping.volume
+                          ? ` · volume←${file.columnMapping.volume}`
+                          : ' · volume←(none)'}
+                      </p>
+                    </div>
+                  </div>
                   {file.warnings.length > 0 && (
-                    <p className="mt-1 text-warning">
+                    <p className="text-warning">
                       {file.warnings.length} warning
                       {file.warnings.length === 1 ? '' : 's'}
                     </p>

@@ -38,6 +38,16 @@ async function seedLibrary() {
         endDate: candles1h.at(-1)!.time,
         candles: candles1h,
         warnings: [],
+        delimiter: ',',
+        delimiterLabel: 'Comma',
+        columnMapping: {
+          timestamp: 'timestamp',
+          open: 'open',
+          high: 'high',
+          low: 'low',
+          close: 'close',
+          volume: 'volume',
+        },
       },
       {
         fileName: 'XAU_4h_data.csv',
@@ -49,6 +59,16 @@ async function seedLibrary() {
         endDate: candles4h.at(-1)!.time,
         candles: candles4h,
         warnings: [],
+        delimiter: ',',
+        delimiterLabel: 'Comma',
+        columnMapping: {
+          timestamp: 'timestamp',
+          open: 'open',
+          high: 'high',
+          low: 'low',
+          close: 'close',
+          volume: 'volume',
+        },
       },
     ],
   })

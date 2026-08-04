@@ -20,6 +20,14 @@ function candle(time: number, price = 100): Candle {
 function sampleImport(overrides: { name?: string; symbol?: string } = {}) {
   const c15 = [candle(1_000), candle(1_000 + 15 * 60_000), candle(1_000 + 30 * 60_000)]
   const c1h = [candle(1_000), candle(1_000 + 3_600_000)]
+  const mapping = {
+    timestamp: 'timestamp',
+    open: 'open',
+    high: 'high',
+    low: 'low',
+    close: 'close',
+    volume: 'volume',
+  } as const
   return {
     name: overrides.name ?? 'Gold (XAUUSD)',
     symbol: overrides.symbol ?? 'XAUUSD',
@@ -36,6 +44,9 @@ function sampleImport(overrides: { name?: string; symbol?: string } = {}) {
         endDate: c15.at(-1)!.time,
         candles: c15,
         warnings: [],
+        delimiter: ',' as const,
+        delimiterLabel: 'Comma',
+        columnMapping: { ...mapping },
       },
       {
         fileName: 'XAU_1h_data.csv',
@@ -47,6 +58,9 @@ function sampleImport(overrides: { name?: string; symbol?: string } = {}) {
         endDate: c1h.at(-1)!.time,
         candles: c1h,
         warnings: [],
+        delimiter: ',' as const,
+        delimiterLabel: 'Comma',
+        columnMapping: { ...mapping },
       },
     ],
   }

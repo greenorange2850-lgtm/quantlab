@@ -1,6 +1,11 @@
 import type { Candle } from '../candles.js'
 import type { CandleInterval } from '../providers/MarketDataProvider.js'
-import type { CsvImportFilePreview, DatasetMarketType } from './types.js'
+import type {
+  CsvColumnMapping,
+  CsvDelimiter,
+  CsvImportFilePreview,
+  DatasetMarketType,
+} from './types.js'
 
 const KNOWN_TIMEFRAMES = [
   '1m',
@@ -66,6 +71,9 @@ const TIMEFRAME_ALIASES: Record<string, CandleInterval> = {
   mn1: '1M',
 }
 
+const CANDIDATE_DELIMITERS: CsvDelimiter[] = [',', ';', '\t']
+
+/** Case-insensitive header aliases (after trim + underscore normalization). */
 const TIMESTAMP_HEADERS = new Set([
   'timestamp',
   'time',
@@ -78,10 +86,17 @@ const TIMESTAMP_HEADERS = new Set([
   'local time',
 ])
 
-const OPEN_HEADERS = new Set(['open', 'o', 'open price'])
-const HIGH_HEADERS = new Set(['high', 'h', 'high price'])
-const LOW_HEADERS = new Set(['low', 'l', 'low price'])
-const CLOSE_HEADERS = new Set(['close', 'c', 'close price', 'adj close', 'adjclose'])
+const OPEN_HEADERS = new Set(['open', 'o', 'open price', 'open_price'])
+const HIGH_HEADERS = new Set(['high', 'h', 'high price', 'high_price'])
+const LOW_HEADERS = new Set(['low', 'l', 'low price', 'low_price'])
+const CLOSE_HEADERS = new Set([
+  'close',
+  'c',
+  'close price',
+  'close_price',
+  'adj close',
+  'adjclose',
+])
 const VOLUME_HEADERS = new Set(['volume', 'vol', 'v', 'tick volume', 'tickvolume'])
 
 export class CsvValidationError extends Error {
@@ -89,6 +104,63 @@ export class CsvValidationError extends Error {
     super(message)
     this.name = 'CsvValidationError'
   }
+}
+
+export function delimiterLabel(delimiter: CsvDelimiter): string {
+  if (delimiter === ';') return 'Semicolon'
+  if (delimiter === '\t') return 'Tab'
+  return 'Comma'
+}
+
+/**
+ * Detect CSV delimiter from the first non-empty line.
+ * Counts `,`, `;`, and `\t` outside quotes and picks the highest count.
+ */
+export function detectDelimiter(text: string): CsvDelimiter {
+  const firstLine = text
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0)
+
+  if (!firstLine) {
+    throw new CsvValidationError('CSV file is empty')
+  }
+
+  const counts: Record<CsvDelimiter, number> = { ',': 0, ';': 0, '\t': 0 }
+  let inQuotes = false
+
+  for (let i = 0; i < firstLine.length; i++) {
+    const ch = firstLine[i]!
+    if (ch === '"') {
+      if (inQuotes && firstLine[i + 1] === '"') {
+        i += 1
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+    if (!inQuotes && (ch === ',' || ch === ';' || ch === '\t')) {
+      counts[ch] += 1
+    }
+  }
+
+  let best: CsvDelimiter = ','
+  let bestCount = -1
+  for (const delimiter of CANDIDATE_DELIMITERS) {
+    if (counts[delimiter] > bestCount) {
+      best = delimiter
+      bestCount = counts[delimiter]
+    }
+  }
+
+  if (bestCount <= 0) {
+    throw new CsvValidationError(
+      'Could not detect CSV delimiter. Expected comma (,), semicolon (;), or tab separators.',
+    )
+  }
+
+  return best
 }
 
 export function detectTimeframeFromFilename(fileName: string): CandleInterval | null {
@@ -147,7 +219,7 @@ export function inferMarketType(symbol: string): DatasetMarketType {
     upper.includes('USDC') ||
     upper.includes('BTC') ||
     upper.includes('ETH') ||
-    upper.endsWith('USD') && (upper.includes('BTC') || upper.includes('ETH'))
+    (upper.endsWith('USD') && (upper.includes('BTC') || upper.includes('ETH')))
   ) {
     return 'crypto'
   }
@@ -156,18 +228,25 @@ export function inferMarketType(symbol: string): DatasetMarketType {
     upper.includes('EUR') ||
     upper.includes('GBP') ||
     upper.includes('JPY') ||
-    upper.includes('USD') && upper.length === 6
+    (upper.includes('USD') && upper.length === 6)
   ) {
     return 'forex'
   }
   return 'other'
 }
 
-function normalizeHeader(value: string): string {
-  return value.trim().toLowerCase().replace(/[_/]+/g, ' ').replace(/\s+/g, ' ')
+/**
+ * Trim whitespace and normalize separators so open_price / Open Price / OPEN match.
+ */
+export function normalizeHeader(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[_/]+/g, ' ')
+    .replace(/\s+/g, ' ')
 }
 
-function parseCsvLine(line: string): string[] {
+export function parseDelimitedLine(line: string, delimiter: CsvDelimiter): string[] {
   const cells: string[] = []
   let current = ''
   let inQuotes = false
@@ -183,7 +262,7 @@ function parseCsvLine(line: string): string[] {
       }
       continue
     }
-    if (ch === ',' && !inQuotes) {
+    if (ch === delimiter && !inQuotes) {
       cells.push(current.trim())
       current = ''
       continue
@@ -232,16 +311,28 @@ function parseNumber(raw: string, field: string, rowIndex: number): number {
   return value
 }
 
-function resolveColumnMap(headers: string[]): {
-  time: number
-  open: number
-  high: number
-  low: number
-  close: number
-  volume: number | null
+function headerMatches(normalized: string, aliases: Set<string>): boolean {
+  if (aliases.has(normalized)) return true
+  // Also match raw underscore forms that were expanded to spaces
+  const underscored = normalized.replace(/\s+/g, '_')
+  return aliases.has(underscored)
+}
+
+export function resolveColumnMap(headers: string[]): {
+  indices: {
+    time: number
+    open: number
+    high: number
+    low: number
+    close: number
+    volume: number | null
+  }
+  mapping: CsvColumnMapping
 } {
-  const normalized = headers.map(normalizeHeader)
-  const find = (set: Set<string>) => normalized.findIndex((h) => set.has(h))
+  const trimmed = headers.map((h) => h.trim())
+  const normalized = trimmed.map(normalizeHeader)
+  const find = (set: Set<string>) =>
+    normalized.findIndex((h) => headerMatches(h, set))
 
   const time = find(TIMESTAMP_HEADERS)
   const open = find(OPEN_HEADERS)
@@ -259,17 +350,27 @@ function resolveColumnMap(headers: string[]): {
 
   if (missing.length > 0) {
     throw new CsvValidationError(
-      `Missing required columns: ${missing.join(', ')}. Expected headers like timestamp, open, high, low, close (volume optional).`,
+      `Missing required columns: ${missing.join(', ')}. Accepted aliases include timestamp/time/date/datetime, open/open_price, high, low, close/close_price, volume/vol (optional).`,
     )
   }
 
   return {
-    time,
-    open,
-    high,
-    low,
-    close,
-    volume: volume >= 0 ? volume : null,
+    indices: {
+      time,
+      open,
+      high,
+      low,
+      close,
+      volume: volume >= 0 ? volume : null,
+    },
+    mapping: {
+      timestamp: trimmed[time]!,
+      open: trimmed[open]!,
+      high: trimmed[high]!,
+      low: trimmed[low]!,
+      close: trimmed[close]!,
+      volume: volume >= 0 ? trimmed[volume]! : null,
+    },
   }
 }
 
@@ -295,16 +396,26 @@ export interface ParseOhlcvCsvOptions {
   /** Yield to event loop every N rows during large imports. */
   yieldEvery?: number
   onProgress?: (parsedRows: number, totalLines: number) => void
+  /** Override auto-detected delimiter. */
+  delimiter?: CsvDelimiter
+}
+
+export interface ParseOhlcvCsvResult {
+  candles: Candle[]
+  warnings: string[]
+  delimiter: CsvDelimiter
+  delimiterLabel: string
+  columnMapping: CsvColumnMapping
 }
 
 /**
  * Parse an OHLCV CSV string into normalized Candle[].
- * Throws CsvValidationError with a friendly message on invalid input.
+ * Auto-detects comma / semicolon / tab delimiters and flexible header aliases.
  */
 export async function parseOhlcvCsv(
   text: string,
   options: ParseOhlcvCsvOptions = {},
-): Promise<{ candles: Candle[]; warnings: string[] }> {
+): Promise<ParseOhlcvCsvResult> {
   const lines = text
     .replace(/^\uFEFF/, '')
     .split(/\r?\n/)
@@ -315,8 +426,9 @@ export async function parseOhlcvCsv(
     throw new CsvValidationError('CSV file is empty or has no data rows')
   }
 
-  const headers = parseCsvLine(lines[0]!)
-  const columns = resolveColumnMap(headers)
+  const delimiter = options.delimiter ?? detectDelimiter(text)
+  const headers = parseDelimitedLine(lines[0]!, delimiter)
+  const { indices: columns, mapping: columnMapping } = resolveColumnMap(headers)
   const candles: Candle[] = []
   const warnings: string[] = []
   const yieldEvery = options.yieldEvery ?? 2_500
@@ -324,7 +436,7 @@ export async function parseOhlcvCsv(
 
   for (let i = 1; i < lines.length; i++) {
     const rowIndex = i + 1
-    const cells = parseCsvLine(lines[i]!)
+    const cells = parseDelimitedLine(lines[i]!, delimiter)
     if (cells.every((cell) => cell === '')) continue
 
     const timeRaw = cells[columns.time] ?? ''
@@ -382,7 +494,13 @@ export async function parseOhlcvCsv(
   }
 
   options.onProgress?.(deduped.length, lines.length - 1)
-  return { candles: deduped, warnings }
+  return {
+    candles: deduped,
+    warnings,
+    delimiter,
+    delimiterLabel: delimiterLabel(delimiter),
+    columnMapping,
+  }
 }
 
 export async function parseCsvFile(
@@ -402,14 +520,15 @@ export async function parseCsvFile(
   const text = await file.text()
   options.onFileProgress?.(0.2)
 
-  const { candles, warnings } = await parseOhlcvCsv(text, {
-    ...options,
-    onProgress: (parsed, total) => {
-      const ratio = 0.2 + 0.75 * (total > 0 ? parsed / total : 1)
-      options.onFileProgress?.(Math.min(0.95, ratio))
-      options.onProgress?.(parsed, total)
-    },
-  })
+  const { candles, warnings, delimiter, delimiterLabel: label, columnMapping } =
+    await parseOhlcvCsv(text, {
+      ...options,
+      onProgress: (parsed, total) => {
+        const ratio = 0.2 + 0.75 * (total > 0 ? parsed / total : 1)
+        options.onFileProgress?.(Math.min(0.95, ratio))
+        options.onProgress?.(parsed, total)
+      },
+    })
 
   const symbol = detectSymbolFromFilename(file.name)
   options.onFileProgress?.(1)
@@ -424,6 +543,9 @@ export async function parseCsvFile(
     endDate: candles[candles.length - 1]!.time,
     candles,
     warnings,
+    delimiter,
+    delimiterLabel: label,
+    columnMapping,
   }
 }
 

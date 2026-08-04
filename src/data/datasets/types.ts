@@ -56,6 +56,20 @@ export interface DatasetCandleSlice {
   candles: Candle[]
 }
 
+export interface CsvColumnMapping {
+  /** Original header text for the timestamp column (trimmed). */
+  timestamp: string
+  open: string
+  high: string
+  low: string
+  close: string
+  /** null when volume column is absent. */
+  volume: string | null
+}
+
+/** Detected CSV field separator. */
+export type CsvDelimiter = ',' | ';' | '\t'
+
 export interface CsvImportFilePreview {
   fileName: string
   fileSize: number
@@ -66,6 +80,12 @@ export interface CsvImportFilePreview {
   endDate: number
   candles: Candle[]
   warnings: string[]
+  /** Auto-detected field separator. */
+  delimiter: CsvDelimiter
+  /** Friendly label for UI (Comma / Semicolon / Tab). */
+  delimiterLabel: string
+  /** Mapped source headers → OHLCV fields. */
+  columnMapping: CsvColumnMapping
 }
 
 export interface CsvImportPreview {

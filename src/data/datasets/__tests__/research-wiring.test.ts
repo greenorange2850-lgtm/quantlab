@@ -40,6 +40,16 @@ describe('optimizer / strategy lab LocalDatasetProvider usage', () => {
           endDate: series.at(-1)!.time,
           candles: series,
           warnings: [],
+          delimiter: ',',
+          delimiterLabel: 'Comma',
+          columnMapping: {
+            timestamp: 'timestamp',
+            open: 'open',
+            high: 'high',
+            low: 'low',
+            close: 'close',
+            volume: 'volume',
+          },
         },
       ],
     })
@@ -88,6 +98,16 @@ describe('optimizer / strategy lab LocalDatasetProvider usage', () => {
           endDate: 2,
           candles: series,
           warnings: [],
+          delimiter: ',',
+          delimiterLabel: 'Comma',
+          columnMapping: {
+            timestamp: 'timestamp',
+            open: 'open',
+            high: 'high',
+            low: 'low',
+            close: 'close',
+            volume: 'volume',
+          },
         },
       ],
     })
