@@ -14,9 +14,8 @@ describe('v1 released navigation', () => {
     expect(byId['strategy-compare']?.path).toBe('/strategy-compare')
     expect(byId['research-sessions']?.path).toBe('/research-sessions')
 
-    expect(byId['trade-replay'] && 'planned' in byId['trade-replay'] && byId['trade-replay'].planned).toBe(
-      true,
-    )
+    expect(byId['trade-replay']?.path).toBe('/backtest-replay')
+    expect(byId['trade-replay'] && 'planned' in byId['trade-replay'] && byId['trade-replay'].planned).toBeFalsy()
     expect(byId.reports && 'planned' in byId.reports && byId.reports.planned).toBe(true)
     expect(byId.settings && 'planned' in byId.settings && byId.settings.planned).toBe(true)
 

@@ -57,6 +57,7 @@ import {
   ResearchProgressPanel,
   resolveOptimizationSummary,
 } from '@/features/research-intelligence'
+import { OpenReplayButton, isReplayAvailableForBacktest } from '@/features/backtest-replay'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
 import { Disclosure } from '@/components/ui/disclosure'
 import { recordPeriodUiSnapshot } from '@/research/period-diagnostics'
@@ -1076,6 +1077,10 @@ export function OptimizerPage() {
                 >
                   View Details
                 </Button>
+                <OpenReplayButton
+                  backtestId={selected.backtestId}
+                  available={isReplayAvailableForBacktest(selected.backtestId)}
+                />
                 <Button
                   variant="outline"
                   className="min-h-11 w-full sm:min-h-9 sm:w-auto"

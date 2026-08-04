@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { backtestDetailKeys } from '@/api/queries/backtest-details'
 import { researchSessionKeys } from '@/api/queries/research-sessions'
 import { useBacktestStore } from '@/stores/backtest.store'
+import { OpenReplayButton, isReplayAvailableForBacktest } from '@/features/backtest-replay'
 
 export function RestoredBacktestBanner() {
   const queryClient = useQueryClient()
@@ -126,16 +127,24 @@ export function RestoredBacktestBanner() {
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="min-h-11 w-full shrink-0 sm:min-h-8 sm:w-auto"
-          onClick={clearRestoredResult}
-        >
-          <X className="mr-1.5 h-3.5 w-3.5" />
-          Back to latest
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          {restoredId ? (
+            <OpenReplayButton
+              backtestId={restoredId}
+              available={isReplayAvailableForBacktest(restoredId)}
+            />
+          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="min-h-11 w-full shrink-0 sm:min-h-8 sm:w-auto"
+            onClick={clearRestoredResult}
+          >
+            <X className="mr-1.5 h-3.5 w-3.5" />
+            Back to latest
+          </Button>
+        </div>
       </div>
     )
   }
