@@ -1,12 +1,21 @@
 import type { Candle } from '@/data/candles'
 import { cloneSmcDetectorConfig, DEFAULT_SMC_DETECTOR_CONFIG } from './defaults'
+import {
+  buildDiagnosticsSummary,
+  buildEventCountBreakdownFields,
+  countStructureBreaks,
+  emptyStructureBreakCounts,
+} from './diagnostics-summary'
 import { detectDisplacement } from './displacement-detector'
 import { detectEqualLevels } from './equal-levels-detector'
 import { detectFairValueGaps } from './fvg-detector'
 import { sanitizeSmcDetectionResult } from './invariants'
 import { detectLiquiditySweeps } from './liquidity-sweep-detector'
 import { detectOrderBlocks } from './order-block-detector'
-import { classifyInternalExternalStructure, type StructureClassificationInternal } from './structure-classifier'
+import {
+  classifyInternalExternalStructure,
+  type StructureClassificationInternal,
+} from './structure-classifier'
 import { detectStructureBreaks } from './structure-breaks'
 import { detectConfirmedSwings } from './swing-detector'
 import type {
@@ -46,6 +55,51 @@ function emptyDiagnostics(
     maxBlockingDurationMs: durationMs,
     structureState: 'UNDETERMINED_STRUCTURE',
     detectionStatus: status,
+    structureBreakCounts: emptyStructureBreakCounts(),
+    liquiditySweepDiagnostics: {
+      rawSweepCandidates: 0,
+      canonicalLevelsConsidered: 0,
+      duplicateSweepsSuppressed: 0,
+      consumedLevelAttemptsIgnored: 0,
+      validUniqueSweeps: 0,
+    },
+    eventCountBreakdown: {
+      uniqueReviewableEvents: 0,
+      lifecycleUpdates: 0,
+      totalEvents: 0,
+      primaryDetectionEvents: 0,
+      fvgCreated: 0,
+      fvgTouched: 0,
+      fvgHalfFilled: 0,
+      fvgFullyFilled: 0,
+      fvgInvalidated: 0,
+      uniqueFvgZones: 0,
+      orderBlockCreated: 0,
+      orderBlockTouched: 0,
+      orderBlockMitigated: 0,
+      orderBlockInvalidated: 0,
+      uniqueOrderBlockZones: 0,
+      explanation: '',
+    },
+    summary: {
+      candleCount,
+      uniqueReviewableEvents: 0,
+      lifecycleUpdates: 0,
+      visibleEvents: 0,
+      totalEvents: 0,
+      externalSwings: 0,
+      internalSwings: 0,
+      externalBos: 0,
+      internalBos: 0,
+      externalChoch: 0,
+      internalChoch: 0,
+      liquidityLevels: 0,
+      rawSweepCandidates: 0,
+      uniqueValidSweeps: 0,
+      duplicateSweepsSuppressed: 0,
+      consumedAttemptsIgnored: 0,
+      invariantFailures: 0,
+    },
     invariants: {
       invalidBullishBosCount: 0,
       invalidBearishBosCount: 0,
@@ -58,11 +112,13 @@ function emptyDiagnostics(
       fvgInvalidGeometryCount: 0,
       sweepWithoutPenetrationCount: 0,
       sweepWithoutCloseReclaimCount: 0,
+      repeatedConsumedLevelSweepCount: 0,
       orderBlockAfterSourceBreakCount: 0,
       orderBlockWithoutRequiredDisplacementCount: 0,
       orderBlockWithoutRequiredFvgCount: 0,
       dependencyReferenceMissingCount: 0,
       eventTimestampMismatchCount: 0,
+      artificialZeroDisplayValueCount: 0,
       ok: true,
     },
   }
@@ -230,7 +286,16 @@ export function detectSmcUntil(
     )
   }
 
-  let sweeps = { events: [] as ReturnType<typeof detectLiquiditySweeps>['events'] }
+  let sweeps: ReturnType<typeof detectLiquiditySweeps> = {
+    events: [],
+    diagnostics: {
+      rawSweepCandidates: 0,
+      canonicalLevelsConsidered: 0,
+      duplicateSweepsSuppressed: 0,
+      consumedLevelAttemptsIgnored: 0,
+      validUniqueSweeps: 0,
+    },
+  }
   maxBlock = Math.max(
     maxBlock,
     runTimed('liquiditySweep', safe.liquiditySweep.enabled, timings, () => {
@@ -278,9 +343,7 @@ export function detectSmcUntil(
     orderBlockEvents: orderBlocks.events,
     structureState: breaks.structureState,
     diagnostics: {
-      detectorVersion: SMC_DETECTOR_VERSION,
-      candleCount: candles.length,
-      visibleThroughIndex: last,
+      ...emptyDiagnostics(candles.length, last, durationMs, 'COMPLETE'),
       swingCandidatesConsidered: swingResult.candidatesConsidered,
       confirmedSwings: annotatedSwings.length,
       internalSwings: classified.internal.length,
@@ -304,14 +367,16 @@ export function detectSmcUntil(
       moduleTimings: timings,
       maxBlockingDurationMs: maxBlock,
       structureState: breaks.structureState,
+      liquiditySweepDiagnostics: sweeps.diagnostics,
       detectionStatus: 'COMPLETE',
     },
   }
 
   const { result, report } = sanitizeSmcDetectionResult(raw, safe)
   const failed = !report.ok
-
-  return {
+  const structureBreakCounts = countStructureBreaks(result)
+  const eventCountBreakdown = buildEventCountBreakdownFields(result)
+  const withCounts: SmcDetectionResult = {
     ...result,
     diagnostics: {
       ...result.diagnostics,
@@ -319,6 +384,9 @@ export function detectSmcUntil(
       moduleTimings: timings,
       maxBlockingDurationMs: maxBlock,
       structureState: result.structureState,
+      structureBreakCounts,
+      liquiditySweepDiagnostics: sweeps.diagnostics,
+      eventCountBreakdown,
       detectionStatus: failed ? 'FAILED' : 'COMPLETE',
       invariantDetails: report.details,
       invariants: {
@@ -333,14 +401,43 @@ export function detectSmcUntil(
         fvgInvalidGeometryCount: report.fvgInvalidGeometryCount,
         sweepWithoutPenetrationCount: report.sweepWithoutPenetrationCount,
         sweepWithoutCloseReclaimCount: report.sweepWithoutCloseReclaimCount,
+        repeatedConsumedLevelSweepCount: report.repeatedConsumedLevelSweepCount,
         orderBlockAfterSourceBreakCount: report.orderBlockAfterSourceBreakCount,
         orderBlockWithoutRequiredDisplacementCount:
           report.orderBlockWithoutRequiredDisplacementCount,
         orderBlockWithoutRequiredFvgCount: report.orderBlockWithoutRequiredFvgCount,
         dependencyReferenceMissingCount: report.dependencyReferenceMissingCount,
         eventTimestampMismatchCount: report.eventTimestampMismatchCount,
+        artificialZeroDisplayValueCount: report.artificialZeroDisplayValueCount,
         ok: report.ok,
       },
+      summary: {
+        candleCount: candles.length,
+        uniqueReviewableEvents: 0,
+        lifecycleUpdates: 0,
+        visibleEvents: 0,
+        totalEvents: 0,
+        externalSwings: 0,
+        internalSwings: 0,
+        externalBos: 0,
+        internalBos: 0,
+        externalChoch: 0,
+        internalChoch: 0,
+        liquidityLevels: 0,
+        rawSweepCandidates: 0,
+        uniqueValidSweeps: 0,
+        duplicateSweepsSuppressed: 0,
+        consumedAttemptsIgnored: 0,
+        invariantFailures: 0,
+      },
+    },
+  }
+
+  return {
+    ...withCounts,
+    diagnostics: {
+      ...withCounts.diagnostics,
+      summary: buildDiagnosticsSummary(withCounts, eventCountBreakdown.uniqueReviewableEvents),
     },
   }
 }

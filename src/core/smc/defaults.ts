@@ -12,10 +12,11 @@ export const DEFAULT_SMC_DETECTOR_CONFIG: SmcDetectorConfig = {
     enabled: true,
     internalPivotLeft: 3,
     internalPivotRight: 3,
-    externalPivotLeft: 8,
-    externalPivotRight: 8,
-    minimumExternalProminencePercent: 0.15,
-    minimumExternalBarsApart: 10,
+    // Stricter external pivots: dominance vs next-best extreme (not full window range).
+    externalPivotLeft: 10,
+    externalPivotRight: 10,
+    minimumExternalProminencePercent: 0.35,
+    minimumExternalBarsApart: 16,
   },
   bos: {
     enabled: true,
@@ -70,6 +71,7 @@ export const DEFAULT_SMC_DETECTOR_CONFIG: SmcDetectorConfig = {
     requireDisplacementAfterSweep: false,
     displacementConfirmationBars: 3,
     equalLevelTolerancePercent: 0.05,
+    allowRepeatedSweepsOfSameLevel: false,
   },
   orderBlock: {
     enabled: true,

@@ -146,6 +146,8 @@ export interface SmcLiquiditySweepConfig {
   requireDisplacementAfterSweep: boolean
   displacementConfirmationBars: number
   equalLevelTolerancePercent: number
+  /** When false (default), a canonical level emits at most one successful sweep. */
+  allowRepeatedSweepsOfSameLevel: boolean
 }
 
 export interface SmcOrderBlockConfig {
@@ -212,7 +214,13 @@ export interface SmcClassifiedSwingEvent {
   classification: 'INTERNAL' | 'EXTERNAL'
   originalSwingId: string
   prominence: number
+  /** Next-best extreme in the classification window (excludes the pivot itself). */
+  nextBestExtreme: number | null
   surroundingRange: { high: number; low: number }
+  /** Deterministic external promotion / rejection notes. */
+  promotionReason: string
+  barsFromPreviousExternal: number | null
+  replacedExternalSwingId: string | null
   reason: string
   refs: SmcEventRef[]
 }
@@ -273,6 +281,8 @@ export interface SmcDisplacementEvent {
   kind: 'BULLISH_DISPLACEMENT' | 'BEARISH_DISPLACEMENT'
   candleIndex: number
   timestamp: number
+  /** Close of the displacement candle — for display; never fabricated. */
+  closePrice: number
   bodySize: number
   fullRange: number
   atr: number
@@ -337,6 +347,8 @@ export interface SmcLiquiditySweepEvent {
   candleIndex: number
   timestamp: number
   sweptSwingIds: string[]
+  /** Canonical liquidity group id after equal/nearby merge. */
+  canonicalLevelId: string
   sweptLevel: number
   wickExtreme: number
   close: number
@@ -350,6 +362,14 @@ export interface SmcLiquiditySweepEvent {
   reason: string
   refs: SmcEventRef[]
   ruleChecks: Record<string, boolean>
+}
+
+export interface SmcLiquiditySweepDiagnostics {
+  rawSweepCandidates: number
+  canonicalLevelsConsidered: number
+  duplicateSweepsSuppressed: number
+  consumedLevelAttemptsIgnored: number
+  validUniqueSweeps: number
 }
 
 export interface SmcOrderBlockEvent {
@@ -390,15 +410,53 @@ export interface SmcInvariantCounts {
   invalidBullishChochCount: number
   invalidBearishChochCount: number
   chochWithoutPriorStructureCount: number
+  /** BOS and CHoCH emitted for the same swing under one profile. */
   duplicateBreakOfSameSwingCount: number
   fvgInvalidGeometryCount: number
   sweepWithoutPenetrationCount: number
   sweepWithoutCloseReclaimCount: number
+  repeatedConsumedLevelSweepCount: number
   orderBlockAfterSourceBreakCount: number
   orderBlockWithoutRequiredDisplacementCount: number
   orderBlockWithoutRequiredFvgCount: number
   dependencyReferenceMissingCount: number
   eventTimestampMismatchCount: number
+  artificialZeroDisplayValueCount: number
+}
+
+export interface SmcStructureBreakCounts {
+  internalBullishBos: number
+  internalBearishBos: number
+  externalBullishBos: number
+  externalBearishBos: number
+  unclassifiedBullishBos: number
+  unclassifiedBearishBos: number
+  internalBullishChoch: number
+  internalBearishChoch: number
+  externalBullishChoch: number
+  externalBearishChoch: number
+  unclassifiedBullishChoch: number
+  unclassifiedBearishChoch: number
+}
+
+export interface SmcDiagnosticsSummary {
+  candleCount: number
+  uniqueReviewableEvents: number
+  lifecycleUpdates: number
+  visibleEvents: number
+  totalEvents: number
+  externalSwings: number
+  internalSwings: number
+  externalBos: number
+  internalBos: number
+  externalChoch: number
+  internalChoch: number
+  liquidityLevels: number
+  rawSweepCandidates: number
+  uniqueValidSweeps: number
+  duplicateSweepsSuppressed: number
+  consumedAttemptsIgnored: number
+  invariantFailures: number
 }
 
 export interface SmcModuleTiming {
@@ -419,9 +477,12 @@ export interface SmcDetectionDiagnostics {
   validBosEvents: number
   validChochEvents: number
   displacementEvents: number
+  /** Unique FVG zones created (not lifecycle updates). */
   fvgEvents: number
   equalLevelEvents: number
+  /** Unique valid sweeps after canonical dedup. */
   liquiditySweepEvents: number
+  /** Unique Order Block zones created (not lifecycle updates). */
   orderBlockEvents: number
   repeatedBreaksIgnored: number
   computationDurationMs: number
@@ -429,6 +490,27 @@ export interface SmcDetectionDiagnostics {
   maxBlockingDurationMs: number
   structureState: SmcStructureState
   detectionStatus: 'COMPLETE' | 'FAILED' | 'CANCELLED' | 'IDLE'
+  structureBreakCounts: SmcStructureBreakCounts
+  liquiditySweepDiagnostics: SmcLiquiditySweepDiagnostics
+  eventCountBreakdown: {
+    uniqueReviewableEvents: number
+    lifecycleUpdates: number
+    totalEvents: number
+    primaryDetectionEvents: number
+    fvgCreated: number
+    fvgTouched: number
+    fvgHalfFilled: number
+    fvgFullyFilled: number
+    fvgInvalidated: number
+    uniqueFvgZones: number
+    orderBlockCreated: number
+    orderBlockTouched: number
+    orderBlockMitigated: number
+    orderBlockInvalidated: number
+    uniqueOrderBlockZones: number
+    explanation: string
+  }
+  summary: SmcDiagnosticsSummary
   /** Present after pipeline invariant audit. All must be 0 for a complete result. */
   invariants?: SmcInvariantCounts & { ok: boolean }
   invariantDetails?: string[]

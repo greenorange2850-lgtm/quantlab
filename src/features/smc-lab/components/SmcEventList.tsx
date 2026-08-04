@@ -1,4 +1,7 @@
-import type { SmcDetectionKind, SmcDetectionResult, SmcEvent } from '@/core/smc'
+import type { Candle } from '@/data/candles'
+import type { SmcDetectionKind, SmcDetectionResult } from '@/core/smc'
+import { listReviewableEvents } from '../event-counts'
+import { getSmcEventDisplayValue } from '../event-display'
 import type { SmcReviewRecord } from '../persistence/types'
 import { flattenDetectionEvents } from '../review-summary'
 import { Badge } from '@/components/ui/badge'
@@ -22,11 +25,14 @@ export type SmcEventFilter =
 
 interface SmcEventListProps {
   detection: SmcDetectionResult
+  candles?: Candle[]
   reviewsByEventId: Map<string, SmcReviewRecord>
   filter: SmcEventFilter
   selectedEventId: string | null
   onFilterChange: (filter: SmcEventFilter) => void
   onSelect: (eventId: string) => void
+  /** When true (default), list unique reviewable events only. */
+  reviewableOnly?: boolean
 }
 
 const FILTERS: { id: SmcEventFilter; label: string }[] = [
@@ -79,25 +85,17 @@ function matchesModuleFilter(kind: SmcDetectionKind, filter: SmcEventFilter): bo
   }
 }
 
-function eventPrice(event: SmcEvent): number {
-  if ('price' in event && typeof event.price === 'number') return event.price
-  if ('closePrice' in event && typeof event.closePrice === 'number') return event.closePrice
-  if ('close' in event && typeof event.close === 'number') return event.close
-  if ('level' in event && typeof event.level === 'number') return event.level
-  if ('midpoint' in event && typeof event.midpoint === 'number') return event.midpoint
-  if ('zoneHigh' in event && typeof event.zoneHigh === 'number') return event.zoneHigh
-  return 0
-}
-
 export function SmcEventList({
   detection,
+  candles = [],
   reviewsByEventId,
   filter,
   selectedEventId,
   onFilterChange,
   onSelect,
+  reviewableOnly = true,
 }: SmcEventListProps) {
-  const events = flattenDetectionEvents(detection).sort(
+  const events = (reviewableOnly ? listReviewableEvents(detection) : flattenDetectionEvents(detection)).sort(
     (a, b) => a.candleIndex - b.candleIndex,
   )
 
@@ -138,7 +136,7 @@ export function SmcEventList({
         ) : (
           filtered.map((event) => {
             const review = reviewsByEventId.get(event.id)
-            const price = eventPrice(event)
+            const display = getSmcEventDisplayValue(event, candles)
             return (
               <li key={event.id}>
                 <button
@@ -169,7 +167,7 @@ export function SmcEventList({
                       </Badge>
                     )}
                   </div>
-                  <p className="font-mono text-xs">{price.toLocaleString()}</p>
+                  <p className="font-mono text-xs">{display.primary}</p>
                   <p className="line-clamp-2 text-[11px] text-muted-foreground">{event.reason}</p>
                 </button>
               </li>

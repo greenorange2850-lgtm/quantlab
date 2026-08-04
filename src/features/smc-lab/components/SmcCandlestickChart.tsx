@@ -230,11 +230,18 @@ export function SmcCandlestickChart({
       ? swings.filter((s) => inWindow(s.candleIndex))
       : []
 
+  const allowBreak = (classification: string | undefined) =>
+    layers.internalBreaks || classification !== 'INTERNAL'
+
   const visibleBos = layers.bosLabels
-    ? bosEvents.filter((e) => inWindow(e.candleIndex))
+    ? bosEvents.filter(
+        (e) => inWindow(e.candleIndex) && allowBreak(e.brokenSwingClassification),
+      )
     : []
   const visibleChoch = layers.chochLabels
-    ? chochEvents.filter((e) => inWindow(e.candleIndex))
+    ? chochEvents.filter(
+        (e) => inWindow(e.candleIndex) && allowBreak(e.brokenSwingClassification),
+      )
     : []
   const visibleSweeps = layers.liquiditySweeps
     ? liquiditySweepEvents.filter((e) => inWindow(e.candleIndex))

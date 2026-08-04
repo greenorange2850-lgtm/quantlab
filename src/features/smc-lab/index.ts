@@ -5,6 +5,15 @@ export {
   formatReviewedAccuracy,
   moduleForKind,
 } from './review-summary'
+export {
+  getSmcEventDisplayValue,
+  isArtificialZeroDisplay,
+} from './event-display'
+export {
+  listReviewableEvents,
+  listLifecycleEvents,
+  buildEventCountBreakdown,
+} from './event-counts'
 export { runSmcDetectionJob } from './run-detection-job'
 export type { SmcModuleProgress, SmcDetectionJobResult } from './run-detection-job'
 export {

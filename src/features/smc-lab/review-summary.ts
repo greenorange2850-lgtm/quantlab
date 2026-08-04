@@ -3,6 +3,7 @@ import type {
   SmcDetectionResult,
   SmcEvent,
 } from '@/core/smc'
+import { listLifecycleEvents, listReviewableEvents } from './event-counts'
 import type { SmcReviewRecord } from './persistence/types'
 
 export type SmcReviewModule =
@@ -60,6 +61,7 @@ export function moduleForKind(kind: SmcDetectionKind): SmcReviewModule {
   return 'Other'
 }
 
+/** All stored events (including lifecycle and base+classified). Prefer listReviewableEvents for reviews. */
 export function flattenDetectionEvents(detection: SmcDetectionResult): SmcEvent[] {
   return [
     ...detection.swings,
@@ -75,9 +77,8 @@ export function flattenDetectionEvents(detection: SmcDetectionResult): SmcEvent[
 }
 
 /**
- * Build review summary. Only reviews whose configHash matches the active
- * detection config are counted as applicable. Unreviewed events are excluded
- * from reviewed accuracy.
+ * Build review summary from unique reviewable events only.
+ * Lifecycle updates are excluded from Detected / reviewed agreement.
  */
 export function buildReviewSummary(input: {
   detection: SmcDetectionResult
@@ -88,8 +89,11 @@ export function buildReviewSummary(input: {
   byKind: Partial<Record<SmcDetectionKind, SmcReviewSummaryBucket>>
   byModule: Record<SmcReviewModule, SmcReviewSummaryBucket>
   historicalReviews: SmcReviewRecord[]
+  lifecycleUpdateCount: number
+  uniqueReviewableCount: number
 } {
-  const events = flattenDetectionEvents(input.detection)
+  const events = listReviewableEvents(input.detection)
+  const lifecycleUpdateCount = listLifecycleEvents(input.detection).length
 
   const applicable = input.reviews.filter((r) => r.configHash === input.activeConfigHash)
   const historicalReviews = input.reviews.filter((r) => r.configHash !== input.activeConfigHash)
@@ -154,6 +158,8 @@ export function buildReviewSummary(input: {
     byKind,
     byModule,
     historicalReviews,
+    lifecycleUpdateCount,
+    uniqueReviewableCount: events.length,
   }
 }
 

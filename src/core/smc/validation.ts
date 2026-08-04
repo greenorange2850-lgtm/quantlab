@@ -277,6 +277,9 @@ export function validateSmcDetectorConfig(
         0,
         5,
       ),
+      allowRepeatedSweepsOfSameLevel:
+        sweepIn?.allowRepeatedSweepsOfSameLevel ??
+        base.liquiditySweep.allowRepeatedSweepsOfSameLevel,
     },
     orderBlock: {
       enabled: obIn?.enabled ?? base.orderBlock.enabled,

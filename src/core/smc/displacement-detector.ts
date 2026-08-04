@@ -179,6 +179,7 @@ export function detectDisplacement(
       kind,
       candleIndex: i,
       timestamp: candle.time,
+      closePrice: candle.close,
       bodySize: geo.body,
       fullRange: geo.range,
       atr: geo.atrValue,
@@ -190,7 +191,7 @@ export function detectDisplacement(
       fvgId: fvgMatch?.id ?? null,
       reason: [
         `${geo.direction} displacement at index ${i}:`,
-        `body ${geo.body.toFixed(6)}, range ${geo.range.toFixed(6)}, ATR ${geo.atrValue.toFixed(6)},`,
+        `close ${candle.close}, body ${geo.body.toFixed(6)}, range ${geo.range.toFixed(6)}, ATR ${geo.atrValue.toFixed(6)},`,
         `body/ATR ${geo.bodyAtr.toFixed(4)}, body/range ${geo.bodyRange.toFixed(4)},`,
         `opposite wick within ${config.maximumOppositeWickRatio}.`,
       ].join(' '),

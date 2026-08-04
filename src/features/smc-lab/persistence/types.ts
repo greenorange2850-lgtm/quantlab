@@ -110,6 +110,8 @@ export interface SmcLabPreferences {
     internalSwings: boolean
     bosLabels: boolean
     chochLabels: boolean
+    /** When false, only external (or unclassified) BOS/CHoCH markers render. */
+    internalBreaks: boolean
     bosLines: boolean
     activeFvg: boolean
     mitigatedFvg: boolean

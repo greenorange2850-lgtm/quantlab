@@ -15,34 +15,62 @@ export interface StructureClassificationInternal {
   annotatedBaseSwings: SmcSwingEvent[]
 }
 
-function prominencePercent(price: number, surroundingHigh: number, surroundingLow: number): number {
-  const range = surroundingHigh - surroundingLow
-  if (range <= 0 || price === 0) return 0
-  return (range / Math.abs(price)) * 100
-}
-
-function surroundingRange(
+/**
+ * Prominence = how much the pivot dominates the next-best extreme in its window.
+ * For a Swing High: (high - max(other highs)) / |high| * 100
+ * For a Swing Low: (min(other lows) - low) / |low| * 100
+ *
+ * Previous Phase-2 formula used full window range / price, which is nearly always
+ * above a 0.15% threshold on crypto and made external classification too permissive.
+ */
+export function swingProminence(
   candles: readonly Candle[],
   index: number,
+  kind: 'SWING_HIGH' | 'SWING_LOW',
   left: number,
   right: number,
-): { high: number; low: number } {
-  let high = -Infinity
-  let low = Infinity
+): { prominence: number; nextBestExtreme: number | null; range: { high: number; low: number } } {
   const start = Math.max(0, index - left)
   const end = Math.min(candles.length - 1, index + right)
+  let high = -Infinity
+  let low = Infinity
+  let nextBest: number | null = null
+
   for (let i = start; i <= end; i++) {
-    high = Math.max(high, candles[i]!.high)
-    low = Math.min(low, candles[i]!.low)
+    const c = candles[i]!
+    high = Math.max(high, c.high)
+    low = Math.min(low, c.low)
+    if (i === index) continue
+    if (kind === 'SWING_HIGH') {
+      nextBest = nextBest == null ? c.high : Math.max(nextBest, c.high)
+    } else {
+      nextBest = nextBest == null ? c.low : Math.min(nextBest, c.low)
+    }
   }
-  return { high, low }
+
+  const pivot = candles[index]!
+  const price = kind === 'SWING_HIGH' ? pivot.high : pivot.low
+  let prominence = 0
+  if (nextBest != null && price !== 0) {
+    prominence =
+      kind === 'SWING_HIGH'
+        ? ((price - nextBest) / Math.abs(price)) * 100
+        : ((nextBest - price) / Math.abs(price)) * 100
+    prominence = Math.max(0, prominence)
+  }
+
+  return { prominence, nextBestExtreme: nextBest, range: { high, low } }
 }
 
 function toClassified(
   swing: SmcSwingEvent,
   classification: 'INTERNAL' | 'EXTERNAL',
   prominence: number,
+  nextBestExtreme: number | null,
   range: { high: number; low: number },
+  promotionReason: string,
+  barsFromPreviousExternal: number | null,
+  replacedExternalSwingId: string | null,
 ): SmcClassifiedSwingEvent {
   const isHigh = swing.kind === 'SWING_HIGH'
   const kind =
@@ -67,10 +95,16 @@ function toClassified(
     classification,
     originalSwingId: swing.id,
     prominence,
+    nextBestExtreme,
     surroundingRange: range,
+    promotionReason,
+    barsFromPreviousExternal,
+    replacedExternalSwingId,
     reason: [
       `${classification} ${isHigh ? 'Swing High' : 'Swing Low'} at index ${swing.candleIndex}.`,
-      `Prominence ${prominence.toFixed(4)}%, surrounding range [${range.low}, ${range.high}].`,
+      `Prominence ${prominence.toFixed(4)}% vs next-best ${nextBestExtreme ?? 'n/a'}.`,
+      `Surrounding range [${range.low}, ${range.high}].`,
+      promotionReason,
       `Confirmed at index ${swing.confirmedAtIndex}. Original swing ${swing.id}.`,
     ].join(' '),
     refs: [{ id: swing.id, kind: swing.kind }],
@@ -126,27 +160,55 @@ export function classifyInternalExternalStructure(
   const lastExternalByKind = new Map<'SWING_HIGH' | 'SWING_LOW', SmcClassifiedSwingEvent>()
 
   for (const swing of externalRaw) {
-    const range = surroundingRange(
+    const { prominence, nextBestExtreme, range } = swingProminence(
       candles,
       swing.candleIndex,
+      swing.kind,
       config.externalPivotLeft,
       config.externalPivotRight,
     )
-    const prom = prominencePercent(swing.price, range.high, range.low)
-    if (prom + 1e-12 < config.minimumExternalProminencePercent) {
+
+    if (prominence + 1e-12 < config.minimumExternalProminencePercent) {
+      // Still useful as internal candidate later; skip external.
       continue
     }
+
     const prev = lastExternalByKind.get(swing.kind)
-    if (
-      prev &&
-      swing.candleIndex - prev.candleIndex < config.minimumExternalBarsApart
-    ) {
-      // Keep the more prominent; do not silently promote the weaker/closer one.
-      if (prom <= prev.prominence) continue
-      const idx = external.findIndex((e) => e.id === prev.id)
-      if (idx >= 0) external.splice(idx, 1)
+    let barsFromPrevious: number | null = null
+    let replacedId: string | null = null
+    let promotionReason = `External: prominence ${prominence.toFixed(4)}% >= ${config.minimumExternalProminencePercent}%`
+
+    if (prev) {
+      barsFromPrevious = swing.candleIndex - prev.candleIndex
+      if (barsFromPrevious < config.minimumExternalBarsApart) {
+        if (prominence <= prev.prominence) {
+          continue
+        }
+        replacedId = prev.id
+        const idx = external.findIndex((e) => e.id === prev.id)
+        if (idx >= 0) external.splice(idx, 1)
+        promotionReason = [
+          `External: prominence ${prominence.toFixed(4)}% replaced prior external ${prev.id}`,
+          `(${barsFromPrevious} bars < min ${config.minimumExternalBarsApart}, prior prominence ${prev.prominence.toFixed(4)}%).`,
+        ].join(' ')
+      } else {
+        promotionReason = [
+          `External: prominence ${prominence.toFixed(4)}% >= ${config.minimumExternalProminencePercent}%`,
+          `and ${barsFromPrevious} bars from prior external (min ${config.minimumExternalBarsApart}).`,
+        ].join(' ')
+      }
     }
-    const classified = toClassified(swing, 'EXTERNAL', prom, range)
+
+    const classified = toClassified(
+      swing,
+      'EXTERNAL',
+      prominence,
+      nextBestExtreme,
+      range,
+      promotionReason,
+      barsFromPrevious,
+      replacedId,
+    )
     external.push(classified)
     lastExternalByKind.set(swing.kind, classified)
   }
@@ -158,15 +220,26 @@ export function classifyInternalExternalStructure(
   const internal: SmcClassifiedSwingEvent[] = []
   for (const swing of internalRaw) {
     const key = `${swing.kind === 'SWING_HIGH' ? 'H' : 'L'}:${swing.candleIndex}`
-    if (externalKeys.has(key)) continue // external wins at same bar
-    const range = surroundingRange(
+    if (externalKeys.has(key)) continue
+    const { prominence, nextBestExtreme, range } = swingProminence(
       candles,
       swing.candleIndex,
+      swing.kind,
       config.internalPivotLeft,
       config.internalPivotRight,
     )
-    const prom = prominencePercent(swing.price, range.high, range.low)
-    internal.push(toClassified(swing, 'INTERNAL', prom, range))
+    internal.push(
+      toClassified(
+        swing,
+        'INTERNAL',
+        prominence,
+        nextBestExtreme,
+        range,
+        'Internal: sensitive pivot not selected as external',
+        null,
+        null,
+      ),
+    )
   }
 
   const classified = [...external, ...internal].sort(
@@ -176,7 +249,6 @@ export function classifyInternalExternalStructure(
   const classByBaseId = new Map<string, 'INTERNAL' | 'EXTERNAL'>()
   for (const c of classified) classByBaseId.set(c.originalSwingId, c.classification)
 
-  // Also map base swings by candle index when original ids differ (different pivot windows).
   const classByIndexKind = new Map<string, 'INTERNAL' | 'EXTERNAL'>()
   for (const c of classified) {
     classByIndexKind.set(

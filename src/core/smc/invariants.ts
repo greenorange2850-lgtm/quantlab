@@ -17,11 +17,13 @@ export interface SmcInvariantReport {
   fvgInvalidGeometryCount: number
   sweepWithoutPenetrationCount: number
   sweepWithoutCloseReclaimCount: number
+  repeatedConsumedLevelSweepCount: number
   orderBlockAfterSourceBreakCount: number
   orderBlockWithoutRequiredDisplacementCount: number
   orderBlockWithoutRequiredFvgCount: number
   dependencyReferenceMissingCount: number
   eventTimestampMismatchCount: number
+  artificialZeroDisplayValueCount: number
   /** True only when every count is zero. */
   ok: boolean
   details: string[]
@@ -40,11 +42,13 @@ function emptyReport(): SmcInvariantReport {
     fvgInvalidGeometryCount: 0,
     sweepWithoutPenetrationCount: 0,
     sweepWithoutCloseReclaimCount: 0,
+    repeatedConsumedLevelSweepCount: 0,
     orderBlockAfterSourceBreakCount: 0,
     orderBlockWithoutRequiredDisplacementCount: 0,
     orderBlockWithoutRequiredFvgCount: 0,
     dependencyReferenceMissingCount: 0,
     eventTimestampMismatchCount: 0,
+    artificialZeroDisplayValueCount: 0,
     ok: true,
     details: [],
   }
@@ -63,11 +67,13 @@ function finalize(report: SmcInvariantReport): SmcInvariantReport {
     report.fvgInvalidGeometryCount === 0 &&
     report.sweepWithoutPenetrationCount === 0 &&
     report.sweepWithoutCloseReclaimCount === 0 &&
+    report.repeatedConsumedLevelSweepCount === 0 &&
     report.orderBlockAfterSourceBreakCount === 0 &&
     report.orderBlockWithoutRequiredDisplacementCount === 0 &&
     report.orderBlockWithoutRequiredFvgCount === 0 &&
     report.dependencyReferenceMissingCount === 0 &&
-    report.eventTimestampMismatchCount === 0
+    report.eventTimestampMismatchCount === 0 &&
+    report.artificialZeroDisplayValueCount === 0
   return report
 }
 
@@ -230,6 +236,7 @@ export function auditSmcInvariants(
     }
   }
 
+  const sweptCanonical = new Map<string, number>()
   for (const sweep of liquiditySweepEvents) {
     if (sweep.penetration <= 0) {
       report.sweepWithoutPenetrationCount += 1
@@ -245,6 +252,18 @@ export function auditSmcInvariants(
       if (!(sweep.wickExtreme < sweep.sweptLevel) || !(sweep.close > sweep.sweptLevel)) {
         report.sweepWithoutCloseReclaimCount += 1
         report.details.push(`SSL sweep ${sweep.id} failed reclaim invariants`)
+      }
+    }
+    const key = sweep.canonicalLevelId || sweep.sweptSwingIds.join(',')
+    sweptCanonical.set(key, (sweptCanonical.get(key) ?? 0) + 1)
+  }
+  if (!config.liquiditySweep.allowRepeatedSweepsOfSameLevel) {
+    for (const [levelId, count] of sweptCanonical) {
+      if (count > 1) {
+        report.repeatedConsumedLevelSweepCount += count - 1
+        report.details.push(
+          `Canonical level ${levelId} swept ${count} times while repeats disabled`,
+        )
       }
     }
   }
@@ -270,12 +289,23 @@ export function auditSmcInvariants(
     }
     for (const ref of ob.refs) {
       if (!allIds.has(ref.id) && !swingsById.has(ref.id)) {
-        // broken swing id may be base swing — ok if in swingsById
         if (!swingsById.has(ref.id)) {
           report.dependencyReferenceMissingCount += 1
           report.details.push(`Order Block ${ob.id} missing ref ${ref.id}`)
         }
       }
+    }
+  }
+
+  // Displacement must carry a real closePrice — never leave UI to invent 0.
+  for (const disp of displacementEvents) {
+    if (
+      !('closePrice' in disp) ||
+      typeof disp.closePrice !== 'number' ||
+      !Number.isFinite(disp.closePrice)
+    ) {
+      report.artificialZeroDisplayValueCount += 1
+      report.details.push(`Displacement ${disp.id} missing closePrice for display`)
     }
   }
 
@@ -339,12 +369,22 @@ export function sanitizeSmcDetectionResult(
     return true
   })
 
+  const seenCanonical = new Set<string>()
   const liquiditySweepEvents = result.liquiditySweepEvents.filter((sweep) => {
     if (sweep.penetration <= 0) return false
     if (sweep.kind === 'BUY_SIDE_LIQUIDITY_SWEEP') {
-      return sweep.wickExtreme > sweep.sweptLevel && sweep.close < sweep.sweptLevel
+      if (!(sweep.wickExtreme > sweep.sweptLevel && sweep.close < sweep.sweptLevel)) {
+        return false
+      }
+    } else if (!(sweep.wickExtreme < sweep.sweptLevel && sweep.close > sweep.sweptLevel)) {
+      return false
     }
-    return sweep.wickExtreme < sweep.sweptLevel && sweep.close > sweep.sweptLevel
+    const key = sweep.canonicalLevelId || sweep.sweptSwingIds.join(',')
+    if (!config.liquiditySweep.allowRepeatedSweepsOfSameLevel && seenCanonical.has(key)) {
+      return false
+    }
+    seenCanonical.add(key)
+    return true
   })
 
   const sanitized: SmcDetectionResult = {

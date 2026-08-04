@@ -47,6 +47,7 @@ const LAYER_LABELS: Array<[keyof SmcChartLayerToggles, string]> = [
   ['internalSwings', 'Internal swings (iSH/iSL)'],
   ['bosLabels', 'BOS labels'],
   ['chochLabels', 'CHoCH labels'],
+  ['internalBreaks', 'Internal BOS/CHoCH'],
   ['bosLines', 'BOS connector lines'],
   ['activeFvg', 'Active FVG zones'],
   ['mitigatedFvg', 'Mitigated FVG'],

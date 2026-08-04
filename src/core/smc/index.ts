@@ -45,7 +45,19 @@ export {
 
 export { detectConfirmedSwings } from './swing-detector'
 export { detectBreakOfStructure } from './bos-detector'
-export { classifyInternalExternalStructure } from './structure-classifier'
+export {
+  classifyInternalExternalStructure,
+  swingProminence,
+} from './structure-classifier'
+export {
+  buildCanonicalLiquidityLevels,
+} from './liquidity-sweep-detector'
+export {
+  countStructureBreaks,
+  countReviewableEvents,
+  buildDiagnosticsSummary,
+  buildEventCountBreakdownFields,
+} from './diagnostics-summary'
 export { detectStructureBreaks } from './structure-breaks'
 export { detectDisplacement, isDisplacementCandleAt } from './displacement-detector'
 export { detectFairValueGaps } from './fvg-detector'
