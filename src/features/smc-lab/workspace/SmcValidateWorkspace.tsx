@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Disclosure } from '@/components/ui/disclosure'
 import { Input } from '@/components/ui/input'
 import { SmcValidationDashboard, SmcGoldenChartCompare } from '../validation'
+import { SetupValidationPanel } from '../setup'
 import { toDetectedProbes } from '@/core/smc'
 import { getSmcLabStore } from '../persistence/smc-lab-store'
 import { formatReviewedAccuracy } from '../review-summary'
@@ -43,6 +44,8 @@ export function SmcValidateWorkspace() {
     setManualNote,
     addManualAnnotation,
     datasetKey,
+    setupReviews,
+    setupValidationMetrics,
   } = useSmcLabWorkspace()
 
   const noReviews = summary.overall.reviewed === 0
@@ -176,6 +179,9 @@ export function SmcValidateWorkspace() {
         onRunValidation={runValidation}
         onDeleteDataset={deleteGoldenDataset}
       />
+
+      <WorkflowStep n={6} title="Setup Engine validation" />
+      <SetupValidationPanel metrics={setupValidationMetrics} reviews={setupReviews} />
 
       {/* Golden chart compare */}
       {validationReport ? (

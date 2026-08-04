@@ -1,6 +1,7 @@
 import { Download, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Disclosure } from '@/components/ui/disclosure'
+import { SetupDiagnosticsPanel } from '../setup'
 import { flattenDetectionEvents } from '../review-summary'
 import { useSmcLabWorkspace } from './SmcLabWorkspaceContext'
 
@@ -19,6 +20,7 @@ export function SmcDiagnosticsWorkspace() {
     activeProfileId,
     exportResearch,
     importResearch,
+    setupEngineResult,
   } = useSmcLabWorkspace()
 
   const s = detection.diagnostics.summary
@@ -281,6 +283,11 @@ export function SmcDiagnosticsWorkspace() {
             </p>
           ))}
         </div>
+      </Disclosure>
+
+      {/* Setup Engine diagnostics */}
+      <Disclosure title="Setup Engine diagnostics" defaultOpen>
+        <SetupDiagnosticsPanel result={setupEngineResult} />
       </Disclosure>
 
       {/* QML diagnostics */}

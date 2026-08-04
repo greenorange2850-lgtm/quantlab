@@ -35,6 +35,13 @@ import type {
   SmcLifecycleProjectionResult,
   SmcVisibilityPipelineDiagnostics,
 } from '@/core/smc'
+import type {
+  SetupEngineResult,
+  SetupReviewRecord,
+  SetupReviewVerdict,
+  SetupValidationMetrics,
+  TradingSetup,
+} from '@/core/setup'
 import type { DowChartVisibilityResult } from '../dow-visibility'
 import type { SwingChartMarkerProjection } from '../dow-label'
 import type { buildReviewSummary, SmcReviewSummaryBucket } from '../review-summary'
@@ -138,6 +145,20 @@ export interface SmcLabWorkspaceModel {
   eventFilter: SmcEventFilter
   setEventFilter: (v: SmcEventFilter) => void
   selectEvent: (id: string) => void
+
+  // Setup Engine
+  setupEngineResult: SetupEngineResult | null
+  selectedSetupId: string | null
+  selectedSetup: TradingSetup | null
+  selectSetup: (setup: TradingSetup) => void
+  clearSelectedSetup: () => void
+  setupReviews: SetupReviewRecord[]
+  setupValidationMetrics: SetupValidationMetrics | null
+  setupReviewNote: string
+  setSetupReviewNote: (v: string) => void
+  setupReviewVerdict: SetupReviewVerdict | null
+  handleSetupVerdict: (verdict: SetupReviewVerdict) => void
+  handleResetSetupReview: () => void
 
   // Dow
   dowTheoryView: SmcDowTheoryLayer

@@ -8,6 +8,7 @@ import { SmcEventList } from '../components/SmcEventList'
 import { layersForDensityPreset } from '../persistence/prefs-archive'
 import { useMemo, useState } from 'react'
 import { QmlInspector, QmlSetupsPanel, type QmlWrongTag } from '../qml'
+import { SetupInspector, SetupSummaryCard } from '../setup'
 import { SmcAppliedConfigSummary } from './SmcAppliedConfigSummary'
 import { SmcQuickViewControls } from './SmcQuickViewControls'
 import { useSmcLabWorkspace } from './SmcLabWorkspaceContext'
@@ -58,6 +59,16 @@ export function SmcAnalyzeWorkspace() {
     eventFilter,
     setEventFilter,
     selectEvent,
+    setupEngineResult,
+    selectedSetupId,
+    selectedSetup,
+    selectSetup,
+    clearSelectedSetup,
+    setupReviewNote,
+    setSetupReviewNote,
+    setupReviewVerdict,
+    handleSetupVerdict,
+    handleResetSetupReview,
     lifecycleProjection,
     setupContext,
     dowTheoryView,
@@ -198,6 +209,22 @@ export function SmcAnalyzeWorkspace() {
               </div>
             </div>
           ) : null}
+
+          <SetupSummaryCard
+            result={setupEngineResult}
+            selectedSetupId={selectedSetupId}
+            onSelectSetup={selectSetup}
+          />
+
+          <SetupInspector
+            setup={selectedSetup}
+            note={setupReviewNote}
+            onNoteChange={setSetupReviewNote}
+            verdict={setupReviewVerdict}
+            onVerdict={handleSetupVerdict}
+            onResetReview={handleResetSetupReview}
+            onClear={clearSelectedSetup}
+          />
 
           {/* Dow Theory summary */}
           <Card hover={false}>

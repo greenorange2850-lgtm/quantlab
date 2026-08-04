@@ -7,12 +7,14 @@ export function createQmlSetupVisualContext(pattern: QmlPattern): SmcSetupVisual
     pattern.status === 'ENTRY_READY'
       ? 'READY'
       : pattern.status === 'RETESTED'
-        ? 'RETESTED'
-        : pattern.status === 'INVALIDATED'
-          ? 'INVALIDATED'
-          : pattern.status === 'EXPIRED'
-            ? 'COMPLETED'
-            : 'WATCHING'
+        ? 'WAITING_RETEST'
+        : pattern.status === 'ZONE_ACTIVE' || pattern.status === 'CONFIRMED'
+          ? 'WAITING_RETEST'
+          : pattern.status === 'INVALIDATED'
+            ? 'INVALIDATED'
+            : pattern.status === 'EXPIRED'
+              ? 'EXPIRED'
+              : 'WATCHING'
 
   const eventIds = [
     pattern.sourceSwingId,

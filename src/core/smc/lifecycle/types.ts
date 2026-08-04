@@ -80,7 +80,14 @@ export interface SmcStructureEventProjection {
 export interface SmcSetupVisualContext {
   setupId: string
   direction: 'BULLISH' | 'BEARISH'
-  status: 'WATCHING' | 'RETESTED' | 'READY' | 'INVALIDATED' | 'COMPLETED'
+  status:
+    | 'WATCHING'
+    | 'WAITING_RETEST'
+    | 'RETESTED'
+    | 'READY'
+    | 'INVALIDATED'
+    | 'COMPLETED'
+    | 'EXPIRED'
   eventIds: string[]
   zoneIds: string[]
   entryZone?: { low: number; high: number }

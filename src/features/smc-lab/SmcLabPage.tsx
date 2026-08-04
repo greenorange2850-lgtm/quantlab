@@ -39,6 +39,17 @@ import {
   type SmcZoneProjection,
 } from '@/core/smc'
 import { createQmlSetupVisualContext } from './qml'
+import { createSetupEngineVisualContext } from './setup'
+import {
+  computeSetupValidationMetrics,
+  createSetupReview,
+  evaluateSetups,
+  upsertSetupReview,
+  type SetupEngineResult,
+  type SetupReviewRecord,
+  type SetupReviewVerdict,
+  type TradingSetup,
+} from '@/core/setup'
 import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
 import {
   RESEARCH_PERIOD_PRESET_OPTIONS,
@@ -221,6 +232,12 @@ export function SmcLabPage() {
   const [priorSmartPreset, setPriorSmartPreset] =
     useState<SmcSmartVisibilityPresetPref>('balanced')
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
+  const [selectedSetupId, setSelectedSetupId] = useState<string | null>(null)
+  const [setupReviews, setSetupReviews] = useState<SetupReviewRecord[]>([])
+  const [setupReviewNote, setSetupReviewNote] = useState('')
+  const [setupReviewVerdict, setSetupReviewVerdict] = useState<SetupReviewVerdict | null>(
+    null,
+  )
   const [selectedQmlId, setSelectedQmlId] = useState<string | null>(null)
   const [activeProfileId, setActiveProfileId] = useState(initialPrefs.activeProfileId)
   const [speed, setSpeed] = useState<SmcPlaySpeed>(initialPrefs.playSpeed)
@@ -311,6 +328,35 @@ export function SmcLabPage() {
         setup: setupContext,
       }),
     [progressive, visibleIndex, smartVisibilityPreset, zoneLifecycle, setupContext],
+  )
+
+  const setupEngineResult: SetupEngineResult | null = useMemo(() => {
+    if (candles.length === 0 || detection.diagnostics.candleCount <= 0) return null
+    return evaluateSetups({
+      candles,
+      detection: progressive,
+      visibleIndex,
+      dowTheory: analyzeDowTheory(progressive.classifiedSwings, visibleIndex),
+      qml: progressive.qml ?? detection.qml,
+      lifecycleZones: lifecycleProjection.zones,
+    })
+  }, [
+    candles,
+    detection.diagnostics.candleCount,
+    detection.qml,
+    progressive,
+    visibleIndex,
+    lifecycleProjection.zones,
+  ])
+
+  const selectedSetup = useMemo(() => {
+    if (!selectedSetupId || !setupEngineResult) return null
+    return setupEngineResult.setups.find((s) => s.id === selectedSetupId) ?? null
+  }, [selectedSetupId, setupEngineResult])
+
+  const setupValidationMetrics = useMemo(
+    () => (setupReviews.length ? computeSetupValidationMetrics(setupReviews) : null),
+    [setupReviews],
   )
 
   const dowTheoryView = useMemo(() => {
@@ -703,6 +749,7 @@ export function SmcLabPage() {
   const exitSetupFocus = useCallback(() => {
     setSetupContext(null)
     setSelectedQmlId(null)
+    setSelectedSetupId(null)
     setSmartVisibilityPreset(priorSmartPreset === 'setup-focus' ? 'balanced' : priorSmartPreset)
   }, [priorSmartPreset])
 
@@ -711,6 +758,7 @@ export function SmcLabPage() {
       setSelectedQmlId(pattern.id)
       setSelectedZoneId(pattern.zoneId)
       setSelectedEventId(null)
+      setSelectedSetupId(null)
       setPriorSmartPreset(
         smartVisibilityPreset === 'setup-focus' ? priorSmartPreset : smartVisibilityPreset,
       )
@@ -720,11 +768,64 @@ export function SmcLabPage() {
     [smartVisibilityPreset, priorSmartPreset],
   )
 
+  const selectSetup = useCallback(
+    (setup: TradingSetup) => {
+      setSelectedSetupId(setup.id)
+      setSelectedEventId(null)
+      setSelectedQmlId(null)
+      const zoneId = setup.entryZone?.sourceId ?? null
+      setSelectedZoneId(zoneId)
+      setPriorSmartPreset(
+        smartVisibilityPreset === 'setup-focus' ? priorSmartPreset : smartVisibilityPreset,
+      )
+      setSetupContext(createSetupEngineVisualContext(setup))
+      setSmartVisibilityPreset('setup-focus')
+      const existing = setupReviews.find((r) => r.setupId === setup.id)
+      setSetupReviewVerdict(existing?.verdict ?? null)
+      setSetupReviewNote(existing?.note ?? '')
+    },
+    [smartVisibilityPreset, priorSmartPreset, setupReviews],
+  )
+
+  const clearSelectedSetup = useCallback(() => {
+    setSelectedSetupId(null)
+    setSetupReviewNote('')
+    setSetupReviewVerdict(null)
+    if (setupContext?.setupId.startsWith('setup-')) {
+      setSetupContext(null)
+      setSmartVisibilityPreset(
+        priorSmartPreset === 'setup-focus' ? 'balanced' : priorSmartPreset,
+      )
+    }
+  }, [setupContext, priorSmartPreset])
+
+  const handleSetupVerdict = useCallback(
+    (verdict: SetupReviewVerdict) => {
+      if (!selectedSetup) return
+      const record = createSetupReview({
+        setup: selectedSetup,
+        verdict,
+        note: setupReviewNote,
+      })
+      setSetupReviews((prev) => upsertSetupReview(prev, record))
+      setSetupReviewVerdict(verdict)
+    },
+    [selectedSetup, setupReviewNote],
+  )
+
+  const handleResetSetupReview = useCallback(() => {
+    if (!selectedSetupId) return
+    setSetupReviews((prev) => prev.filter((r) => r.setupId !== selectedSetupId))
+    setSetupReviewVerdict(null)
+    setSetupReviewNote('')
+  }, [selectedSetupId])
+
   const clearMarkers = useCallback(() => {
     setDetection(emptyDetection())
     setSelectedEventId(null)
     setSelectedZoneId(null)
     setSelectedQmlId(null)
+    setSelectedSetupId(null)
     setSetupContext(null)
   }, [])
 
@@ -1183,6 +1284,20 @@ export function SmcLabPage() {
     setEventFilter,
     selectEvent,
 
+    // Setup Engine
+    setupEngineResult,
+    selectedSetupId,
+    selectedSetup,
+    selectSetup,
+    clearSelectedSetup,
+    setupReviews,
+    setupValidationMetrics,
+    setupReviewNote,
+    setSetupReviewNote,
+    setupReviewVerdict,
+    handleSetupVerdict,
+    handleResetSetupReview,
+
     // Dow
     dowTheoryView,
     dowChartVisibility,
@@ -1248,6 +1363,9 @@ export function SmcLabPage() {
     visibleIndex, playing, speed, annotations, selectedEventId, selectedZoneId,
     selectedQmlId, selectQmlPattern,
     selectedEvent, selectedZone, eventFilter, selectEvent,
+    setupEngineResult, selectedSetupId, selectedSetup, selectSetup, clearSelectedSetup,
+    setupReviews, setupValidationMetrics, setupReviewNote, setupReviewVerdict,
+    handleSetupVerdict, handleResetSetupReview,
     dowTheoryView, dowChartVisibility, chartDowMarkers, showStructureDowView, showDebugDowView,
     lifecycleProjection,
     reviews, reviewsByEventId, selectedReview, staleReview, note, tags,
