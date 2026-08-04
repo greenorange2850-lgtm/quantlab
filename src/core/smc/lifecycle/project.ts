@@ -1,8 +1,5 @@
 import type { SmcDetectionResult } from '../types'
 import { auditLifecycleProjectionInvariants } from './invariants'
-import { projectFvgZones } from './project-fvg'
-import { projectLiquidityZones } from './project-liquidity'
-import { projectOrderBlockZones } from './project-ob'
 import {
   DEFAULT_ZONE_LIFECYCLE_SETTINGS,
   type SmcLifecycleDiagnostics,
@@ -12,6 +9,9 @@ import {
   type SmcZoneLifecycleSettings,
 } from './types'
 import { filterZonesBySmartVisibility, projectStructureRelevance } from './visibility'
+import { managedZoneToProjection } from './zone-lifecycle-bridge'
+import { runZoneLifecycleEngine } from './zone-lifecycle-engine'
+import { buildZoneLifecycleReport } from './zone-lifecycle-report'
 
 export interface ProjectSmcLifecycleInput {
   detection: SmcDetectionResult
@@ -67,16 +67,24 @@ function buildDiagnostics(
         z.zoneKind === 'ORDER_BLOCK' && !visibleZones.some((v) => v.zoneId === z.zoneId),
     ).length,
     liquidityActiveUnswept: zones.filter(
-      (z) => z.zoneKind === 'LIQUIDITY_LEVEL' && z.state === 'ACTIVE',
+      (z) =>
+        (z.zoneKind === 'LIQUIDITY_LEVEL' || z.zoneKind === 'EQUAL_LEVEL') &&
+        z.state === 'ACTIVE',
     ).length,
     liquiditySwept: zones.filter(
-      (z) => z.zoneKind === 'LIQUIDITY_LEVEL' && z.state === 'SWEPT',
+      (z) =>
+        (z.zoneKind === 'LIQUIDITY_LEVEL' || z.zoneKind === 'EQUAL_LEVEL') &&
+        (z.state === 'SWEPT' || z.state === 'SWEEPED'),
     ).length,
     liquidityBroken: zones.filter(
-      (z) => z.zoneKind === 'LIQUIDITY_LEVEL' && z.state === 'BROKEN',
+      (z) =>
+        (z.zoneKind === 'LIQUIDITY_LEVEL' || z.zoneKind === 'EQUAL_LEVEL') &&
+        z.state === 'BROKEN',
     ).length,
     liquiditySuperseded: zones.filter(
-      (z) => z.zoneKind === 'LIQUIDITY_LEVEL' && z.state === 'SUPERSEDED',
+      (z) =>
+        (z.zoneKind === 'LIQUIDITY_LEVEL' || z.zoneKind === 'EQUAL_LEVEL') &&
+        (z.state === 'SUPERSEDED' || z.state === 'CONSUMED'),
     ).length,
     zonesExtendingToVisibleIndex: visibleZones.filter((z) => z.extendsToVisibleEdge).length,
     zonesClippedAtTerminal: visibleZones.filter((z) => !z.extendsToVisibleEdge).length,
@@ -108,24 +116,22 @@ export function projectSmcLifecycle(
   const setupZoneIds = setup ? new Set(setup.zoneIds) : undefined
   const setupEventIds = setup ? new Set(setup.eventIds) : undefined
 
-  const fvg = projectFvgZones(detection.fvgEvents, visibleIndex, {
-    extendActiveRight: settings.extendActiveZonesRight,
-  })
-  const ob = projectOrderBlockZones(detection.orderBlockEvents, visibleIndex, {
-    extendActiveRight: settings.extendActiveZonesRight,
-  })
-  const liq = projectLiquidityZones(
-    detection.equalLevelEvents,
-    detection.liquiditySweepEvents,
+  // Phase 6 lifecycle manager — projection only; detectors untouched.
+  const managed = runZoneLifecycleEngine({
+    fvgEvents: detection.fvgEvents,
+    orderBlockEvents: detection.orderBlockEvents,
+    equalLevelEvents: detection.equalLevelEvents,
+    liquiditySweepEvents: detection.liquiditySweepEvents,
     visibleIndex,
-    { extendActiveRight: settings.extendActiveZonesRight },
-  )
+    extendActiveRight: settings.extendActiveZonesRight,
+  })
+  const lifecycleReport = buildZoneLifecycleReport(managed.zones)
 
-  const zones = [...fvg, ...ob, ...liq].map((z) =>
-    setupZoneIds?.has(z.zoneId)
-      ? { ...z, setupRefs: [...new Set([...z.setupRefs, setup!.setupId])] }
-      : z,
-  )
+  const zones = managed.zones.map((meta) => {
+    const setupRefs =
+      setupZoneIds?.has(meta.id) && setup ? [setup.setupId] : ([] as string[])
+    return managedZoneToProjection(meta, setupRefs)
+  })
 
   const visibleZones = filterZonesBySmartVisibility(
     zones,
@@ -148,6 +154,8 @@ export function projectSmcLifecycle(
     preset,
     zones,
     visibleZones,
+    managedZones: managed.zones,
+    lifecycleReport,
     structureEvents,
     setup,
     diagnostics,

@@ -371,6 +371,12 @@ function SelectedZoneCard({
   onSelectSourceEvent,
   onClearZone,
 }: SelectedZoneCardProps) {
+  const life = selectedZone.lifecycle
+  const createdIdx = life?.createdIndex ?? selectedZone.startIndex
+  const touchIdx = life?.firstTouchIndex ?? selectedZone.firstTouchIndex
+  const mitigatedIdx = life?.mitigatedIndex ?? selectedZone.mitigationIndex
+  const invalidatedIdx = life?.invalidatedIndex ?? selectedZone.invalidationIndex
+  const fillPercent = life?.fillPercent
   return (
     <Card hover={false}>
       <CardHeader className="pb-2">
@@ -380,6 +386,7 @@ function SelectedZoneCard({
         <p>
           <span className="text-muted-foreground">Kind: </span>
           {selectedZone.zoneKind} · {selectedZone.direction}
+          {life ? ` · ${life.type}` : ''}
         </p>
         <p>
           <span className="text-muted-foreground">Source event: </span>
@@ -392,8 +399,49 @@ function SelectedZoneCard({
           </button>
         </p>
         <p>
-          <span className="text-muted-foreground">State: </span>
-          {selectedZone.state}
+          <span className="text-muted-foreground">Current State: </span>
+          {life?.currentState ?? selectedZone.state}
+        </p>
+        <p>
+          <span className="text-muted-foreground">Age: </span>
+          {life != null ? `${life.ageCandles} candles` : '—'}
+        </p>
+        <p>
+          <span className="text-muted-foreground">Touches: </span>
+          {life != null ? life.touchCount : '—'}
+        </p>
+        <p>
+          <span className="text-muted-foreground">Fill %: </span>
+          {fillPercent != null ? `${fillPercent}%` : '—'}
+        </p>
+        <p>
+          <span className="text-muted-foreground">Created: </span>
+          candle {createdIdx}
+          {candles[createdIdx]
+            ? ` · ${new Date(candles[createdIdx]!.time).toLocaleString()}`
+            : ''}
+        </p>
+        <p>
+          <span className="text-muted-foreground">Touched: </span>
+          {touchIdx != null
+            ? `candle ${touchIdx}${
+                candles[touchIdx]
+                  ? ` · ${new Date(candles[touchIdx]!.time).toLocaleString()}`
+                  : ''
+              }`
+            : '—'}
+        </p>
+        <p>
+          <span className="text-muted-foreground">Mitigated: </span>
+          {mitigatedIdx != null ? `candle ${mitigatedIdx}` : '—'}
+        </p>
+        <p>
+          <span className="text-muted-foreground">Invalidated: </span>
+          {invalidatedIdx != null ? `candle ${invalidatedIdx}` : '—'}
+        </p>
+        <p>
+          <span className="text-muted-foreground">Reason: </span>
+          {life?.reason ?? selectedZone.lifecycleReason}
         </p>
         <p>
           <span className="text-muted-foreground">Still active: </span>
@@ -404,37 +452,9 @@ function SelectedZoneCard({
           {selectedZone.startIndex} → {selectedZone.endIndex}
           {selectedZone.extendsToVisibleEdge ? ' (extends to visible)' : ' (clipped)'}
         </p>
-        {selectedZone.firstTouchIndex != null ? (
-          <p>
-            <span className="text-muted-foreground">First touch: </span>
-            candle {selectedZone.firstTouchIndex}
-            {candles[selectedZone.firstTouchIndex]
-              ? ` · ${new Date(candles[selectedZone.firstTouchIndex]!.time).toLocaleString()}`
-              : ''}
-          </p>
-        ) : null}
-        {selectedZone.mitigationIndex != null ? (
-          <p>
-            <span className="text-muted-foreground">Mitigation / fill: </span>
-            candle {selectedZone.mitigationIndex}
-            {candles[selectedZone.mitigationIndex]
-              ? ` · ${new Date(candles[selectedZone.mitigationIndex]!.time).toLocaleString()}`
-              : ''}
-          </p>
-        ) : null}
-        {selectedZone.invalidationIndex != null ? (
-          <p>
-            <span className="text-muted-foreground">Invalidation: </span>
-            candle {selectedZone.invalidationIndex}
-          </p>
-        ) : null}
         <p>
           <span className="text-muted-foreground">Why visible: </span>
           {selectedZone.visibilityReason}
-        </p>
-        <p>
-          <span className="text-muted-foreground">Why extent: </span>
-          {selectedZone.lifecycleReason}
         </p>
         <p>
           <span className="text-muted-foreground">Setup refs: </span>
