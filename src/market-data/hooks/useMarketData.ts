@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { MarketDataSource } from '../types/index.js'
+import { getApiBaseUrl } from '@/api/base-url'
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api/v1'
+const BASE = getApiBaseUrl()
 
 async function fetchJson<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`)
