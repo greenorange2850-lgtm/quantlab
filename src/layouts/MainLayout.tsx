@@ -16,6 +16,7 @@ const pageTitles: Record<string, string> = {
   '/strategy-lab': 'Strategy Lab',
   '/backtest-lab': 'Backtest Lab',
   '/backtest-replay': 'Backtest Replay',
+  '/candle-research': 'Candle Research',
   '/dataset-library': 'Dataset Library',
   '/market-explorer': 'Market Explorer',
   '/trade-replay': 'Trade Replay',

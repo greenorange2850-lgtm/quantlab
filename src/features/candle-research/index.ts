@@ -1,0 +1,1 @@
+export { CandleResearchPage } from './CandleResearchPage'

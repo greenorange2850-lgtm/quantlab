@@ -361,6 +361,12 @@ export function BacktestReplayPage() {
             {bundle.metadata.strategyName} {bundle.metadata.strategyVersion} · {bundle.candles.length}{' '}
             candles · {bundle.trades.length} trades
           </p>
+          <Link
+            to={`/candle-research?backtest=${encodeURIComponent(backtestId)}`}
+            className="mt-2 inline-flex min-h-11 items-center text-xs text-accent hover:text-accent/80"
+          >
+            Open Candle Research (Phase 1)
+          </Link>
         </div>
       </div>
 

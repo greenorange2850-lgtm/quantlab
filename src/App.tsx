@@ -6,6 +6,7 @@ import { DatasetLibraryPage } from '@/pages/DatasetLibraryPage'
 import { StrategyLabPage } from '@/pages/StrategyLabPage'
 import { BacktestLabPage } from '@/pages/BacktestLabPage'
 import { BacktestReplayPage } from '@/pages/BacktestReplayPage'
+import { CandleResearchPage } from '@/pages/CandleResearchPage'
 import { OptimizerPage } from '@/pages/OptimizerPage'
 import { StrategyComparePage } from '@/features/strategy-compare'
 import { StrategyLibraryPage } from '@/features/strategy-library'
@@ -59,6 +60,7 @@ export function App() {
           <Route path="/strategy-lab" element={<StrategyLabPage />} />
           <Route path="/backtest-lab" element={<BacktestLabPage />} />
           <Route path="/backtest-replay" element={<BacktestReplayPage />} />
+          <Route path="/candle-research" element={<CandleResearchPage />} />
           <Route path="/trade-replay" element={<Navigate to="/backtest-replay" replace />} />
           <Route path="/optimizer" element={<OptimizerPage />} />
           <Route path="/new-research" element={<Navigate to="/optimizer" replace />} />

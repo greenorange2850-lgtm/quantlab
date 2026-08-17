@@ -8,6 +8,12 @@ interface ReplayCandlestickChartProps {
   visibleEntryMarkers: ReplayTradeMarker[]
   visibleExitMarkers: ReplayTradeMarker[]
   dimUnselected?: boolean
+  highlightedCandleTimes?: number[]
+  overlayLevels?: Array<{
+    price: number
+    label: string
+    color?: string
+  }>
 }
 
 const WIDTH = 360
@@ -41,6 +47,8 @@ export function ReplayCandlestickChart({
   visibleEntryMarkers,
   visibleExitMarkers,
   dimUnselected = true,
+  highlightedCandleTimes = [],
+  overlayLevels = [],
 }: ReplayCandlestickChartProps) {
   const selectedMarker =
     markers.find((marker) => marker.tradeId === selectedTradeId) ?? visibleEntryMarkers.at(-1) ?? null
@@ -65,6 +73,9 @@ export function ReplayCandlestickChart({
   const prices = [
     ...candles.flatMap((candle) => [candle.high, candle.low]),
     ...markerPrices.filter((price): price is number => price != null && Number.isFinite(price)),
+    ...overlayLevels
+      .map((level) => level.price)
+      .filter((price): price is number => Number.isFinite(price)),
   ]
   const minPrice = Math.min(...prices)
   const maxPrice = Math.max(...prices)
@@ -89,6 +100,7 @@ export function ReplayCandlestickChart({
   const selectedEntryY = selectedMarker ? yForPrice(selectedMarker.entryPrice) : null
   const selectedExitY = selectedMarker ? yForPrice(selectedMarker.exitPrice) : null
   const selectedExitVisible = selectedMarker ? visibleExitIds.has(selectedMarker.tradeId) : false
+  const highlightedTimes = new Set(highlightedCandleTimes)
 
   const gridPrices = [0.25, 0.5, 0.75].map((ratio) => yMin + (yMax - yMin) * ratio)
 
@@ -117,6 +129,27 @@ export function ReplayCandlestickChart({
               />
               <text x={WIDTH - PLOT.right + 5} y={y + 3} fill="#71717a" fontSize="9">
                 {formatPrice(price)}
+              </text>
+            </g>
+          )
+        })}
+
+        {overlayLevels.map((level) => {
+          if (!Number.isFinite(level.price)) return null
+          const y = yForPrice(level.price)
+          return (
+            <g key={`${level.label}-${level.price}`}>
+              <line
+                x1={PLOT.left}
+                x2={WIDTH - PLOT.right}
+                y1={y}
+                y2={y}
+                stroke={level.color ?? '#94a3b8'}
+                strokeOpacity="0.55"
+                strokeDasharray="2 5"
+              />
+              <text x={PLOT.left + 4} y={y - 4} fill={level.color ?? '#94a3b8'} fontSize="9">
+                {level.label}
               </text>
             </g>
           )
@@ -230,6 +263,19 @@ export function ReplayCandlestickChart({
 
           return (
             <g key={candle.time}>
+              {highlightedTimes.has(candle.time) ? (
+                <rect
+                  x={x - candleBodyWidth * 1.15}
+                  y={PLOT.top}
+                  width={candleBodyWidth * 2.3}
+                  height={plotHeight}
+                  rx="2"
+                  fill="#38bdf8"
+                  fillOpacity="0.15"
+                  stroke="#38bdf8"
+                  strokeOpacity="0.35"
+                />
+              ) : null}
               <line x1={x} x2={x} y1={highY} y2={lowY} stroke={color} strokeOpacity="0.65" />
               <rect
                 x={x - candleBodyWidth / 2}
