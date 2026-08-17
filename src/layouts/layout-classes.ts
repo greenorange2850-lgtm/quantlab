@@ -8,7 +8,7 @@ export const PAGE_SHELL = 'relative min-h-screen overflow-x-hidden'
  * Drawer mode applies below lg per mobile-first overhaul.
  */
 export const MAIN_CONTENT_OFFSET =
-  'min-w-0 w-full max-w-full lg:ml-[240px] lg:w-[calc(100%-240px)]'
+  'min-w-0 w-full max-w-full [--sidebar-w:240px] lg:ml-[var(--sidebar-w)] lg:w-[calc(100%_-_var(--sidebar-w))]'
 
 /**
  * Page padding:
