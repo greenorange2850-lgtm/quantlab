@@ -335,3 +335,85 @@ describe('runRandomSearch live progress', () => {
     expect(first.candidates.map((c) => c.score)).toEqual(second.candidates.map((c) => c.score))
   })
 })
+
+describe('riskConfig threading through optimizer', () => {
+  beforeEach(() => {
+    vi.mocked(runBacktestPipeline).mockClear()
+  })
+
+  it('optimizer passes the configured riskConfig to every candidate backtest call', async () => {
+    const customRiskConfig = {
+      ...defaultRiskConfig,
+      riskPercent: 2.5,
+      maxPositionSize: 50,
+    }
+
+    await runRandomSearch({
+      candles: buildCandles(60),
+      config: {
+        iterations: 3,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 60,
+        initialCapital: 10_000,
+        seed: 99,
+        riskConfig: customRiskConfig,
+      },
+    })
+
+    const calls = vi.mocked(runBacktestPipeline).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    for (const [params] of calls) {
+      expect(params?.riskConfig).toEqual(customRiskConfig)
+    }
+  })
+
+  it('when riskConfig is omitted, pipeline calls receive undefined (uses defaultRiskConfig internally)', async () => {
+    await runRandomSearch({
+      candles: buildCandles(60),
+      config: {
+        iterations: 2,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 60,
+        initialCapital: 10_000,
+        seed: 55,
+      },
+    })
+
+    const calls = vi.mocked(runBacktestPipeline).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    for (const [params] of calls) {
+      expect(params?.riskConfig).toBeUndefined()
+    }
+  })
+
+  it('persisted research session retains the risk configuration in session.config', async () => {
+    const customRiskConfig = {
+      ...defaultRiskConfig,
+      riskPercent: 3,
+      maxPositionSize: 75,
+    }
+
+    const session = await runRandomSearch({
+      candles: buildCandles(60),
+      config: {
+        iterations: 2,
+        parameterRanges: DEFAULT_MA_CROSS_RANGES,
+        objective: 'profitFactor',
+        symbol: 'BTCUSDT',
+        interval: '1h',
+        limit: 60,
+        initialCapital: 10_000,
+        seed: 77,
+        riskConfig: customRiskConfig,
+      },
+    })
+
+    expect(session.config.riskConfig).toEqual(customRiskConfig)
+  })
+})

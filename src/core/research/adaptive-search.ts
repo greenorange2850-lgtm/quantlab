@@ -380,6 +380,7 @@ export async function runAdaptiveSearch(
       candles,
       strategyParams: parameters,
       strategyVersion: `rs-${parameters.fastPeriod}-${parameters.slowPeriod}-${parameters.rsiPeriod}`,
+      riskConfig: config.riskConfig,
     })
 
     const score = scoreFromReport(pipelineResult.report, config.objective)
@@ -538,6 +539,7 @@ export async function runAdaptiveSearch(
       candles,
       strategyParams: baselineParams,
       strategyVersion: `baseline-${baselineParams.fastPeriod}-${baselineParams.slowPeriod}-${baselineParams.rsiPeriod}`,
+      riskConfig: config.riskConfig,
     })
     const baselineScore = scoreFromReport(baselinePipeline.report, config.objective)
     const baseline: OptimizationBaseline = {

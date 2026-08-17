@@ -13,6 +13,7 @@ import { MarketSourceFields } from '@/components/market/MarketSourceFields'
 import { useResearchCandles } from '@/api/queries/research-candles'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import { DEFAULT_MA_CROSS_PARAMS, type MovingAverageCrossParams } from '@/core/strategy'
+import { defaultRiskConfig } from '@/core/risk/config'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { useResearchStore } from '@/stores/research.store'
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
@@ -57,6 +58,8 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
   const [initialCapital, setInitialCapital] = useState(
     String(defaultBacktestPipelineParams.initialCapital),
   )
+  const [riskPercent, setRiskPercent] = useState(String(defaultRiskConfig.riskPercent))
+  const [maxPositionSize, setMaxPositionSize] = useState(String(defaultRiskConfig.maxPositionSize))
   const [strategyParams, setStrategyParams] = useState<MovingAverageCrossParams>({
     ...DEFAULT_MA_CROSS_PARAMS,
   })
@@ -114,6 +117,8 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
     if (!candlesQuery.data?.length || !resolvedPeriod.period) return
 
     const parsedCapital = Number(initialCapital)
+    const parsedRiskPercent = Number(riskPercent)
+    const parsedMaxPositionSize = Number(maxPositionSize)
 
     await runBacktest({
       symbol,
@@ -126,6 +131,15 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
         : defaultBacktestPipelineParams.initialCapital,
       candles: candlesQuery.data,
       strategyParams,
+      riskConfig: {
+        ...defaultRiskConfig,
+        riskPercent: Number.isFinite(parsedRiskPercent) && parsedRiskPercent > 0
+          ? parsedRiskPercent
+          : defaultRiskConfig.riskPercent,
+        maxPositionSize: Number.isFinite(parsedMaxPositionSize) && parsedMaxPositionSize > 0
+          ? parsedMaxPositionSize
+          : defaultRiskConfig.maxPositionSize,
+      },
     })
 
     if (!useBacktestStore.getState().error) {
@@ -210,6 +224,35 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
               />
             </div>
           </div>
+
+          <Disclosure title="Risk controls">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="min-w-0 space-y-2">
+                <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Risk per trade (%)
+                </label>
+                <Input
+                  value={riskPercent}
+                  onChange={(event) => setRiskPercent(event.target.value)}
+                  inputMode="decimal"
+                  className="w-full bg-white/[0.03]"
+                />
+                <p className="text-[10px] text-muted-foreground">% of equity risked per trade (e.g. 1 = 1%).</p>
+              </div>
+              <div className="min-w-0 space-y-2">
+                <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Max position size (%)
+                </label>
+                <Input
+                  value={maxPositionSize}
+                  onChange={(event) => setMaxPositionSize(event.target.value)}
+                  inputMode="decimal"
+                  className="w-full bg-white/[0.03]"
+                />
+                <p className="text-[10px] text-muted-foreground">Maximum position as % of equity (e.g. 100 = no cap).</p>
+              </div>
+            </div>
+          </Disclosure>
 
           <Disclosure title="Strategy parameters">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

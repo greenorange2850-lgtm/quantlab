@@ -1,5 +1,6 @@
 import type { Candle } from '../../data/candles.js'
 import type { BacktestReport } from '../analytics/types.js'
+import type { RiskConfig } from '../risk/config.js'
 import type { MovingAverageCrossParams } from '../strategy/MovingAverageCrossStrategy.js'
 import type { RandomSearchPerfDiagnostics } from './cooperative-schedule.js'
 import type { RandomSearchRunControls } from './run-controls.js'
@@ -60,6 +61,12 @@ export interface RandomSearchConfig {
   initialCapital: number
   commissionPercent?: number
   positionSizePercent?: number
+  /**
+   * Risk configuration applied to every candidate backtest.
+   * Fixed experiment configuration — not part of the randomized search space.
+   * Defaults to {@link defaultRiskConfig} when omitted (backward compatible).
+   */
+  riskConfig?: RiskConfig
   /**
    * Strategy Lab parameters used for the pre-search baseline backtest.
    * Defaults to DEFAULT_MA_CROSS_PARAMS when omitted.

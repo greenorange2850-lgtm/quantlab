@@ -25,6 +25,7 @@ import { useResearchSession } from '@/api/queries/research-sessions'
 import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
 import { ResearchPeriodDiagnosticsPanel } from '@/components/dev/ResearchPeriodDiagnosticsPanel'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
+import { defaultRiskConfig } from '@/core/risk/config'
 import {
   formatDurationMs,
   formatLiveStatusLabel,
@@ -165,6 +166,8 @@ export function OptimizerPage() {
   const [initialCapital, setInitialCapital] = useState(
     String(defaultBacktestPipelineParams.initialCapital),
   )
+  const [riskPercent, setRiskPercent] = useState(String(defaultRiskConfig.riskPercent))
+  const [maxPositionSize, setMaxPositionSize] = useState(String(defaultRiskConfig.maxPositionSize))
   const [iterations, setIterations] = useState(String(defaultRandomSearchDraft.iterations))
   const [objective, setObjective] = useState<ScoringObjective>(defaultRandomSearchDraft.objective)
   const [ranges, setRanges] = useState<ParameterRange[]>(
@@ -285,6 +288,8 @@ export function OptimizerPage() {
     if (!candlesQuery.data?.length || !resolvedPeriod.period) return
 
     const maxDd = parseOptionalNumber(maxDrawdownPercent)
+    const parsedRiskPercent = Number(riskPercent)
+    const parsedMaxPositionSize = Number(maxPositionSize)
     const result = await startRandomSearch({
       candles: candlesQuery.data,
       config: {
@@ -300,6 +305,15 @@ export function OptimizerPage() {
         baselineParameters: baselineParams,
         searchPreset,
         autoStopOnConverge,
+        riskConfig: {
+          ...defaultRiskConfig,
+          riskPercent: Number.isFinite(parsedRiskPercent) && parsedRiskPercent > 0
+            ? parsedRiskPercent
+            : defaultRiskConfig.riskPercent,
+          maxPositionSize: Number.isFinite(parsedMaxPositionSize) && parsedMaxPositionSize > 0
+            ? parsedMaxPositionSize
+            : defaultRiskConfig.maxPositionSize,
+        },
         constraints: {
           maxDrawdown: maxDd !== undefined ? maxDd / 100 : undefined,
           minimumTrades: parseOptionalNumber(minimumTrades),
@@ -400,6 +414,30 @@ export function OptimizerPage() {
                 value={initialCapital}
                 disabled={isActive}
                 onChange={(event) => setInitialCapital(event.target.value)}
+                className="w-full bg-white/[0.03]"
+              />
+            </div>
+            <div className="min-w-0 space-y-2">
+              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Risk per trade (%)
+              </label>
+              <Input
+                value={riskPercent}
+                disabled={isActive}
+                onChange={(event) => setRiskPercent(event.target.value)}
+                inputMode="decimal"
+                className="w-full bg-white/[0.03]"
+              />
+            </div>
+            <div className="min-w-0 space-y-2">
+              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Max position size (%)
+              </label>
+              <Input
+                value={maxPositionSize}
+                disabled={isActive}
+                onChange={(event) => setMaxPositionSize(event.target.value)}
+                inputMode="decimal"
                 className="w-full bg-white/[0.03]"
               />
             </div>

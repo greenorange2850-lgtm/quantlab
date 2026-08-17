@@ -6,7 +6,7 @@ import type { BacktestReport } from '../analytics/types.js'
 import { BacktestEngine } from '../backtest/BacktestEngine.js'
 import type { BacktestExecutionEvent } from '../backtest/execution-events.js'
 import { MarketDataEngine } from '../market/market-data-engine.js'
-import { defaultRiskConfig } from '../risk/config.js'
+import { defaultRiskConfig, type RiskConfig } from '../risk/config.js'
 import { validateRiskConfig } from '../risk/validators.js'
 import {
   DEFAULT_MA_CROSS_PARAMS,
@@ -36,6 +36,11 @@ export interface RunBacktestPipelineParams {
   candles?: Candle[]
   /** Optional MA Cross parameters — defaults preserve original strategy behavior. */
   strategyParams?: Partial<MovingAverageCrossParams>
+  /**
+   * Risk configuration for position sizing.
+   * Defaults to {@link defaultRiskConfig} when omitted (backward compatible).
+   */
+  riskConfig?: RiskConfig
   /**
    * @deprecated Prefer passing live `candles`. Ignored when `candles` is provided.
    * Retained only so older call sites compiling against the type do not break.
@@ -83,7 +88,8 @@ function isoDate(time: number): string {
 export async function runBacktestPipeline(
   params: RunBacktestPipelineParams = defaultBacktestPipelineParams,
 ): Promise<RunBacktestPipelineResult> {
-  validateRiskConfig(defaultRiskConfig)
+  const riskConfig = params.riskConfig ?? defaultRiskConfig
+  validateRiskConfig(riskConfig)
 
   const strategyParams: MovingAverageCrossParams = {
     ...DEFAULT_MA_CROSS_PARAMS,
@@ -96,7 +102,7 @@ export async function runBacktestPipeline(
     commissionPercent: params.commissionPercent,
     positionSizePercent: params.positionSizePercent,
     symbol: params.symbol,
-    riskConfig: defaultRiskConfig,
+    riskConfig,
   }
 
   let candles: Candle[]

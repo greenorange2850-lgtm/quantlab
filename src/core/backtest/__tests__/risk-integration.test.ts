@@ -274,3 +274,107 @@ describe('risk-based order sizing integration', () => {
     expect(result.trades[1]!.quantity).toBeGreaterThan(result.trades[0]!.quantity)
   })
 })
+
+describe('configurable riskPercent integration', () => {
+  const EQUITY = 10_000
+  const ENTRY = 100
+  const STOP = 95 // $5 stop distance
+  const SYMBOL = 'BTCUSDT'
+
+  function buildConfigWithRisk(riskPercent: number) {
+    return {
+      initialCapital: EQUITY,
+      commissionPercent: 0,
+      positionSizePercent: 100,
+      slippagePercent: 0,
+      symbol: SYMBOL,
+      riskConfig: { ...defaultRiskConfig, riskPercent },
+    }
+  }
+
+  function sizeEntry(riskPercent: number): number {
+    const portfolio = new Portfolio(EQUITY)
+    const request = buildOrderRequestFromSignal(
+      portfolio,
+      {
+        signal: SignalType.BUY,
+        confidence: 1,
+        reason: 'test',
+        timestamp: 0,
+        symbol: SYMBOL,
+        stopLossPrice: STOP,
+      },
+      ENTRY,
+      buildConfigWithRisk(riskPercent),
+    )
+    if (!request) throw new Error(`No order request for riskPercent=${riskPercent}`)
+    return request.quantity
+  }
+
+  it('lower risk-per-trade produces a smaller position size', () => {
+    const lowRisk = sizeEntry(0.5)
+    const highRisk = sizeEntry(2)
+    expect(lowRisk).toBeLessThan(highRisk)
+  })
+
+  it('higher risk-per-trade produces a larger position size under identical candles/signals', () => {
+    const baseline = sizeEntry(1)
+    const larger = sizeEntry(5)
+    expect(larger).toBeGreaterThan(baseline)
+  })
+
+  it('position size scales linearly with riskPercent', () => {
+    const size1 = sizeEntry(1)
+    const size2 = sizeEntry(2)
+    expect(size2).toBeCloseTo(size1 * 2, 5)
+  })
+
+  it('sizing respects available equity/cash constraints (cash < uncapped quantity)', () => {
+    // With riskPercent=50, uncapped qty = (10000*0.5/100)/5 = 10 units at $100 = $1000 notional
+    // That fits in cash. Test with a very large riskPercent so notional would exceed cash.
+    const portfolio = new Portfolio(1_000)
+    // riskPercent=100 => riskAmount=1000 / stopDistance=5 => qty=200, notional=200*100=$20000 >> $1000
+    const request = buildOrderRequestFromSignal(
+      portfolio,
+      {
+        signal: SignalType.BUY,
+        confidence: 1,
+        reason: 'test',
+        timestamp: 0,
+        symbol: SYMBOL,
+        stopLossPrice: STOP,
+      },
+      ENTRY,
+      {
+        initialCapital: 1_000,
+        commissionPercent: 0,
+        positionSizePercent: 100,
+        slippagePercent: 0,
+        symbol: SYMBOL,
+        riskConfig: { ...defaultRiskConfig, riskPercent: 100 },
+      },
+    )
+    expect(request).not.toBeNull()
+    // quantity must not exceed available cash / price
+    expect(request!.quantity * ENTRY).toBeLessThanOrEqual(1_000)
+  })
+
+  it('existing default behavior remains compatible (riskPercent=1, stop=$5 => qty≈20)', () => {
+    const portfolio = new Portfolio(10_000)
+    const request = buildOrderRequestFromSignal(
+      portfolio,
+      {
+        signal: SignalType.BUY,
+        confidence: 1,
+        reason: 'test',
+        timestamp: 0,
+        symbol: SYMBOL,
+        stopLossPrice: STOP,
+      },
+      ENTRY,
+      buildConfig(), // uses defaultRiskConfig with riskPercent=1
+    )
+    // riskAmount = 10000*1/100 = 100, stopDist=5, qty=100/5=20
+    expect(request?.quantity).toBeCloseTo(20, 5)
+  })
+})
