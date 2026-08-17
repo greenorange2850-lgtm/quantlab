@@ -14,23 +14,30 @@ import { useResearchCandles } from '@/api/queries/research-candles'
 import {
   cloneSmcDetectorConfig,
   countProfileEvents,
+  createGoldenDatasetId,
   DEFAULT_SMC_DETECTOR_CONFIG,
   describeCandleEventDifference,
   emptySmcDetectionResult,
+  evaluateSmcValidation,
   eventsAtCandle,
   filterDetectionByRanking,
   getBuiltinSmcProfile,
   getEventImportance,
+  goldenLabelFromProbe,
   QUANTLAB_DEFAULT_PROFILE,
   relatedEventsByRank,
   SMC_DETECTOR_VERSION,
+  toDetectedProbes,
   validateSmcDetectorConfig,
+  validationModuleForKind,
   withSmcVisibilityMode,
   type SmcDetectionProfile,
   type SmcDetectionResult,
   type SmcDetectorConfig,
   type SmcEvent,
+  type SmcGoldenDataset,
   type SmcProfileCompareCounts,
+  type SmcValidationReport,
   type SmcVisibilityMode,
 } from '@/core/smc'
 import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
@@ -71,6 +78,7 @@ import {
   runSmcDetectionJob,
   type SmcModuleProgress,
 } from './run-detection-job'
+import { SmcGoldenChartCompare, SmcValidationDashboard } from './validation'
 import type { SmcSavedLabConfig } from './persistence/types'
 
 const CHART_WINDOW = 72
@@ -174,6 +182,9 @@ export function SmcLabPage() {
   const [eventFilter, setEventFilter] = useState<SmcEventFilter>('ALL')
   const [reviews, setReviews] = useState<SmcReviewRecord[]>([])
   const [annotations, setAnnotations] = useState<SmcManualAnnotation[]>([])
+  const [goldenDatasets, setGoldenDatasets] = useState<SmcGoldenDataset[]>([])
+  const [activeGoldenId, setActiveGoldenId] = useState<string | null>(null)
+  const [validationReport, setValidationReport] = useState<SmcValidationReport | null>(null)
   const [note, setNote] = useState('')
   const [tags, setTags] = useState<SmcWrongTag[]>([])
   const [compareProfileId, setCompareProfileId] = useState<string | null>(
@@ -331,13 +342,15 @@ export function SmcLabPage() {
     let cancelled = false
     void (async () => {
       const store = getSmcLabStore()
-      const [nextReviews, nextAnnotations] = await Promise.all([
+      const [nextReviews, nextAnnotations, nextGoldens] = await Promise.all([
         store.listReviews(datasetKey),
         store.listAnnotations(datasetKey),
+        store.listGoldenDatasets(datasetKey),
       ])
       if (!cancelled) {
         setReviews(nextReviews)
         setAnnotations(nextAnnotations)
+        setGoldenDatasets(nextGoldens)
       }
     })()
     return () => {
@@ -491,13 +504,14 @@ export function SmcLabPage() {
 
   const exportResearch = () => {
     const payload: SmcLabExportPayload = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       exportedAt: Date.now(),
       detectorVersion: SMC_DETECTOR_VERSION,
       detectorConfig: cloneSmcDetectorConfig(config),
       profileId: activeProfileId,
       reviews,
       annotations,
+      goldenDatasets,
       dataset: {
         datasetKey,
         sourceKind,
@@ -523,10 +537,106 @@ export function SmcLabPage() {
     const store = getSmcLabStore()
     for (const review of payload.reviews) await store.putReview(review)
     for (const annotation of payload.annotations) await store.putAnnotation(annotation)
+    for (const golden of payload.goldenDatasets ?? []) await store.putGoldenDataset(golden)
     setConfig(cloneSmcDetectorConfig(payload.detectorConfig))
     if (payload.profileId) setActiveProfileId(payload.profileId)
     setReviews(await store.listReviews(datasetKey))
     setAnnotations(await store.listAnnotations(datasetKey))
+    setGoldenDatasets(await store.listGoldenDatasets(datasetKey))
+  }
+
+  const saveGoldenFromCorrectReviews = async () => {
+    const probes = toDetectedProbes(detection)
+    const byId = new Map(probes.map((p) => [p.id, p]))
+    const correct = reviews.filter(
+      (r) =>
+        r.verdict === 'correct' &&
+        r.configHash === configHash &&
+        r.detectorVersion === SMC_DETECTOR_VERSION,
+    )
+    const labels = correct
+      .map((r) => {
+        const probe = byId.get(r.fingerprint.eventId)
+        if (!probe) {
+          const module = validationModuleForKind(r.fingerprint.kind)
+          if (!module) return null
+          return goldenLabelFromProbe({
+            id: r.fingerprint.eventId,
+            kind: r.fingerprint.kind,
+            candleIndex: r.fingerprint.candleIndex,
+            timestamp: r.fingerprint.timestamp,
+            price: r.fingerprint.price,
+            sourceStructureId: r.fingerprint.brokenSwingId ?? null,
+          })
+        }
+        return goldenLabelFromProbe(probe)
+      })
+      .filter((l): l is NonNullable<typeof l> => l != null)
+
+    if (labels.length === 0) return
+
+    const id = createGoldenDatasetId({
+      datasetKey,
+      detectorVersion: SMC_DETECTOR_VERSION,
+      configFingerprint: configHash,
+    })
+    const now = Date.now()
+    const dataset: SmcGoldenDataset = {
+      id,
+      name: `${symbol} ${interval} · ${labels.length} labels`,
+      sourceKind,
+      symbol,
+      timeframe: interval,
+      datasetKey,
+      startMs: candles[0]?.time ?? null,
+      endMs: candles.at(-1)?.time ?? null,
+      detectorVersion: SMC_DETECTOR_VERSION,
+      configFingerprint: configHash,
+      profileId: activeProfileId,
+      labels,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await getSmcLabStore().putGoldenDataset(dataset)
+    const next = await getSmcLabStore().listGoldenDatasets(datasetKey)
+    setGoldenDatasets(next)
+    setActiveGoldenId(id)
+  }
+
+  const runValidation = () => {
+    const dataset =
+      goldenDatasets.find((d) => d.id === activeGoldenId) ?? goldenDatasets[0] ?? null
+    if (!dataset) {
+      setValidationReport(null)
+      return
+    }
+    const report = evaluateSmcValidation({
+      dataset,
+      detection,
+      candles,
+      config,
+      reviews: reviews.map((r) => ({
+        eventId: r.fingerprint.eventId,
+        kind: r.fingerprint.kind,
+        module: validationModuleForKind(r.fingerprint.kind),
+        verdict: r.verdict,
+        reasonTags: r.reasonTags,
+        configFingerprint: r.configHash,
+        detectorVersion: r.detectorVersion,
+      })),
+    })
+    setValidationReport(report)
+    setActiveGoldenId(dataset.id)
+  }
+
+  const deleteGoldenDataset = async (id: string) => {
+    await getSmcLabStore().deleteGoldenDataset(id)
+    const next = await getSmcLabStore().listGoldenDatasets(datasetKey)
+    setGoldenDatasets(next)
+    if (activeGoldenId === id) {
+      setActiveGoldenId(null)
+      setValidationReport(null)
+    }
   }
 
   const loadSavedConfig = (entry: SmcSavedLabConfig) => {
@@ -966,6 +1076,29 @@ export function SmcLabPage() {
         </div>
       </Disclosure>
 
+      {/* 7b. Validation Suite */}
+      <SmcValidationDashboard
+        report={validationReport}
+        datasets={goldenDatasets}
+        activeDatasetId={activeGoldenId}
+        onSelectDataset={setActiveGoldenId}
+        onSaveGoldenFromReviews={() => void saveGoldenFromCorrectReviews()}
+        onRunValidation={runValidation}
+        onDeleteDataset={(id) => void deleteGoldenDataset(id)}
+      />
+      {validationReport ? (
+        <SmcGoldenChartCompare
+          detected={toDetectedProbes(detection)}
+          expected={
+            goldenDatasets.find((d) => d.id === (activeGoldenId ?? validationReport.datasetId))
+              ?.labels ?? []
+          }
+          matched={validationReport.matched}
+          missed={validationReport.missed}
+          extra={validationReport.extra}
+        />
+      ) : null}
+
       {/* 8. Advanced Settings */}
       <Disclosure title="Advanced settings">
         <SmcControlsPanel {...sharedControls} sections={['advanced', 'layers']} />
@@ -1204,7 +1337,7 @@ export function SmcLabPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button type="button" variant="outline" className="min-h-11" onClick={exportResearch}>
             <Download className="mr-2 h-4 w-4" />
-            Export JSON (schema v2)
+            Export JSON (schema v3)
           </Button>
           <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-border px-3 text-sm">
             <Upload className="mr-2 h-4 w-4" />

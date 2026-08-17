@@ -1,3 +1,4 @@
+import type { SmcGoldenDataset } from '@/core/smc'
 import type { SmcLabExportPayload, SmcManualAnnotation, SmcReviewRecord } from './types'
 import { SMC_LAB_DB } from './types'
 
@@ -9,6 +10,10 @@ export interface SmcLabStore {
   putAnnotation(annotation: SmcManualAnnotation): Promise<void>
   listAnnotations(datasetKey?: string): Promise<SmcManualAnnotation[]>
   deleteAnnotation(id: string): Promise<void>
+  putGoldenDataset(dataset: SmcGoldenDataset): Promise<void>
+  getGoldenDataset(id: string): Promise<SmcGoldenDataset | null>
+  listGoldenDatasets(datasetKey?: string): Promise<SmcGoldenDataset[]>
+  deleteGoldenDataset(id: string): Promise<void>
   clear(): Promise<void>
 }
 
@@ -16,6 +21,7 @@ export interface SmcLabStore {
 export class MemorySmcLabStore implements SmcLabStore {
   private reviews = new Map<string, SmcReviewRecord>()
   private annotations = new Map<string, SmcManualAnnotation>()
+  private goldens = new Map<string, SmcGoldenDataset>()
 
   async putReview(review: SmcReviewRecord): Promise<void> {
     this.reviews.set(review.id, { ...review, reasonTags: [...review.reasonTags] })
@@ -51,9 +57,32 @@ export class MemorySmcLabStore implements SmcLabStore {
     this.annotations.delete(id)
   }
 
+  async putGoldenDataset(dataset: SmcGoldenDataset): Promise<void> {
+    this.goldens.set(dataset.id, {
+      ...dataset,
+      labels: dataset.labels.map((l) => ({ ...l, reasonTags: l.reasonTags ? [...l.reasonTags] : undefined })),
+    })
+  }
+
+  async getGoldenDataset(id: string): Promise<SmcGoldenDataset | null> {
+    return this.goldens.get(id) ?? null
+  }
+
+  async listGoldenDatasets(datasetKey?: string): Promise<SmcGoldenDataset[]> {
+    const all = [...this.goldens.values()]
+    return (datasetKey ? all.filter((d) => d.datasetKey === datasetKey) : all).sort(
+      (a, b) => b.updatedAt - a.updatedAt,
+    )
+  }
+
+  async deleteGoldenDataset(id: string): Promise<void> {
+    this.goldens.delete(id)
+  }
+
   async clear(): Promise<void> {
     this.reviews.clear()
     this.annotations.clear()
+    this.goldens.clear()
   }
 }
 
@@ -73,6 +102,10 @@ function openDatabase(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(SMC_LAB_DB.annotations)) {
         const store = db.createObjectStore(SMC_LAB_DB.annotations, { keyPath: 'id' })
+        store.createIndex('datasetKey', 'datasetKey', { unique: false })
+      }
+      if (!db.objectStoreNames.contains(SMC_LAB_DB.goldenDatasets)) {
+        const store = db.createObjectStore(SMC_LAB_DB.goldenDatasets, { keyPath: 'id' })
         store.createIndex('datasetKey', 'datasetKey', { unique: false })
       }
     }
@@ -182,12 +215,58 @@ export class IndexedDBSmcLabStore implements SmcLabStore {
     await done
   }
 
+  async putGoldenDataset(dataset: SmcGoldenDataset): Promise<void> {
+    const db = await this.db()
+    const tx = db.transaction(SMC_LAB_DB.goldenDatasets, 'readwrite')
+    const done = transactionDone(tx)
+    tx.objectStore(SMC_LAB_DB.goldenDatasets).put(dataset)
+    await done
+  }
+
+  async getGoldenDataset(id: string): Promise<SmcGoldenDataset | null> {
+    const db = await this.db()
+    const tx = db.transaction(SMC_LAB_DB.goldenDatasets, 'readonly')
+    const value = await requestToPromise(
+      tx.objectStore(SMC_LAB_DB.goldenDatasets).get(id) as IDBRequest<
+        SmcGoldenDataset | undefined
+      >,
+    )
+    return value ?? null
+  }
+
+  async listGoldenDatasets(datasetKey?: string): Promise<SmcGoldenDataset[]> {
+    const db = await this.db()
+    const tx = db.transaction(SMC_LAB_DB.goldenDatasets, 'readonly')
+    const store = tx.objectStore(SMC_LAB_DB.goldenDatasets)
+    if (datasetKey) {
+      const index = store.index('datasetKey')
+      const values = await requestToPromise(
+        index.getAll(datasetKey) as IDBRequest<SmcGoldenDataset[]>,
+      )
+      return values.sort((a, b) => b.updatedAt - a.updatedAt)
+    }
+    const values = await requestToPromise(store.getAll() as IDBRequest<SmcGoldenDataset[]>)
+    return values.sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  async deleteGoldenDataset(id: string): Promise<void> {
+    const db = await this.db()
+    const tx = db.transaction(SMC_LAB_DB.goldenDatasets, 'readwrite')
+    const done = transactionDone(tx)
+    tx.objectStore(SMC_LAB_DB.goldenDatasets).delete(id)
+    await done
+  }
+
   async clear(): Promise<void> {
     const db = await this.db()
-    const tx = db.transaction([SMC_LAB_DB.reviews, SMC_LAB_DB.annotations], 'readwrite')
+    const stores = [SMC_LAB_DB.reviews, SMC_LAB_DB.annotations, SMC_LAB_DB.goldenDatasets]
+    const tx = db.transaction(stores, 'readwrite')
     const done = transactionDone(tx)
-    tx.objectStore(SMC_LAB_DB.reviews).clear()
-    tx.objectStore(SMC_LAB_DB.annotations).clear()
+    for (const name of stores) {
+      if (db.objectStoreNames.contains(name)) {
+        tx.objectStore(name).clear()
+      }
+    }
     await done
   }
 }
@@ -211,7 +290,7 @@ export function validateSmcLabExport(payload: unknown): SmcLabExportPayload {
     throw new Error('Invalid SMC Lab export: expected object')
   }
   const data = payload as Partial<SmcLabExportPayload>
-  if (data.schemaVersion !== 1 && data.schemaVersion !== 2) {
+  if (data.schemaVersion !== 1 && data.schemaVersion !== 2 && data.schemaVersion !== 3) {
     throw new Error(`Unsupported SMC Lab export schema: ${String(data.schemaVersion)}`)
   }
   if (!data.detectorConfig || !Array.isArray(data.reviews) || !Array.isArray(data.annotations)) {
