@@ -41,3 +41,12 @@ export function validateRiskConfig(config: RiskConfig): void {
     throw new Error('maxDrawdownPercent cannot be negative')
   }
 }
+
+/**
+ * Parses a user-supplied percentage string into a valid positive number.
+ * Returns `fallback` when the input is empty, non-numeric, or non-positive.
+ */
+export function parseRiskPercentInput(raw: string, fallback: number): number {
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}

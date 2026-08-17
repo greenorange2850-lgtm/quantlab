@@ -1,5 +1,5 @@
 export type { PositionSizeInput, PositionSizeResult } from './types.js'
 export type { RiskConfig } from './config.js'
 export { defaultRiskConfig } from './config.js'
-export { validateRiskConfig } from './validators.js'
+export { validateRiskConfig, parseRiskPercentInput } from './validators.js'
 export { calculatePositionSize } from './position-sizing.js'

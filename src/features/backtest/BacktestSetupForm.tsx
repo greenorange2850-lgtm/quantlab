@@ -14,6 +14,7 @@ import { useResearchCandles } from '@/api/queries/research-candles'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import { DEFAULT_MA_CROSS_PARAMS, type MovingAverageCrossParams } from '@/core/strategy'
 import { defaultRiskConfig } from '@/core/risk/config'
+import { parseRiskPercentInput } from '@/core/risk/validators'
 import { useBacktestStore } from '@/stores/backtest.store'
 import { useResearchStore } from '@/stores/research.store'
 import type { BacktestTimeframe } from '@/data/binance-exchange-info'
@@ -117,8 +118,6 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
     if (!candlesQuery.data?.length || !resolvedPeriod.period) return
 
     const parsedCapital = Number(initialCapital)
-    const parsedRiskPercent = Number(riskPercent)
-    const parsedMaxPositionSize = Number(maxPositionSize)
 
     await runBacktest({
       symbol,
@@ -133,12 +132,8 @@ export function BacktestSetupForm({ title, description }: BacktestSetupFormProps
       strategyParams,
       riskConfig: {
         ...defaultRiskConfig,
-        riskPercent: Number.isFinite(parsedRiskPercent) && parsedRiskPercent > 0
-          ? parsedRiskPercent
-          : defaultRiskConfig.riskPercent,
-        maxPositionSize: Number.isFinite(parsedMaxPositionSize) && parsedMaxPositionSize > 0
-          ? parsedMaxPositionSize
-          : defaultRiskConfig.maxPositionSize,
+        riskPercent: parseRiskPercentInput(riskPercent, defaultRiskConfig.riskPercent),
+        maxPositionSize: parseRiskPercentInput(maxPositionSize, defaultRiskConfig.maxPositionSize),
       },
     })
 

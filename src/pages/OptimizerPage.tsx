@@ -26,6 +26,7 @@ import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-sour
 import { ResearchPeriodDiagnosticsPanel } from '@/components/dev/ResearchPeriodDiagnosticsPanel'
 import { defaultBacktestPipelineParams } from '@/core/dashboard'
 import { defaultRiskConfig } from '@/core/risk/config'
+import { parseRiskPercentInput } from '@/core/risk/validators'
 import {
   formatDurationMs,
   formatLiveStatusLabel,
@@ -288,8 +289,6 @@ export function OptimizerPage() {
     if (!candlesQuery.data?.length || !resolvedPeriod.period) return
 
     const maxDd = parseOptionalNumber(maxDrawdownPercent)
-    const parsedRiskPercent = Number(riskPercent)
-    const parsedMaxPositionSize = Number(maxPositionSize)
     const result = await startRandomSearch({
       candles: candlesQuery.data,
       config: {
@@ -307,12 +306,8 @@ export function OptimizerPage() {
         autoStopOnConverge,
         riskConfig: {
           ...defaultRiskConfig,
-          riskPercent: Number.isFinite(parsedRiskPercent) && parsedRiskPercent > 0
-            ? parsedRiskPercent
-            : defaultRiskConfig.riskPercent,
-          maxPositionSize: Number.isFinite(parsedMaxPositionSize) && parsedMaxPositionSize > 0
-            ? parsedMaxPositionSize
-            : defaultRiskConfig.maxPositionSize,
+          riskPercent: parseRiskPercentInput(riskPercent, defaultRiskConfig.riskPercent),
+          maxPositionSize: parseRiskPercentInput(maxPositionSize, defaultRiskConfig.maxPositionSize),
         },
         constraints: {
           maxDrawdown: maxDd !== undefined ? maxDd / 100 : undefined,
