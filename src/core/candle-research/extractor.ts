@@ -77,7 +77,7 @@ function penetrationIntoBullishReferenceBody(current: Candle, previous: Candle):
   const bodyBottom = Math.min(previous.open, previous.close)
   const bodySize = bodyTop - bodyBottom
   if (bodySize <= EPSILON) return 0
-  const penetrationPrice = Math.min(current.low, bodyTop) - bodyBottom
+  const penetrationPrice = bodyTop - Math.max(current.low, bodyBottom)
   const clamped = Math.max(0, Math.min(bodySize, penetrationPrice))
   return clamped / bodySize
 }

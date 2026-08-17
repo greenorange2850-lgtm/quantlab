@@ -10,7 +10,6 @@ import type {
   SetupOutcomeMetrics,
 } from './types'
 
-const RECOVERY_LEVELS = [0.25, 0.5, 0.75, 1] as const
 const WINDOW_DEFINITIONS = [
   { label: '+15m' as const, offsetMs: 15 * 60_000 },
   { label: '+30m' as const, offsetMs: 30 * 60_000 },
@@ -42,7 +41,7 @@ function inferStepMs(candles: readonly Candle[], fallbackInterval?: string): num
 
 function createWindow(
   label: OutcomeWindowMetrics['label'],
-  endTime: number,
+  endTime: number | null,
   entryPrice: number,
   direction: 'up' | 'down',
   referenceRange: number,
@@ -160,6 +159,11 @@ export function measureSetupOutcome(input: {
   )
 
   const atrValue = atr(candles, atrPeriod, setup.setupIndex)
+  const maxWindowRecoveryPercent = windows.reduce<number | null>((best, window) => {
+    if (window.recoveryPercent == null) return best
+    if (best == null) return window.recoveryPercent
+    return Math.max(best, window.recoveryPercent)
+  }, null)
 
   return {
     setupId: setup.id,
@@ -185,7 +189,7 @@ export function measureSetupOutcome(input: {
     maePercentOfRange: referenceRange > 0 ? (maePrice / referenceRange) * 100 : null,
     mfeAtrNormalized: atrValue > 0 ? mfePrice / atrValue : null,
     maeAtrNormalized: atrValue > 0 ? maePrice / atrValue : null,
-    maxRecoveryPercent: referenceRange > 0 ? (mfePrice / referenceRange) * 100 : null,
+    maxRecoveryPercent: maxWindowRecoveryPercent,
     timeToMfeMs: mfeTime != null ? Math.max(0, mfeTime - setupTime) : null,
     timeToRecoveryMs: {
       '0.25': firstRecoveryTimeMs(
@@ -261,16 +265,20 @@ function collectRecoveryTimes(outcomes: readonly SetupOutcome[], level: keyof Se
 
 function buildAggregateForSet(outcomes: readonly SetupOutcome[]) {
   const total = outcomes.length
-  const reached025 = collectRecoveryTimes(outcomes, '0.25').length
-  const reached050 = collectRecoveryTimes(outcomes, '0.50').length
-  const reached075 = collectRecoveryTimes(outcomes, '0.75').length
-  const reached100 = collectRecoveryTimes(outcomes, '1.00').length
+  const recovery025 = collectRecoveryTimes(outcomes, '0.25')
+  const recovery050 = collectRecoveryTimes(outcomes, '0.50')
+  const recovery075 = collectRecoveryTimes(outcomes, '0.75')
+  const recovery100 = collectRecoveryTimes(outcomes, '1.00')
+  const reached025 = recovery025.length
+  const reached050 = recovery050.length
+  const reached075 = recovery075.length
+  const reached100 = recovery100.length
 
   return {
     totalSetups: total,
     medianMfePrice: median(outcomes.map((item) => item.metrics.mfePrice)),
     medianMaePrice: median(outcomes.map((item) => item.metrics.maePrice)),
-    medianRecoveryTimeMs: median(collectRecoveryTimes(outcomes, '0.50')),
+    medianRecoveryTimeMs: median(recovery050),
     reached: {
       '0.25': percentageReached(reached025, total),
       '0.50': percentageReached(reached050, total),

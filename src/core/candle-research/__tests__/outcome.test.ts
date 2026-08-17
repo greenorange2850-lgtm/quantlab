@@ -77,7 +77,7 @@ describe('candle research outcome measurement', () => {
     expect(outcome.previousLowRetested).toBe(true)
     expect(outcome.previousHighRetested).toBe(false)
     expect(outcome.oppositeExtremeBroken).toBe(false)
-    expect(outcome.timeToRecoveryMs['0.25']).toBe(15 * 60_000)
+    expect(outcome.timeToRecoveryMs['0.25']).toBe(30 * 60_000)
   })
 
   it('builds aggregate stats grouped by penetration threshold', () => {
