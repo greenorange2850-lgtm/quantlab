@@ -1,5 +1,5 @@
 import { OrderSide, OrderType } from '../models/order.js'
-import { calculateCommission } from '../backtest/trade-math.js'
+import { calculateCommission } from './commission.js'
 import type { ExecutionContext } from './execution-context.js'
 import { validateExecutionContext } from './execution-context.js'
 import {
