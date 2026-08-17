@@ -7,7 +7,8 @@ export const PAGE_SHELL = 'relative min-h-screen overflow-x-hidden'
  * Remove sidebar offset below desktop (lg / 1024px); keep permanent sidebar at lg+.
  * Drawer mode applies below lg per mobile-first overhaul.
  */
-export const MAIN_CONTENT_OFFSET = 'min-w-0 w-full lg:ml-[240px]'
+export const MAIN_CONTENT_OFFSET =
+  'min-w-0 w-full max-w-full lg:ml-[240px] lg:w-[calc(100%-240px)]'
 
 /**
  * Page padding:
