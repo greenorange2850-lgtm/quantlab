@@ -8,6 +8,14 @@ interface ReplayCandlestickChartProps {
   visibleEntryMarkers: ReplayTradeMarker[]
   visibleExitMarkers: ReplayTradeMarker[]
   dimUnselected?: boolean
+  highlightedCandleTimes?: number[]
+  overlayLines?: Array<{
+    id: string
+    price: number
+    color: string
+    label: string
+    dashed?: boolean
+  }>
 }
 
 const WIDTH = 360
@@ -41,6 +49,8 @@ export function ReplayCandlestickChart({
   visibleEntryMarkers,
   visibleExitMarkers,
   dimUnselected = true,
+  highlightedCandleTimes = [],
+  overlayLines = [],
 }: ReplayCandlestickChartProps) {
   const selectedMarker =
     markers.find((marker) => marker.tradeId === selectedTradeId) ?? visibleEntryMarkers.at(-1) ?? null
@@ -91,6 +101,7 @@ export function ReplayCandlestickChart({
   const selectedExitVisible = selectedMarker ? visibleExitIds.has(selectedMarker.tradeId) : false
 
   const gridPrices = [0.25, 0.5, 0.75].map((ratio) => yMin + (yMax - yMin) * ratio)
+  const highlightedTimes = new Set(highlightedCandleTimes)
 
   return (
     <div className="rounded-xl border border-border/70 bg-slate-950/40 p-2">
@@ -216,6 +227,49 @@ export function ReplayCandlestickChart({
               strokeWidth="1.5"
             />
           )}
+
+        {candles.map((candle, index) => {
+          const x = xForIndex(index)
+          const isHighlighted = highlightedTimes.has(candle.time)
+          if (isHighlighted) {
+            const width = candleSlot * 0.9
+            return (
+              <g key={`highlight-${candle.time}`}>
+                <rect
+                  x={x - width / 2}
+                  y={PLOT.top}
+                  width={width}
+                  height={plotHeight}
+                  fill="rgba(56,189,248,0.10)"
+                  stroke="rgba(56,189,248,0.45)"
+                  rx="3"
+                />
+              </g>
+            )
+          }
+          return null
+        })}
+
+        {overlayLines.map((line) => {
+          if (!Number.isFinite(line.price) || line.price < yMin || line.price > yMax) return null
+          const y = yForPrice(line.price)
+          return (
+            <g key={line.id}>
+              <line
+                x1={PLOT.left}
+                x2={WIDTH - PLOT.right}
+                y1={y}
+                y2={y}
+                stroke={line.color}
+                strokeOpacity="0.75"
+                strokeDasharray={line.dashed ? '4 5' : undefined}
+              />
+              <text x={WIDTH - PLOT.right - 84} y={y - 4} fill={line.color} fontSize="9">
+                {line.label}
+              </text>
+            </g>
+          )
+        })}
 
         {candles.map((candle, index) => {
           const x = xForIndex(index)
