@@ -105,7 +105,7 @@ describe('direct consumption detector', () => {
       candle({ time: 1, open: 100, high: 112, low: 99, close: 110 }), // bullish reference
       candle({ time: 2, open: 109, high: 110, low: 103, close: 104 }), // bearish move into previous body (70%)
       candle({ time: 3, open: 108, high: 109, low: 95, close: 96 }), // bearish reference
-      candle({ time: 4, open: 97, high: 103, low: 96, close: 102 }), // bullish move into previous body (87.5%)
+      candle({ time: 4, open: 97, high: 106, low: 96, close: 105 }), // bullish move into previous body (83.3%)
     ]
 
     const features = extractCandleFeatures(candles)
