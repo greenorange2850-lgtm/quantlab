@@ -18,15 +18,20 @@ import {
   describeCandleEventDifference,
   emptySmcDetectionResult,
   eventsAtCandle,
+  filterDetectionByRanking,
   getBuiltinSmcProfile,
+  getEventImportance,
   QUANTLAB_DEFAULT_PROFILE,
+  relatedEventsByRank,
   SMC_DETECTOR_VERSION,
   validateSmcDetectorConfig,
+  withSmcVisibilityMode,
   type SmcDetectionProfile,
   type SmcDetectionResult,
   type SmcDetectorConfig,
   type SmcEvent,
   type SmcProfileCompareCounts,
+  type SmcVisibilityMode,
 } from '@/core/smc'
 import { DEFAULT_MARKET_SOURCE, type MarketSourceKind } from '@/data/market-source'
 import { resolveResearchPeriod, type ResearchPeriodSelection } from '@/data/research-period'
@@ -54,6 +59,7 @@ import {
   type SmcLabExportPayload,
   type SmcManualAnnotation,
   type SmcReviewRecord,
+  type SmcVisibilityModePref,
   type SmcWrongTag,
 } from './persistence/types'
 import {
@@ -152,6 +158,9 @@ export function SmcLabPage() {
   const [densityPreset, setDensityPreset] = useState<SmcDensityPreset>(
     initialPrefs.densityPreset,
   )
+  const [visibilityMode, setVisibilityMode] = useState<SmcVisibilityModePref>(
+    initialPrefs.visibilityMode ?? 'balanced',
+  )
   const [activeProfileId, setActiveProfileId] = useState(initialPrefs.activeProfileId)
   const [speed, setSpeed] = useState<SmcPlaySpeed>(initialPrefs.playSpeed)
 
@@ -214,6 +223,12 @@ export function SmcLabPage() {
     if (candles.length === 0) return emptyDetection()
     return progressiveFilter(detection, visibleIndex)
   }, [detection, visibleIndex, candles.length])
+
+  /** Chart/list view — ranking-filtered; full `progressive` kept for Debug / inspector lookup. */
+  const progressiveVisible = useMemo(
+    () => filterDetectionByRanking(progressive),
+    [progressive],
+  )
 
   const { windowStart, windowCandles, highlightSwingId } = useMemo(() => {
     const maxVisible = Math.min(candles.length - 1, visibleIndex)
@@ -305,11 +320,12 @@ export function SmcLabPage() {
       detectorConfig: config,
       layerToggles: layers,
       densityPreset,
+      visibilityMode,
       activeProfileId,
       playSpeed: speed,
       compareProfileId,
     })
-  }, [config, layers, densityPreset, activeProfileId, speed, compareProfileId])
+  }, [config, layers, densityPreset, visibilityMode, activeProfileId, speed, compareProfileId])
 
   useEffect(() => {
     let cancelled = false
@@ -386,12 +402,20 @@ export function SmcLabPage() {
       return
     }
 
-    setDetection(job.result)
+    setDetection(withSmcVisibilityMode(job.result, visibilityMode))
     setVisibleIndex(candles.length - 1)
     setDetecting(false)
     setDetectionProgress(null)
     setModuleProgress(job.moduleProgress)
-  }, [candles, config])
+  }, [candles, config, visibilityMode])
+
+  const handleVisibilityMode = useCallback((mode: SmcVisibilityModePref) => {
+    setVisibilityMode(mode)
+    setDetection((prev) => {
+      if (prev.diagnostics.candleCount <= 0) return prev
+      return withSmcVisibilityMode(prev, mode as SmcVisibilityMode)
+    })
+  }, [])
 
   const clearMarkers = () => {
     setDetection(emptyDetection())
@@ -615,11 +639,11 @@ export function SmcLabPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-semibold tracking-tight">SMC Lab</h2>
               <Badge variant="outline" className="text-[10px]">
-                Isolated Lab · Phase 2
+                Isolated Lab · Phase 3
               </Badge>
             </div>
             <p className="text-pretty text-xs text-muted-foreground">
-              Experimental visual detector workspace
+              Detector finds events; intelligence ranks what you see
             </p>
             <p className="text-pretty text-[11px] text-muted-foreground">
               Detections in this lab do not affect strategies, backtests, optimization, or live
@@ -686,26 +710,68 @@ export function SmcLabPage() {
       {/* 2. Profile */}
       <SmcControlsPanel {...sharedControls} sections={['profile', 'density']} />
 
+      <Card hover={false}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Intelligence visibility</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-[11px] text-muted-foreground">
+            Ranking filters display only — detector events are never deleted.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ['focus', 'Focus', 'Highest ranked only'],
+                ['balanced', 'Balanced', 'Default QuantLab view'],
+                ['debug', 'Debug', 'Everything'],
+              ] as const
+            ).map(([id, label, hint]) => (
+              <button
+                key={id}
+                type="button"
+                className={`min-h-11 rounded-lg border px-3 text-left text-sm ${
+                  visibilityMode === id
+                    ? 'border-amber-500/50 bg-amber-500/15'
+                    : 'border-border bg-white/[0.03]'
+                }`}
+                onClick={() => handleVisibilityMode(id)}
+              >
+                <span className="font-medium">{label}</span>
+                <span className="mt-0.5 block text-[10px] text-muted-foreground">{hint}</span>
+              </button>
+            ))}
+          </div>
+          {detection.diagnostics.ranking ? (
+            <p className="font-mono text-[11px] text-muted-foreground">
+              Visible {detection.diagnostics.ranking.visibleEvents} / detected{' '}
+              {detection.diagnostics.ranking.detectedEvents} · hidden by ranking{' '}
+              {detection.diagnostics.ranking.hiddenByRanking}
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+
       {/* 3. Apply Detection */}
       <SmcControlsPanel {...sharedControls} sections={['modules', 'actions']} />
 
       {/* 4. Chart */}
       <SmcCandlestickChart
         candles={windowCandles}
-        swings={progressive.swings}
-        classifiedSwings={progressive.classifiedSwings}
-        bosEvents={progressive.bosEvents}
-        chochEvents={progressive.chochEvents}
-        displacementEvents={progressive.displacementEvents}
-        fvgEvents={progressive.fvgEvents}
-        equalLevelEvents={progressive.equalLevelEvents}
-        liquiditySweepEvents={progressive.liquiditySweepEvents}
-        orderBlockEvents={progressive.orderBlockEvents}
+        swings={progressiveVisible.swings}
+        classifiedSwings={progressiveVisible.classifiedSwings}
+        bosEvents={progressiveVisible.bosEvents}
+        chochEvents={progressiveVisible.chochEvents}
+        displacementEvents={progressiveVisible.displacementEvents}
+        fvgEvents={progressiveVisible.fvgEvents}
+        equalLevelEvents={progressiveVisible.equalLevelEvents}
+        liquiditySweepEvents={progressiveVisible.liquiditySweepEvents}
+        orderBlockEvents={progressiveVisible.orderBlockEvents}
         annotations={annotations}
         selectedEventId={selectedEventId}
         highlightSwingId={highlightSwingId}
         layers={layers}
         windowStartIndex={windowStart}
+        importanceById={detection.intelligence?.byEventId}
       />
 
       <SmcCursorControls
@@ -735,6 +801,22 @@ export function SmcLabPage() {
         onTagsChange={setTags}
         onVerdict={(v) => void handleVerdict(v)}
         onResetReview={() => void handleResetReview()}
+        importance={selectedEventId ? getEventImportance(detection, selectedEventId) : null}
+        related={
+          selectedEventId
+            ? relatedEventsByRank(detection, selectedEventId)
+            : { higher: [], nearbyLower: [] }
+        }
+        onSelectRelated={(id) => {
+          setSelectedEventId(id)
+          const event = findEvent(progressive, id) ?? findEvent(detection, id)
+          if (event) {
+            setVisibleIndex((v) => Math.max(v, event.candleIndex))
+            const review = reviewsByEventId.get(id)
+            setNote(review?.note ?? '')
+            setTags(review?.reasonTags ?? [])
+          }
+        }}
       />
 
       {/* 6. Event List */}
@@ -755,6 +837,8 @@ export function SmcLabPage() {
             setTags(review?.reasonTags ?? [])
           }
         }}
+        rankingVisibleOnly={visibilityMode !== 'debug'}
+        importanceById={detection.intelligence?.byEventId}
       />
 
       {/* Profile comparison aggregates */}
@@ -1038,15 +1122,29 @@ export function SmcLabPage() {
                   <p>Lifecycle updates: {s.lifecycleUpdates}</p>
                   <p>
                     Visible events:{' '}
-                    {windowCandles.length > 0
-                      ? flattenDetectionEvents(progressive).filter(
-                          (e) =>
-                            e.candleIndex >= windowStart &&
-                            e.candleIndex < windowStart + windowCandles.length,
-                        ).length
-                      : 0}
+                    {detection.diagnostics.ranking?.visibleEvents ??
+                      (windowCandles.length > 0
+                        ? flattenDetectionEvents(progressiveVisible).filter(
+                            (e) =>
+                              e.candleIndex >= windowStart &&
+                              e.candleIndex < windowStart + windowCandles.length,
+                          ).length
+                        : 0)}
                   </p>
                   <p>Total events: {s.totalEvents}</p>
+                  {detection.diagnostics.ranking ? (
+                    <>
+                      <p className="mt-2">
+                        Detected Events: {detection.diagnostics.ranking.detectedEvents}
+                      </p>
+                      <p>Visible Events: {detection.diagnostics.ranking.visibleEvents}</p>
+                      <p>Hidden by Ranking: {detection.diagnostics.ranking.hiddenByRanking}</p>
+                      <p>Average Importance: {detection.diagnostics.ranking.averageImportance}</p>
+                      <p>Highest Importance: {detection.diagnostics.ranking.highestImportance}</p>
+                      <p>Lowest Importance: {detection.diagnostics.ranking.lowestImportance}</p>
+                      <p>Visibility mode: {detection.diagnostics.ranking.mode}</p>
+                    </>
+                  ) : null}
                   <p className="mt-2">External swings: {s.externalSwings}</p>
                   <p>Internal swings: {s.internalSwings}</p>
                   <p className="mt-2">External BOS: {s.externalBos}</p>

@@ -90,6 +90,26 @@ export {
 } from './modules'
 
 export {
+  SMC_RANKING_VERSION,
+  SMC_VISIBILITY_POLICIES,
+  scoreSmcEvent,
+  eventFamilyKey,
+  rankSmcDetectionResult,
+  applySmcIntelligence,
+  withSmcVisibilityMode,
+  getEventImportance,
+  isEventVisibleByRanking,
+  filterDetectionByRanking,
+  relatedEventsByRank,
+  type SmcVisibilityMode,
+  type SmcImportanceReason,
+  type SmcRankedEventMeta,
+  type SmcRankingDiagnostics,
+  type SmcIntelligenceLayer,
+  type SmcVisibilityPolicy,
+} from './ranking'
+
+export {
   BUILTIN_SMC_PROFILES,
   BUILTIN_SMC_PRESETS,
   QUANTLAB_DEFAULT_PROFILE,

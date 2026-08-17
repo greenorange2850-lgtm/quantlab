@@ -116,6 +116,7 @@ const DEFAULT_PREFS: SmcLabPreferences = {
   detectorConfig: cloneSmcDetectorConfig(DEFAULT_SMC_DETECTOR_CONFIG),
   layerToggles: { ...DEFAULT_SMC_LAYER_TOGGLES },
   densityPreset: 'structure',
+  visibilityMode: 'balanced',
   playSpeed: 1,
   compareProfileId: null,
 }
@@ -162,6 +163,7 @@ export function loadSmcLabPreferences(): SmcLabPreferences {
       schemaVersion: 2,
       activeProfileId: parsed.activeProfileId ?? 'quantlab-default',
       densityPreset: parsed.densityPreset ?? 'structure',
+      visibilityMode: parsed.visibilityMode ?? 'balanced',
       compareProfileId: parsed.compareProfileId ?? null,
       detectorConfig: parsed.detectorConfig
         ? cloneSmcDetectorConfig(parsed.detectorConfig)
