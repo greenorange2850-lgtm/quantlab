@@ -16,6 +16,33 @@ export interface SmcRankedEventMeta {
   visible: boolean
 }
 
+export interface SmcVisibilityStageCounts {
+  detectorCount: number
+  rankedCount: number
+  visibleCount: number
+  chartEligibleCount: number
+  chartRenderedCount: number
+  listRenderedCount: number
+}
+
+export type SmcVisibilityModuleBucket =
+  | 'Swing'
+  | 'BOS'
+  | 'CHoCH'
+  | 'Displacement'
+  | 'FVG'
+  | 'EqualLevel'
+  | 'LiquiditySweep'
+  | 'OrderBlock'
+  | 'Other'
+
+export interface SmcVisibilityPipelineDiagnostics {
+  overall: SmcVisibilityStageCounts
+  byModule: Record<SmcVisibilityModuleBucket, SmcVisibilityStageCounts>
+  notes: string[]
+  mode: string
+}
+
 export interface SmcRankingDiagnostics {
   detectedEvents: number
   visibleEvents: number
@@ -28,6 +55,8 @@ export interface SmcRankingDiagnostics {
   balancedThreshold: number
   focusMaxVisible: number
   balancedMaxVisible: number
+  /** Per-stage visibility pipeline counts (detector → ranked → visible). */
+  pipeline?: SmcVisibilityPipelineDiagnostics
 }
 
 export interface SmcIntelligenceLayer {
@@ -42,16 +71,43 @@ export interface SmcIntelligenceLayer {
 
 export interface SmcVisibilityPolicy {
   mode: SmcVisibilityMode
-  /** Minimum score to be considered (before max-cap trim). */
+  /** Minimum score for non-structure events (before max-cap trim). */
   minScore: number
+  /**
+   * Minimum score for BOS/CHoCH. Balanced uses 0 so detector structure
+   * breaks are not accidentally wiped by the general floor.
+   */
+  structureMinScore: number
   /** Hard cap on visible reviewable events (Debug = Infinity). */
   maxVisible: number
+  /** Prefer keeping BOS/CHoCH when trimming to maxVisible. */
+  protectStructureBreaks: boolean
 }
 
-export const SMC_RANKING_VERSION = 'smc-rank-1'
+export const SMC_RANKING_VERSION = 'smc-rank-1.1'
 
 export const SMC_VISIBILITY_POLICIES: Record<SmcVisibilityMode, SmcVisibilityPolicy> = {
-  focus: { mode: 'focus', minScore: 70, maxVisible: 40 },
-  balanced: { mode: 'balanced', minScore: 45, maxVisible: 80 },
-  debug: { mode: 'debug', minScore: 0, maxVisible: Number.POSITIVE_INFINITY },
+  focus: {
+    mode: 'focus',
+    minScore: 70,
+    structureMinScore: 70,
+    maxVisible: 40,
+    protectStructureBreaks: true,
+  },
+  balanced: {
+    mode: 'balanced',
+    minScore: 45,
+    // Structure breaks use a separate floor so internal BOS (base ~52) and
+    // CHoCH are not wiped by the general threshold or sweep-dominated top-N.
+    structureMinScore: 0,
+    maxVisible: 120,
+    protectStructureBreaks: true,
+  },
+  debug: {
+    mode: 'debug',
+    minScore: 0,
+    structureMinScore: 0,
+    maxVisible: Number.POSITIVE_INFINITY,
+    protectStructureBreaks: false,
+  },
 }

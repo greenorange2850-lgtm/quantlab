@@ -5,6 +5,9 @@ export type {
   SmcRankingDiagnostics,
   SmcIntelligenceLayer,
   SmcVisibilityPolicy,
+  SmcVisibilityStageCounts,
+  SmcVisibilityModuleBucket,
+  SmcVisibilityPipelineDiagnostics,
 } from './types'
 export {
   SMC_RANKING_VERSION,
@@ -21,3 +24,8 @@ export {
   filterDetectionByRanking,
   relatedEventsByRank,
 } from './rank-events'
+export {
+  buildVisibilityPipelineDiagnostics,
+  withRenderedCounts,
+  visibilityModuleForKind,
+} from './pipeline-diagnostics'

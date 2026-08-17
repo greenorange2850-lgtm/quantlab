@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Candle } from '@/data/candles'
 import {
-  applySmcIntelligence,
   cloneSmcDetectorConfig,
   detectSmc,
   filterDetectionByRanking,
@@ -178,11 +177,50 @@ describe('SMC intelligence ranking', () => {
     expect(focus.diagnostics.ranking!.visibleEvents).toBeLessThanOrEqual(40)
   })
 
-  it('pipeline attaches intelligence with Balanced defaults', () => {
-    const candles = Array.from({ length: 80 }, (_, i) => candle(i, 50, 51, 49, 50))
-    const result = applySmcIntelligence(detectSmc(candles, cloneSmcDetectorConfig()), 'balanced')
-    expect(result.intelligence?.rankingVersion).toMatch(/^smc-rank/)
-    expect(result.diagnostics.ranking?.detectedEvents).toBeGreaterThanOrEqual(0)
-    expect(result.diagnostics.ranking?.averageImportance).toBeGreaterThanOrEqual(0)
+  it('Balanced mode keeps BOS/CHoCH visible (does not wipe structure for sweeps)', () => {
+    const candles = Array.from({ length: 200 }, (_, i) => {
+      const wave = Math.sin(i / 5) * 5 + Math.sin(i / 17) * 12
+      const c = 100 + wave
+      return candle(i, c - 0.3, c + 1.8, c - 1.8, c + 0.1)
+    })
+    // Inject displacement-like impulses to create structure + sweeps
+    candles[40] = candle(40, 100, 120, 99, 118)
+    candles[80] = candle(80, 110, 111, 88, 90)
+    candles[120] = candle(120, 95, 125, 94, 122)
+    const balanced = withSmcVisibilityMode(
+      detectSmc(candles, cloneSmcDetectorConfig()),
+      'balanced',
+    )
+    const bosDetected = balanced.bosEvents.length
+    const chochDetected = balanced.chochEvents.length
+    expect(bosDetected + chochDetected).toBeGreaterThan(0)
+
+    const bosVisible = balanced.bosEvents.filter(
+      (e) => balanced.intelligence?.byEventId[e.id]?.visible,
+    ).length
+    const chochVisible = balanced.chochEvents.filter(
+      (e) => balanced.intelligence?.byEventId[e.id]?.visible,
+    ).length
+    // Regression guard: Balanced must not hide the entire BOS/CHoCH set.
+    expect(bosVisible).toBe(bosDetected)
+    expect(chochVisible).toBe(chochDetected)
+
+    const pipeline = balanced.diagnostics.ranking?.pipeline
+    expect(pipeline?.byModule.BOS.detectorCount).toBe(bosDetected)
+    expect(pipeline?.byModule.BOS.visibleCount).toBe(bosVisible)
+    expect(pipeline?.byModule.CHoCH.visibleCount).toBe(chochVisible)
   })
 })
+
+describe('SMC intelligence ranking (pipeline diagnostics)', () => {
+  it('exposes detector/ranked/visible stage counts', () => {
+    const candles = Array.from({ length: 80 }, (_, i) => candle(i, 50, 51, 49, 50))
+    const result = detectSmc(candles, cloneSmcDetectorConfig())
+    const pipeline = result.diagnostics.ranking?.pipeline
+    expect(pipeline).toBeTruthy()
+    expect(pipeline!.overall.detectorCount).toBeGreaterThanOrEqual(0)
+    expect(pipeline!.overall.rankedCount).toBe(pipeline!.overall.detectorCount)
+    expect(pipeline!.overall.visibleCount).toBeLessThanOrEqual(pipeline!.overall.rankedCount)
+  })
+})
+

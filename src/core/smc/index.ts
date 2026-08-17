@@ -101,12 +101,18 @@ export {
   isEventVisibleByRanking,
   filterDetectionByRanking,
   relatedEventsByRank,
+  buildVisibilityPipelineDiagnostics,
+  withRenderedCounts,
+  visibilityModuleForKind,
   type SmcVisibilityMode,
   type SmcImportanceReason,
   type SmcRankedEventMeta,
   type SmcRankingDiagnostics,
   type SmcIntelligenceLayer,
   type SmcVisibilityPolicy,
+  type SmcVisibilityStageCounts,
+  type SmcVisibilityModuleBucket,
+  type SmcVisibilityPipelineDiagnostics,
 } from './ranking'
 
 export {
@@ -145,6 +151,31 @@ export {
   type SmcReviewSample,
   type EvaluateValidationInput,
 } from './validation-suite'
+
+export {
+  DEFAULT_ZONE_LIFECYCLE_SETTINGS,
+  emptyLifecycleInvariantCounts,
+  projectFvgZones,
+  projectOrderBlockZones,
+  projectLiquidityZones,
+  filterZonesBySmartVisibility,
+  projectStructureRelevance,
+  auditLifecycleProjectionInvariants,
+  projectSmcLifecycle,
+  createMockSetupVisualContext,
+  type SmcChartZoneState,
+  type SmcZoneKind,
+  type SmcStructureRelevance,
+  type SmcSmartVisibilityPreset,
+  type SmcZoneProjection,
+  type SmcStructureEventProjection,
+  type SmcSetupVisualContext,
+  type SmcZoneLifecycleSettings,
+  type SmcLifecycleDiagnostics,
+  type SmcLifecycleInvariantCounts,
+  type SmcLifecycleProjectionResult,
+  type ProjectSmcLifecycleInput,
+} from './lifecycle'
 
 export {
   BUILTIN_SMC_PROFILES,

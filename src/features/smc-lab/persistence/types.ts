@@ -104,6 +104,14 @@ export type SmcDensityPreset = 'minimal' | 'structure' | 'liquidity' | 'full-deb
 /** Intelligence visibility mode — filters display only; never deletes detector events. */
 export type SmcVisibilityModePref = 'focus' | 'balanced' | 'debug'
 
+/** Smart chart zone visibility (orthogonal to ranking Focus/Balanced/Debug). */
+export type SmcSmartVisibilityPresetPref =
+  | 'active-only'
+  | 'setup-focus'
+  | 'balanced'
+  | 'history'
+  | 'debug'
+
 export interface SmcLabPreferences {
   schemaVersion: 2
   activeConfigId: string | null
@@ -130,8 +138,18 @@ export interface SmcLabPreferences {
     diagnosticsLabels: boolean
   }
   densityPreset: SmcDensityPreset
-  /** Focus / Balanced / Debug ranking visibility. Default Balanced. */
+  /** Ranking Focus / Balanced / Debug. */
   visibilityMode: SmcVisibilityModePref
+  /** Zone lifecycle smart chart visibility. Default Balanced. */
+  smartVisibilityPreset: SmcSmartVisibilityPresetPref
+  zoneLifecycle: {
+    showActive: boolean
+    showTouched: boolean
+    showMitigatedFilled: boolean
+    showInvalidated: boolean
+    extendActiveZonesRight: boolean
+    fadeOldActiveZones: boolean
+  }
   playSpeed: 0.5 | 1 | 2 | 5
   compareProfileId: string | null
 }
