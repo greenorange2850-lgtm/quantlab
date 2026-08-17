@@ -1,5 +1,6 @@
 import type { ConnectionStatus } from '@trading-os/shared'
 import type { RunBacktestPipelineParams } from '@/core/dashboard'
+import type { PlaybookParameters } from '@/core/playbook'
 
 /**
  * Zustand field classification (dashboard / backtest / app stores).
@@ -28,6 +29,13 @@ export interface BacktestPersistedState {
   lastParams: RunBacktestPipelineParams
 }
 
+/** Playbook store slice written to localStorage. */
+export interface PlaybookPersistedState {
+  selectedPlaybookId: string
+  drafts: Record<string, PlaybookParameters>
+  applied: Record<string, PlaybookParameters>
+}
+
 export interface AppPersistableFields {
   sidebarCollapsed: boolean
   activeStrategyId: string | null
@@ -40,6 +48,7 @@ export interface BacktestPersistableFields {
 
 export const APP_STORE_PERSIST_NAME = 'quantlab:app'
 export const BACKTEST_STORE_PERSIST_NAME = 'quantlab:backtest'
+export const PLAYBOOK_STORE_PERSIST_NAME = 'quantlab:playbook'
 export const STORE_PERSIST_VERSION = 1
 
 /** Keep only UI / session preferences from the app store. */
@@ -56,6 +65,19 @@ export function partializeBacktestState(
 ): BacktestPersistedState {
   return {
     lastParams: state.lastParams,
+  }
+}
+
+/** Keep only the selected playbook and its drafts/applied parameter payloads. */
+export function partializePlaybookState(state: {
+  selectedPlaybookId: string
+  drafts: Record<string, PlaybookParameters>
+  applied: Record<string, PlaybookParameters>
+}): PlaybookPersistedState {
+  return {
+    selectedPlaybookId: state.selectedPlaybookId,
+    drafts: state.drafts,
+    applied: state.applied,
   }
 }
 
