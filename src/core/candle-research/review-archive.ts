@@ -12,9 +12,9 @@ function readStorage(): ResearchSetupReview[] {
   if (!canUseStorage()) return [...memoryReviews]
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return [...memoryReviews]
+    if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return [...memoryReviews]
+    if (!Array.isArray(parsed)) return []
     return parsed.filter((value): value is ResearchSetupReview => {
       return (
         !!value &&
@@ -27,7 +27,7 @@ function readStorage(): ResearchSetupReview[] {
       )
     })
   } catch {
-    return [...memoryReviews]
+    return []
   }
 }
 
