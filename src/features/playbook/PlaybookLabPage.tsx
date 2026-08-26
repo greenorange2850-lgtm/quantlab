@@ -17,6 +17,7 @@ import { DataSourceBar } from './components/DataSourceBar'
 import { DecisionCard } from './components/DecisionCard'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
 import { HistorySummary } from './components/HistorySummary'
+import { OpenPlaybookReplayButton } from './components/OpenPlaybookReplayButton'
 import { PlaybookSelector } from './components/PlaybookSelector'
 import {
   usePlaybookHistoricalCatalog,
@@ -147,6 +148,21 @@ export function PlaybookLabPage() {
               history={view.result.history}
               meta={view.historical?.meta}
               eventSupport={view.historical?.eventSupport}
+              action={
+                dataSourceKind === 'historical' &&
+                historicalSeries.result?.ok ? (
+                  <OpenPlaybookReplayButton
+                    kind={historicalSeries.result.ref.kind}
+                    id={historicalSeries.result.ref.id}
+                    playbookId={definition.id}
+                    timeframe={historicalSeries.result.timeframe}
+                    setupCandleIndex={
+                      view.historical?.meta.replayCursor?.candleIndex ??
+                      view.result.evaluation.candleIndex
+                    }
+                  />
+                ) : null
+              }
             />
             <DecisionCard evaluation={view.result.evaluation} />
             <DiagnosticsPanel diagnostics={view.diagnostics} history={view.result.history} />
