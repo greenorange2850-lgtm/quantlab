@@ -58,12 +58,61 @@ export function windowAroundTrade(
   }
 }
 
+export function windowAroundIndex(
+  candles: readonly Candle[],
+  index: number,
+  contextBars = DEFAULT_CONTEXT_BARS,
+  maxVisible = MAX_VISIBLE_CANDLES,
+): CandleWindow {
+  if (candles.length === 0) {
+    return { startIndex: 0, endIndex: -1, candles: [] }
+  }
+  const center = Math.max(0, Math.min(candles.length - 1, index))
+  let start = Math.max(0, center - contextBars)
+  let end = Math.min(candles.length - 1, center + contextBars)
+  if (end - start + 1 > maxVisible) {
+    const half = Math.floor(maxVisible / 2)
+    start = Math.max(0, center - half)
+    end = Math.min(candles.length - 1, start + maxVisible - 1)
+    start = Math.max(0, end - maxVisible + 1)
+  }
+  return {
+    startIndex: start,
+    endIndex: end,
+    candles: candles.slice(start, end + 1),
+  }
+}
+
 export function candlesVisibleForReplay(
   candles: readonly Candle[],
   cursorIndex: number,
 ): Candle[] {
   if (cursorIndex < 0) return []
   return candles.slice(0, Math.min(candles.length, cursorIndex + 1))
+}
+
+/** Prefer a focused Playbook setup window; otherwise keep trade-window behavior. */
+export function chartWindowForReplay(input: {
+  visibleCandles: readonly Candle[]
+  mode: 'full' | 'replay'
+  selectedTrade: Trade | null
+  playbookFocusTimeMs: number | null
+}): CandleWindow {
+  const visible = input.visibleCandles
+  if (visible.length === 0) {
+    return { startIndex: 0, endIndex: -1, candles: [] }
+  }
+  if (input.playbookFocusTimeMs != null) {
+    return windowAroundIndex(visible, findCandleIndex(visible, input.playbookFocusTimeMs))
+  }
+  if (input.selectedTrade) {
+    if (input.mode === 'full') return windowAroundTrade(visible, input.selectedTrade)
+    const entryVisible = visible.some((candle) => candle.time === input.selectedTrade!.entryTime)
+    if (entryVisible) return windowAroundTrade(visible, input.selectedTrade)
+  }
+  const end = visible.length - 1
+  const start = Math.max(0, end - 120)
+  return { startIndex: start, endIndex: end, candles: visible.slice(start, end + 1) }
 }
 
 export function equityAtCursor(

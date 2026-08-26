@@ -34,6 +34,10 @@ export interface PlaybookPersistedState {
   selectedPlaybookId: string
   drafts: Record<string, PlaybookParameters>
   applied: Record<string, PlaybookParameters>
+  dataSourceKind: 'demo' | 'historical'
+  selectedHistoricalKind: 'backtest' | 'dataset' | null
+  selectedHistoricalId: string | null
+  selectedHistoricalTimeframe: string | null
 }
 
 export interface AppPersistableFields {
@@ -68,16 +72,24 @@ export function partializeBacktestState(
   }
 }
 
-/** Keep only the selected playbook and its drafts/applied parameter payloads. */
+/** Keep only the selected playbook, drafts/applied payloads, and data-source choice. */
 export function partializePlaybookState(state: {
   selectedPlaybookId: string
   drafts: Record<string, PlaybookParameters>
   applied: Record<string, PlaybookParameters>
+  dataSourceKind: 'demo' | 'historical'
+  selectedHistoricalKind: 'backtest' | 'dataset' | null
+  selectedHistoricalId: string | null
+  selectedHistoricalTimeframe: string | null
 }): PlaybookPersistedState {
   return {
     selectedPlaybookId: state.selectedPlaybookId,
     drafts: state.drafts,
     applied: state.applied,
+    dataSourceKind: state.dataSourceKind,
+    selectedHistoricalKind: state.selectedHistoricalKind,
+    selectedHistoricalId: state.selectedHistoricalId,
+    selectedHistoricalTimeframe: state.selectedHistoricalTimeframe,
   }
 }
 

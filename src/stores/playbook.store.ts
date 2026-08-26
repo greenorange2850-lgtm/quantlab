@@ -7,6 +7,7 @@ import {
   STORE_PERSIST_VERSION,
   getPersistStorage,
   partializePlaybookState,
+  type PlaybookPersistedState,
 } from './persistence'
 
 interface PlaybookStoreState {
@@ -16,7 +17,19 @@ interface PlaybookStoreState {
   drafts: Record<string, PlaybookParameters>
   /** Last-applied parameter payloads keyed by playbook id. */
   applied: Record<string, PlaybookParameters>
+  /** Demo fixtures vs a saved backtest/dataset. Demo is never an implicit fallback. */
+  dataSourceKind: 'demo' | 'historical'
+  selectedHistoricalKind: 'backtest' | 'dataset' | null
+  selectedHistoricalId: string | null
+  selectedHistoricalTimeframe: string | null
   selectPlaybook: (id: string) => void
+  setDataSourceKind: (kind: 'demo' | 'historical') => void
+  selectHistoricalSource: (
+    kind: 'backtest' | 'dataset' | null,
+    id: string | null,
+    timeframe?: string | null,
+  ) => void
+  setHistoricalTimeframe: (timeframe: string | null) => void
   /** Patch a single draft parameter for a playbook. */
   updateParameter: (playbookId: string, key: string, value: ParameterValue) => void
   /** Replace the entire draft (e.g. seeded defaults on first visit). */
@@ -33,7 +46,20 @@ export const usePlaybookStore = create<PlaybookStoreState>()(
       selectedPlaybookId: 'bullish-qml-reversal',
       drafts: {},
       applied: {},
+      dataSourceKind: 'demo',
+      selectedHistoricalKind: null,
+      selectedHistoricalId: null,
+      selectedHistoricalTimeframe: null,
       selectPlaybook: (id) => set({ selectedPlaybookId: id }),
+      setDataSourceKind: (kind) => set({ dataSourceKind: kind }),
+      selectHistoricalSource: (kind, id, timeframe = null) =>
+        set({
+          dataSourceKind: 'historical',
+          selectedHistoricalKind: kind,
+          selectedHistoricalId: id,
+          selectedHistoricalTimeframe: timeframe ?? null,
+        }),
+      setHistoricalTimeframe: (timeframe) => set({ selectedHistoricalTimeframe: timeframe }),
       updateParameter: (playbookId, key, value) =>
         set((s) => ({
           drafts: {
@@ -65,6 +91,17 @@ export const usePlaybookStore = create<PlaybookStoreState>()(
       storage: createJSONStorage(getPersistStorage),
       partialize: (state): ReturnType<typeof partializePlaybookState> =>
         partializePlaybookState(state),
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState ?? {}) as Partial<PlaybookPersistedState>
+        return {
+          ...currentState,
+          ...persisted,
+          dataSourceKind: persisted.dataSourceKind === 'historical' ? 'historical' : 'demo',
+          selectedHistoricalKind: persisted.selectedHistoricalKind ?? null,
+          selectedHistoricalId: persisted.selectedHistoricalId ?? null,
+          selectedHistoricalTimeframe: persisted.selectedHistoricalTimeframe ?? null,
+        }
+      },
     },
   ),
 )

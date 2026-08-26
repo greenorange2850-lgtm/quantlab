@@ -1,5 +1,11 @@
 import type { Candle } from '@/data/candles'
 import type { ReplayTradeMarker } from '@/core/backtest/execution-events'
+import {
+  PLAYBOOK_MARKER_COLORS,
+  PLAYBOOK_MARKER_LABELS,
+  playbookMarkerPlotPrice,
+  type PlaybookReplayMarker,
+} from '@/features/playbook/replay-markers'
 
 interface ReplayCandlestickChartProps {
   candles: Candle[]
@@ -8,6 +14,10 @@ interface ReplayCandlestickChartProps {
   visibleEntryMarkers: ReplayTradeMarker[]
   visibleExitMarkers: ReplayTradeMarker[]
   dimUnselected?: boolean
+  playbookMarkers?: PlaybookReplayMarker[]
+  selectedPlaybookMarkerId?: string | null
+  showPlaybookLifecycleOutcome?: boolean
+  onSelectPlaybookMarker?: (markerId: string) => void
 }
 
 const WIDTH = 360
@@ -41,12 +51,19 @@ export function ReplayCandlestickChart({
   visibleEntryMarkers,
   visibleExitMarkers,
   dimUnselected = true,
+  playbookMarkers = [],
+  selectedPlaybookMarkerId = null,
+  showPlaybookLifecycleOutcome = false,
+  onSelectPlaybookMarker,
 }: ReplayCandlestickChartProps) {
   const selectedMarker =
     markers.find((marker) => marker.tradeId === selectedTradeId) ?? visibleEntryMarkers.at(-1) ?? null
   const visibleEntryIds = new Set(visibleEntryMarkers.map((marker) => marker.tradeId))
   const visibleExitIds = new Set(visibleExitMarkers.map((marker) => marker.tradeId))
   const candleIndexByTime = new Map(candles.map((candle, index) => [candle.time, index]))
+  const closeByTime = new Map(candles.map((candle) => [candle.time, candle.close]))
+  const selectedPlaybookMarker =
+    playbookMarkers.find((marker) => marker.id === selectedPlaybookMarkerId) ?? null
 
   if (candles.length === 0) {
     return (
@@ -62,9 +79,18 @@ export function ReplayCandlestickChart({
     marker.takeProfitPrice,
     visibleExitIds.has(marker.tradeId) ? marker.exitPrice : null,
   ])
+  const playbookPrices = playbookMarkers.flatMap((marker) => {
+    const plot = playbookMarkerPlotPrice(marker, closeByTime)
+    return [
+      plot,
+      marker.stopReference?.price ?? null,
+      selectedPlaybookMarker?.id === marker.id ? marker.targets[0]?.price ?? null : null,
+    ]
+  })
   const prices = [
     ...candles.flatMap((candle) => [candle.high, candle.low]),
     ...markerPrices.filter((price): price is number => price != null && Number.isFinite(price)),
+    ...playbookPrices.filter((price): price is number => price != null && Number.isFinite(price)),
   ]
   const minPrice = Math.min(...prices)
   const maxPrice = Math.max(...prices)
@@ -96,7 +122,11 @@ export function ReplayCandlestickChart({
     <div className="rounded-xl border border-border/70 bg-slate-950/40 p-2">
       <svg
         role="img"
-        aria-label="Backtest replay candlestick chart with trade markers"
+        aria-label={
+          playbookMarkers.length > 0
+            ? 'Backtest replay candlestick chart with trade and playbook markers'
+            : 'Backtest replay candlestick chart with trade markers'
+        }
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="h-[250px] w-full overflow-visible"
         preserveAspectRatio="none"
@@ -304,6 +334,121 @@ export function ReplayCandlestickChart({
             </g>
           )
         })}
+
+        {selectedPlaybookMarker?.stopReference && (
+          <g>
+            <line
+              x1={PLOT.left}
+              x2={WIDTH - PLOT.right}
+              y1={yForPrice(selectedPlaybookMarker.stopReference.price)}
+              y2={yForPrice(selectedPlaybookMarker.stopReference.price)}
+              stroke="#f97316"
+              strokeOpacity="0.45"
+              strokeDasharray="2 4"
+            />
+            <text
+              x={WIDTH - PLOT.right - 62}
+              y={yForPrice(selectedPlaybookMarker.stopReference.price) - 4}
+              fill="#fdba74"
+              fontSize="9"
+            >
+              PB Stop {formatPrice(selectedPlaybookMarker.stopReference.price)}
+            </text>
+          </g>
+        )}
+
+        {selectedPlaybookMarker?.targets[0] && (
+          <g>
+            <line
+              x1={PLOT.left}
+              x2={WIDTH - PLOT.right}
+              y1={yForPrice(selectedPlaybookMarker.targets[0].price)}
+              y2={yForPrice(selectedPlaybookMarker.targets[0].price)}
+              stroke="#38bdf8"
+              strokeOpacity="0.45"
+              strokeDasharray="2 4"
+            />
+            <text
+              x={WIDTH - PLOT.right - 52}
+              y={yForPrice(selectedPlaybookMarker.targets[0].price) - 4}
+              fill="#7dd3fc"
+              fontSize="9"
+            >
+              PB T1 {formatPrice(selectedPlaybookMarker.targets[0].price)}
+            </text>
+          </g>
+        )}
+
+        {playbookMarkers.map((marker) => {
+          const x = xForTime(marker.timeMs)
+          const price = playbookMarkerPlotPrice(marker, closeByTime)
+          if (x == null || price == null) return null
+          const y = yForPrice(price)
+          const isSelected = marker.id === selectedPlaybookMarkerId
+          const color = PLAYBOOK_MARKER_COLORS[marker.setupStatus]
+          const label = PLAYBOOK_MARKER_LABELS[marker.setupStatus]
+          const opacity =
+            dimUnselected && selectedPlaybookMarkerId && !isSelected ? 0.45 : 1
+          const outcome =
+            showPlaybookLifecycleOutcome && marker.lifecycleOutcome
+              ? marker.lifecycleOutcome
+              : null
+
+          return (
+            <g
+              key={`playbook-${marker.id}`}
+              opacity={opacity}
+              style={{ cursor: onSelectPlaybookMarker ? 'pointer' : undefined }}
+              onClick={() => onSelectPlaybookMarker?.(marker.id)}
+            >
+              <rect
+                x={x - 6}
+                y={y - 6}
+                width="12"
+                height="12"
+                rx="2"
+                fill={color}
+                fillOpacity={isSelected ? 0.95 : 0.75}
+                stroke={isSelected ? '#f8fafc' : '#020617'}
+                strokeWidth={isSelected ? 1.6 : 1.2}
+                transform={`rotate(45 ${x} ${y})`}
+              />
+              <rect
+                x={clamp(x - 18, PLOT.left, WIDTH - PLOT.right - 36)}
+                y={clamp(y + 8, 2, HEIGHT - 28)}
+                width="36"
+                height="13"
+                rx="3"
+                fill={color}
+                fillOpacity="0.18"
+                stroke={color}
+                strokeOpacity="0.55"
+              />
+              <text
+                x={clamp(x, PLOT.left + 18, WIDTH - PLOT.right - 18)}
+                y={clamp(y + 18, 12, HEIGHT - 18)}
+                fill="#f8fafc"
+                textAnchor="middle"
+                fontSize="8"
+                fontWeight="700"
+              >
+                {label}
+              </text>
+              {outcome ? (
+                <text
+                  x={clamp(x, PLOT.left + 18, WIDTH - PLOT.right - 18)}
+                  y={clamp(y + 29, 22, HEIGHT - 6)}
+                  fill="#c4b5fd"
+                  textAnchor="middle"
+                  fontSize="7"
+                  fontWeight="600"
+                >
+                  OUT {PLAYBOOK_MARKER_LABELS[outcome.status]}
+                </text>
+              ) : null}
+            </g>
+          )
+        })}
       </svg>
       <div className="mt-1 flex flex-wrap items-center gap-2 px-1 text-[10px] text-muted-foreground">
         <span className="inline-flex items-center gap-1">
@@ -315,6 +460,16 @@ export function ReplayCandlestickChart({
         <span className="inline-flex items-center gap-1">
           <span className="h-2 w-2 rotate-45 bg-violet-400/80" /> EXIT
         </span>
+        {playbookMarkers.length > 0 ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rotate-45 bg-amber-400/80" /> Playbook setup
+          </span>
+        ) : null}
+        {showPlaybookLifecycleOutcome ? (
+          <span className="inline-flex items-center gap-1 text-violet-300">
+            OUT = later historical outcome
+          </span>
+        ) : null}
       </div>
     </div>
   )

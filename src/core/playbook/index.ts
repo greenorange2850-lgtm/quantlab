@@ -157,4 +157,37 @@ export {
   type PlaybookPipelineResult,
 } from './pipeline.js'
 
+export {
+  adaptHistoricalCandle,
+  adaptHistoricalCandles,
+  adaptHistoricalDetectorEvents,
+  assertValidQuantLabCandle,
+  inspectPlaybookEventSupport,
+  isPlaybookEvent,
+  PLAYBOOK_DETECTOR_RULES,
+  PLAYBOOK_EVENT_REQUIREMENTS,
+  HistoricalCandleAdapterError,
+  type QuantLabOhlcvCandle,
+  type PlaybookEventRequirement,
+  type DetectorEventInspection,
+} from './historical-adapter.js'
+
+export {
+  evaluateHistoricalPlaybook,
+  buildHistoricalSeries,
+  resolveHistoricalSymbol,
+  resolveHistoricalTimeframe,
+  playbookKindForId,
+  HistoricalEvaluationError,
+  type PlaybookLabDataSourceKind,
+  type HistoricalLoadErrorCode,
+  type PlaybookReplayCursor,
+  type PlaybookHistoricalSeries,
+  type HistoricalEvaluationInput,
+  type HistoricalEvaluationMeta,
+  type HistoricalEvaluationSuccess,
+  type HistoricalEvaluationFailure,
+  type HistoricalEvaluationOutcome,
+} from './historical.js'
+
 export { canonicalStringify, fingerprintHash } from './json.js'

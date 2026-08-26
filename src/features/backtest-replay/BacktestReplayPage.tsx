@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import type { EquityPoint } from '@/core/backtest/BacktestResult'
@@ -11,6 +11,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Disclosure } from '@/components/ui/disclosure'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency, formatPercent } from '@/lib/utils'
+import { PlaybookSetupNavigator } from '@/features/playbook/components/PlaybookSetupNavigator'
+import { SelectedPlaybookSetupCard } from '@/features/playbook/components/SelectedPlaybookSetupCard'
+import {
+  buildPlaybookReplayOverlay,
+  findSetupIndexByCandle,
+  parsePlaybookReplaySearch,
+  playbookChartPresentation,
+  replayCursorForSetup,
+  replayPageQueryIsValid,
+  type PlaybookReplayOverlay,
+} from '@/features/playbook/replay-markers'
+import { usePlaybookStore } from '@/stores/playbook.store'
 import { BacktestSummaryStrip } from './components/BacktestSummaryStrip'
 import { EquityReplayPanel } from './components/EquityReplayPanel'
 import { ExecutionAssumptions } from './components/ExecutionAssumptions'
@@ -21,7 +33,7 @@ import { SignalVerificationCard } from './components/SignalVerificationCard'
 import { TradeListPanel } from './components/TradeListPanel'
 import { TradeNavigator } from './components/TradeNavigator'
 import { VerifyTradePanel } from './components/VerifyTradePanel'
-import { loadBacktestReplay, type ReplayAvailability } from './load-replay'
+import { loadReplayPageSource, type ReplayPageLoadResult } from './load-playbook-replay'
 import { buildSignalVerification } from './signal-verification'
 import {
   buildTradeMarkers,
@@ -30,19 +42,19 @@ import {
 } from './trade-markers'
 import {
   candlesVisibleForReplay,
+  chartWindowForReplay,
   createInitialReplayState,
   findCandleIndex,
   msPerCandle,
   stepCursor,
-  windowAroundTrade,
   type ReplayControllerState,
   type ReplaySpeedMultiplier,
 } from './replay-window'
 
 type LoadState =
   | { status: 'idle' | 'loading'; availability: null }
-  | { status: 'ready'; availability: Extract<ReplayAvailability, { available: true }> }
-  | { status: 'unavailable'; availability: Extract<ReplayAvailability, { available: false }> }
+  | { status: 'ready'; availability: Extract<ReplayPageLoadResult, { available: true }> }
+  | { status: 'unavailable'; availability: Extract<ReplayPageLoadResult, { available: false }> }
   | { status: 'error'; message: string; availability: null }
 
 const EVENT_LABELS: Record<BacktestExecutionEventKind, string> = {
@@ -161,27 +173,34 @@ function TradeSelectBridge({
 
 export function BacktestReplayPage() {
   const [searchParams] = useSearchParams()
-  const backtestId = searchParams.get('backtest') ?? searchParams.get('id') ?? ''
+  const query = useMemo(() => parsePlaybookReplaySearch(searchParams), [searchParams])
+  const queryValid = replayPageQueryIsValid(query)
+  const applied = usePlaybookStore((s) => s.applied)
+  const drafts = usePlaybookStore((s) => s.drafts)
   const [loadState, setLoadState] = useState<LoadState>({ status: 'idle', availability: null })
   const [selectedTradeIndex, setSelectedTradeIndex] = useState(0)
+  const [selectedSetupIndex, setSelectedSetupIndex] = useState(0)
   const [replayState, setReplayState] = useState<ReplayControllerState>(() =>
     createInitialReplayState(0, true),
   )
+  const focusedQueryKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!backtestId) {
+    if (!queryValid) {
       setLoadState({ status: 'idle', availability: null })
       return
     }
 
     let cancelled = false
     setLoadState({ status: 'loading', availability: null })
-    void loadBacktestReplay(backtestId)
+    focusedQueryKeyRef.current = null
+    void loadReplayPageSource(query)
       .then((availability) => {
         if (cancelled) return
         if (availability.available) {
           setLoadState({ status: 'ready', availability })
           setSelectedTradeIndex(0)
+          setSelectedSetupIndex(0)
           setReplayState(createInitialReplayState(availability.bundle.candles.length, true))
         } else {
           setLoadState({ status: 'unavailable', availability })
@@ -199,9 +218,42 @@ export function BacktestReplayPage() {
     return () => {
       cancelled = true
     }
-  }, [backtestId])
+  }, [
+    queryValid,
+    query.backtestId,
+    query.datasetId,
+    query.playbookId,
+    query.timeframe,
+    query.setupCandleIndex,
+  ])
 
   const bundle = loadState.status === 'ready' ? loadState.availability.bundle : null
+  const detectorEvents = loadState.status === 'ready' ? loadState.availability.detectorEvents : []
+  const playbookParameters = query.playbookId
+    ? (applied[query.playbookId] ?? drafts[query.playbookId])
+    : undefined
+
+  const overlay = useMemo((): PlaybookReplayOverlay | null => {
+    if (!bundle || !query.playbookId) return null
+    try {
+      return buildPlaybookReplayOverlay({
+        playbookId: query.playbookId,
+        parameters: playbookParameters,
+        symbol: bundle.metadata.symbol,
+        timeframe: bundle.metadata.timeframe,
+        candles: bundle.candles,
+        detectorEvents,
+      })
+    } catch {
+      return null
+    }
+  }, [
+    bundle,
+    detectorEvents,
+    playbookParameters,
+    query.playbookId,
+  ])
+
   const markers = useMemo(
     () => (bundle ? buildTradeMarkers(bundle.trades, bundle.events) : []),
     [bundle],
@@ -211,6 +263,7 @@ export function BacktestReplayPage() {
   const selectedMarker = selectedTrade
     ? markers.find((marker) => marker.tradeId === selectedTrade.id) ?? null
     : null
+  const selectedPlaybookMarker = overlay?.markers[selectedSetupIndex] ?? null
   const cursorTime =
     bundle && replayState.mode === 'replay'
       ? bundle.candles[replayState.cursorIndex]?.time ?? null
@@ -233,6 +286,43 @@ export function BacktestReplayPage() {
     return () => window.clearInterval(interval)
   }, [bundle, replayState.playing, replayState.speed])
 
+  const selectPlaybookSetup = (index: number) => {
+    if (!overlay || overlay.markers.length === 0) return
+    const next = Math.max(0, Math.min(overlay.markers.length - 1, index))
+    const marker = overlay.markers[next]
+    if (!marker) return
+    setSelectedSetupIndex(next)
+    setReplayState((current) => ({
+      ...current,
+      ...replayCursorForSetup(marker),
+    }))
+  }
+
+  useEffect(() => {
+    if (!overlay || overlay.markers.length === 0) return
+    const key = `${query.backtestId}:${query.datasetId}:${query.playbookId}:${query.setupCandleIndex}`
+    if (focusedQueryKeyRef.current === key) return
+    focusedQueryKeyRef.current = key
+    const index =
+      query.setupCandleIndex != null
+        ? findSetupIndexByCandle(overlay.markers, query.setupCandleIndex)
+        : overlay.markers.length - 1
+    if (index < 0) return
+    const marker = overlay.markers[index]
+    if (!marker) return
+    setSelectedSetupIndex(index)
+    setReplayState((current) => ({
+      ...current,
+      ...replayCursorForSetup(marker),
+    }))
+  }, [
+    overlay,
+    query.backtestId,
+    query.datasetId,
+    query.playbookId,
+    query.setupCandleIndex,
+  ])
+
   const visibleFullSeries = useMemo(() => {
     if (!bundle) return []
     return replayState.mode === 'replay'
@@ -240,19 +330,21 @@ export function BacktestReplayPage() {
       : bundle.candles
   }, [bundle, replayState.cursorIndex, replayState.mode])
 
-  const chartWindow = useMemo(() => {
-    if (!bundle || visibleFullSeries.length === 0) return { candles: [], startIndex: 0, endIndex: -1 }
-    if (selectedTrade && replayState.mode === 'full') {
-      return windowAroundTrade(visibleFullSeries, selectedTrade)
-    }
-    if (selectedTrade && replayState.mode === 'replay') {
-      const entryVisible = visibleFullSeries.some((candle) => candle.time === selectedTrade.entryTime)
-      if (entryVisible) return windowAroundTrade(visibleFullSeries, selectedTrade)
-    }
-    const end = visibleFullSeries.length - 1
-    const start = Math.max(0, end - 120)
-    return { startIndex: start, endIndex: end, candles: visibleFullSeries.slice(start, end + 1) }
-  }, [bundle, replayState.mode, selectedTrade, visibleFullSeries])
+  const playbookFocusTimeMs =
+    overlay && selectedPlaybookMarker && replayState.mode === 'replay'
+      ? selectedPlaybookMarker.timeMs
+      : null
+
+  const chartWindow = useMemo(
+    () =>
+      chartWindowForReplay({
+        visibleCandles: visibleFullSeries,
+        mode: replayState.mode,
+        selectedTrade,
+        playbookFocusTimeMs,
+      }),
+    [playbookFocusTimeMs, replayState.mode, selectedTrade, visibleFullSeries],
+  )
 
   const visibleEntryMarkers = useMemo(
     () => markersVisibleAtCursor(markers, cursorTime, replayState.mode),
@@ -261,6 +353,15 @@ export function BacktestReplayPage() {
   const visibleExitMarkers = useMemo(
     () => exitsVisibleAtCursor(markers, cursorTime, replayState.mode),
     [cursorTime, markers, replayState.mode],
+  )
+  const playbookChart = useMemo(
+    () =>
+      playbookChartPresentation(
+        overlay?.markers ?? [],
+        replayState.mode === 'replay' ? replayState.cursorIndex : null,
+        replayState.mode,
+      ),
+    [overlay?.markers, replayState.cursorIndex, replayState.mode],
   )
 
   const signalSnapshot = useMemo(() => {
@@ -288,11 +389,11 @@ export function BacktestReplayPage() {
     }))
   }
 
-  if (!backtestId) {
+  if (!queryValid) {
     return (
       <EmptyReplayMessage
-        title="Replay needs a backtest id"
-        message="Open replay from a completed backtest or add ?backtest=<id> to the URL."
+        title="Replay needs a backtest or Playbook source"
+        message="Open replay from a completed backtest, Playbook Lab Historical, or add ?backtest=<id> to the URL."
       />
     )
   }
@@ -356,6 +457,9 @@ export function BacktestReplayPage() {
             <Badge variant={replaySource === 'indexeddb' ? 'accent' : 'outline'}>
               {replaySource}
             </Badge>
+            {overlay ? (
+              <Badge variant="outline">Playbook overlay</Badge>
+            ) : null}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {bundle.metadata.strategyName} {bundle.metadata.strategyVersion} · {bundle.candles.length}{' '}
@@ -373,6 +477,9 @@ export function BacktestReplayPage() {
               <CardTitle className="text-base">Replay Chart</CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
                 BUY/SELL labels mark entries; EXIT diamonds mark closed trades.
+                {overlay
+                  ? ' Playbook labels mark setup state transitions at that candle.'
+                  : ''}
               </p>
             </div>
             {selectedTrade && (
@@ -392,17 +499,48 @@ export function BacktestReplayPage() {
             selectedTradeId={selectedTrade?.id ?? null}
             visibleEntryMarkers={visibleEntryMarkers}
             visibleExitMarkers={visibleExitMarkers}
+            playbookMarkers={playbookChart.markers}
+            selectedPlaybookMarkerId={selectedPlaybookMarker?.id ?? null}
+            showPlaybookLifecycleOutcome={playbookChart.showLifecycleOutcome}
+            onSelectPlaybookMarker={(markerId) => {
+              const index = overlay?.markers.findIndex((marker) => marker.id === markerId) ?? -1
+              if (index >= 0) selectPlaybookSetup(index)
+            }}
           />
         </CardContent>
       </Card>
 
-      <TradeNavigator
-        tradeCount={bundle.trades.length}
-        selectedIndex={Math.min(selectedTradeIndex, Math.max(0, bundle.trades.length - 1))}
-        onSelect={selectTradeIndex}
-      />
+      {overlay ? (
+        <>
+          <PlaybookSetupNavigator
+            setupCount={overlay.markers.length}
+            selectedIndex={Math.min(
+              selectedSetupIndex,
+              Math.max(0, overlay.markers.length - 1),
+            )}
+            onSelect={selectPlaybookSetup}
+          />
+          <SelectedPlaybookSetupCard
+            marker={selectedPlaybookMarker}
+            replayMode={replayState.mode}
+          />
+        </>
+      ) : query.playbookId ? (
+        <p className="text-xs text-muted-foreground">
+          Playbook overlay unavailable for “{query.playbookId}”. Trade replay is unchanged.
+        </p>
+      ) : null}
 
-      <SelectedTradeCard trade={selectedTrade} marker={selectedMarker} />
+      {bundle.trades.length > 0 ? (
+        <>
+          <TradeNavigator
+            tradeCount={bundle.trades.length}
+            selectedIndex={Math.min(selectedTradeIndex, Math.max(0, bundle.trades.length - 1))}
+            onSelect={selectTradeIndex}
+          />
+          <SelectedTradeCard trade={selectedTrade} marker={selectedMarker} />
+        </>
+      ) : null}
 
       <ReplayControls
         state={replayState}
@@ -429,26 +567,32 @@ export function BacktestReplayPage() {
       />
 
       <div className="space-y-3">
-        <Disclosure title="Signal verification">
-          <SignalVerificationCard snapshot={signalSnapshot} />
-        </Disclosure>
+        {bundle.trades.length > 0 ? (
+          <>
+            <Disclosure title="Signal verification">
+              <SignalVerificationCard snapshot={signalSnapshot} />
+            </Disclosure>
 
-        <Disclosure title="Verify selected trade">
-          <VerifyTradePanel
-            trade={selectedTrade}
-            candles={bundle.candles}
-            events={bundle.events}
-            strategyParams={bundle.metadata.strategyParams}
-          />
-        </Disclosure>
+            <Disclosure title="Verify selected trade">
+              <VerifyTradePanel
+                trade={selectedTrade}
+                candles={bundle.candles}
+                events={bundle.events}
+                strategyParams={bundle.metadata.strategyParams}
+              />
+            </Disclosure>
+          </>
+        ) : null}
 
         <FunnelPanel bundle={bundle} />
 
-        <TradeSelectBridge
-          trades={bundle.trades}
-          selectedTradeId={selectedTrade?.id ?? null}
-          onSelectIndex={selectTradeIndex}
-        />
+        {bundle.trades.length > 0 ? (
+          <TradeSelectBridge
+            trades={bundle.trades}
+            selectedTradeId={selectedTrade?.id ?? null}
+            onSelectIndex={selectTradeIndex}
+          />
+        ) : null}
 
         <Disclosure title="Equity replay">
           <EquityReplayPanel

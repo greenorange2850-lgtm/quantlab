@@ -17,12 +17,15 @@ import {
 } from '../trade-markers'
 import {
   candlesVisibleForReplay,
+  chartWindowForReplay,
   createInitialReplayState,
   findCandleIndex,
   maxDrawdownAtCursor,
   realizedPnlThrough,
   stepCursor,
+  windowAroundIndex,
   windowAroundTrade,
+  DEFAULT_CONTEXT_BARS,
   MAX_VISIBLE_CANDLES,
 } from '../replay-window'
 import { buildSignalVerification } from '../signal-verification'
@@ -158,6 +161,35 @@ describe('replay cursor controls', () => {
     expect(window.candles.length).toBeLessThanOrEqual(MAX_VISIBLE_CANDLES)
     expect(window.candles.some((c) => c.time === trade.entryTime)).toBe(true)
     expect(findCandleIndex(candles, trade.entryTime)).toBe(200)
+  })
+
+  it('windows around a playbook candle index without exceeding the cap', () => {
+    const candles = makeCandles(400)
+    const window = windowAroundIndex(candles, 50)
+    expect(window.candles.length).toBeLessThanOrEqual(MAX_VISIBLE_CANDLES)
+    expect(window.startIndex).toBe(Math.max(0, 50 - DEFAULT_CONTEXT_BARS))
+    expect(window.candles.some((c) => c.time === candles[50]!.time)).toBe(true)
+
+    const edge = windowAroundIndex(candles, 0)
+    expect(edge.startIndex).toBe(0)
+    expect(edge.candles[0]!.time).toBe(candles[0]!.time)
+  })
+
+  it('prefers a focused playbook candle over the selected trade window', () => {
+    const candles = makeCandles(200)
+    const trade = makeTrade({
+      entryTime: candles[80]!.time,
+      exitTime: candles[90]!.time,
+    })
+    const playbookFocus = candles[20]!.time
+    const window = chartWindowForReplay({
+      visibleCandles: candles,
+      mode: 'replay',
+      selectedTrade: trade,
+      playbookFocusTimeMs: playbookFocus,
+    })
+    expect(window.candles.some((c) => c.time === playbookFocus)).toBe(true)
+    expect(findCandleIndex(window.candles, playbookFocus)).toBeGreaterThanOrEqual(0)
   })
 })
 
