@@ -9,6 +9,10 @@ describe('playbook store', () => {
       selectedPlaybookId: 'bullish-qml-reversal',
       drafts: {},
       applied: {},
+      dataSourceKind: 'demo',
+      selectedHistoricalKind: null,
+      selectedHistoricalId: null,
+      selectedHistoricalTimeframe: null,
     })
   })
 
@@ -85,6 +89,30 @@ describe('playbook store', () => {
   it('partializes only the persisted slice', () => {
     const state = usePlaybookStore.getState()
     const partial = partializePlaybookState(state)
-    expect(Object.keys(partial)).toEqual(['selectedPlaybookId', 'drafts', 'applied'])
+    expect(Object.keys(partial)).toEqual([
+      'selectedPlaybookId',
+      'drafts',
+      'applied',
+      'dataSourceKind',
+      'selectedHistoricalKind',
+      'selectedHistoricalId',
+      'selectedHistoricalTimeframe',
+    ])
+  })
+
+  it('selects a historical source without implying demo fallback', () => {
+    const { setDataSourceKind, selectHistoricalSource, setHistoricalTimeframe } =
+      usePlaybookStore.getState()
+    setDataSourceKind('historical')
+    expect(usePlaybookStore.getState().dataSourceKind).toBe('historical')
+    selectHistoricalSource('backtest', 'bt-1', '1h')
+    expect(usePlaybookStore.getState()).toMatchObject({
+      dataSourceKind: 'historical',
+      selectedHistoricalKind: 'backtest',
+      selectedHistoricalId: 'bt-1',
+      selectedHistoricalTimeframe: '1h',
+    })
+    setHistoricalTimeframe('4h')
+    expect(usePlaybookStore.getState().selectedHistoricalTimeframe).toBe('4h')
   })
 })
